@@ -189,6 +189,25 @@ if [ "$DRY_RUN" = "false" ]; then
   grep -q "\"version\": \"$NEW_VERSION\"" "$MANIFEST" || die "Version rewrite failed in $MANIFEST"
 fi
 
+# ----- 1b) sync version in marketplace.json (if present) ---------------------
+MARKETPLACE="$PLUGIN_DIR/.claude-plugin/marketplace.json"
+if [ -f "$MARKETPLACE" ]; then
+  info "Updating $MARKETPLACE"
+  if [ "$DRY_RUN" = "false" ]; then
+    tmp="$(mktemp)"
+    # update only the first "version" after the "plugins" array (the plugin's version),
+    # leaving metadata.version untouched
+    awk -v new="$NEW_VERSION" '
+      /"plugins"[[:space:]]*:/ { inp=1 }
+      inp && !done && /"version"[[:space:]]*:/ {
+        sub(/"version"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"/, "\"version\": \"" new "\"")
+        done=1
+      }
+      { print }
+    ' "$MARKETPLACE" > "$tmp" && mv "$tmp" "$MARKETPLACE"
+  fi
+fi
+
 # ----- 2) update CHANGELOG ---------------------------------------------------
 info "Updating $CHANGELOG"
 if [ "$DRY_RUN" = "false" ] && [ -f "$CHANGELOG" ]; then
