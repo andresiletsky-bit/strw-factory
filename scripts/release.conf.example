@@ -1,0 +1,15 @@
+# strw-factory release config
+# Copy to release.conf (same folder) and adjust. release.conf is git-ignored.
+# 'setup' writes this file for you automatically.
+
+# Branch that releases are cut from and pushed to.
+MAIN_BRANCH="main"
+
+# Git remote name (must already point at your GitHub repo).
+REMOTE="origin"
+
+# Create a GitHub Release via the gh CLI ("true"/"false").
+USE_GH="true"
+
+# Tag prefix. Tags look like v0.1.1.
+TAG_PREFIX="v"

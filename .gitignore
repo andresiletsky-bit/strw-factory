@@ -1,0 +1,6 @@
+# Local release config (contains machine-specific settings)
+scripts/release.conf
+
+# OS / editor cruft
+.DS_Store
+*.swp
