@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.2.0] — 2026-07-07
 Впровадження 15 покращень за whitepaper «The New SDLC with Vibe Coding» (Google/Kaggle, 2026) — див. `improvements-new-sdlc-vibe-coding.md` у робочій папці.
 
 ### Added

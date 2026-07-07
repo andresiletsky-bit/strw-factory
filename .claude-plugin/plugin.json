@@ -1,6 +1,6 @@
 {
   "name": "strw-factory",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "STRW Loop Factory — orchestration layer for a one-person AI product company. Runs scheduled/event-driven loops (Discovery, Validation, Build, Growth, Portfolio, Retro) with maker/checker separation, gate discipline (GO/KILL/PIVOT), a git-based state spine (strw-state/), and a single triage inbox for human escalations.",
   "author": {
     "name": "Andrii Siletskyi",

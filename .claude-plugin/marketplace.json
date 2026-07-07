@@ -13,7 +13,7 @@
       "name": "strw-factory",
       "source": "./",
       "description": "STRW Loop Factory — runs scheduled/event-driven loops (Discovery, Validation, Build, Growth, Portfolio, Retro) with maker/checker separation, gate discipline (GO/KILL/PIVOT), a git-based state spine, and a single triage inbox for human escalations.",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "author": {
         "name": "Andrii Siletskyi",
         "email": "andre.siletsky@gmail.com"
