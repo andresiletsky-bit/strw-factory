@@ -1,0 +1,38 @@
+# CI-шаблон strw-factory для продуктових репо (GitHub Actions).
+# Гейт L3: зелений CI = єдиний доказ stop-умови. Адаптуй кроки під стек продукту.
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Стек (приклад Node; заміни під стек з company-context) ---
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+
+      # 1. Тести (написані з AC до коду) — обов'язково
+      - name: Tests
+        run: npm test
+
+      # 2. Lint — обов'язково
+      - name: Lint
+        run: npm run lint
+
+      # 3. Dep-audit: галюциновані/вразливі залежності — блокер
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+
+      # 4. Tracking events: схема tracking-plan ↔ реалізація
+      - name: Tracking schema check
+        run: npm run check:tracking --if-present
+
+      # 5. Секрети в коді — блокер
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }

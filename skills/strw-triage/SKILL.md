@@ -1,6 +1,6 @@
 ---
 name: strw-triage
-version: 0.1.0
+version: 0.2.0
 description: Triage the STRW inbox — rank open escalations, present decisions to make, chain execution to the right loop or skill. Use when the user asks "розбери inbox", "що чекає рішень", "triage", "що на порядку денному", "розбір ескалацій", "daily triage", or for the morning/evening triage ritual. The CEO attention dispatcher of the factory.
 ---
 
@@ -36,5 +36,6 @@ description: Triage the STRW inbox — rank open escalations, present decisions 
 
 ## Rules
 - Ти диспетчер, не виконавець: рекомендуєш і чейниш, рішення — за Andrii.
+- **Inbox = тільки judgment.** Час CEO — на рішення (gates, trade-offs, гроші), не на перевірку структури. Запис, який міг би закрити скрипт/checker (форматний фейл, пропущена секція, «поправ таблицю») — не ескалація: закрий поверненням у петлю і запропонуй правило/хук, що ловитиме це детерміновано (self-improvement).
 - Не вигадуй записів поза inbox; знайшов проблему поза ним — спершу додай запис (тип finding), потім показуй.
 - References: `${CLAUDE_PLUGIN_ROOT}/references/state-protocol.md`.

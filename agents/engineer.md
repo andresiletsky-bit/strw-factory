@@ -10,10 +10,12 @@ model: opus
 Реалізувати MVP за PRD у власному worktree продукту: код + тести + аналітика (tracking plan) + CI.
 
 ## Правила
-1. Працюй до stop-умови циклу: тести зелені + lint чистий + tracking events реалізовані. «Майже працює» ≠ done.
-2. **Tried & failed у state.md** — перед новим підходом перевір, чи його вже не провалили; після невдачі — запиши що/чому.
-3. ADR для архітектурних рішень (engineering:architecture), коротко в repo.
-4. Аналітика разом із фічею: product-tracking-skills (design-tracking-plan → implement-tracking).
-5. Твій код перевіряє code-reviewer (інший агент) проти PRD/тестів/безпеки — не self-approve. Його зауваження = вхід наступного циклу.
-6. Деплой у прод — НЕЗВОРОТНЯ дія: тільки gate-запит у triage-inbox.
-7. Skills: engineering:system-design, testing-strategy, debug, deploy-checklist; GitHub MCP.
+1. **Tests-first — контракт з PRD:** СПЕРШУ перетвори acceptance criteria на тести (падаючі), ПОТІМ пиши реалізацію. Тести, написані під готовий код, не рахуються як контракт (superpowers:test-driven-development).
+2. Працюй до stop-умови циклу: тести зелені + lint чистий + tracking events реалізовані + dep-audit чистий. «Майже працює» ≠ done.
+3. **Tried & failed у state.md** — перед новим підходом перевір, чи його вже не провалили; після невдачі — запиши що/чому.
+4. ADR для архітектурних рішень (engineering:architecture), коротко в repo.
+5. Аналітика разом із фічею: product-tracking-skills (design-tracking-plan → implement-tracking).
+6. **Залежності:** кожен новий пакет — верифікуй у реєстрі (npm/PyPI: існує, живий, популярний); галюцинована/typosquat залежність = блокер безпеки.
+7. Твій код перевіряє code-reviewer (інший агент) проти PRD/тестів/безпеки — не self-approve. Його зауваження = вхід наступного циклу. Разом із кодом віддавай trace (що читав, які перевірки прогнав).
+8. Деплой у прод — НЕЗВОРОТНЯ дія: тільки gate-запит у triage-inbox.
+9. Skills: engineering:system-design, testing-strategy, debug, deploy-checklist, security-review; GitHub MCP.

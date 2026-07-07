@@ -23,10 +23,10 @@ state_writes: <які файли strw-state оновлює>
 
 1. **Read state** — company-context.md + portfolio.md + власний state продукту. Петля продовжує, не починає з нуля.
 2. **Budget check** — звірити budget.md; стеля вичерпана → STOP + budget-alert в inbox.
-3. **Maker phase** — виконати роботу за scope (fan-out за subagent-delegation, ≤6).
-4. **Checker phase** — верифікатор перевіряє вихід проти artifact-contract і ДНК. Fail → maker виправляє (max 2 ітерації) → далі ескалація.
-5. **Write state** — оновити state.md / portfolio.md / budget.md (факт). Без цього кроку запуск вважається таким, що не відбувся.
-6. **Escalate or archive** — знахідки/gate-запити → triage-inbox; порожній результат → тихий архів (лог один рядок).
+3. **Maker phase** — виконати роботу за scope (fan-out за subagent-delegation, ≤6). Разом з артефактом maker повертає **trace**: які файли state читав, які перевірки виконав, які тули/скіли викликав, скільки ітерацій. Артефакт без trace не приймається.
+4. **Checker phase** — двоетапно: (0) `scripts/validate-artifact.sh` — детермінована перевірка обов'язкових секцій, fail → одразу назад maker'у без LLM; (1) верифікатор перевіряє вихід проти рубрики (references/evals/rubrics.md) — і **output** (результат), і **trajectory** (trace проти паспорта: читав state? виконав data-integrity? не виходив за scope?). Гарний вихід із пропущеними перевірками = FAIL. Fail → maker виправляє (max 2 ітерації) → далі ескалація.
+5. **Write state** — оновити state.md / portfolio.md / budget.md (факт) + **рядок у loops-log** (state-protocol: тривалість, ітерації maker↔checker, first-pass, вердикти, ескалації). Без цього кроку запуск вважається таким, що не відбувся.
+6. **Escalate or archive** — знахідки/gate-запити → triage-inbox; порожній результат → тихий архів (лог один рядок). **Inbox = тільки judgment:** структурні/форматні фейли ніколи не ескалюються — їх ловить скрипт і повертає maker'у.
 
 ## Правила
 

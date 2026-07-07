@@ -1,10 +1,10 @@
 # STRW Factory
 
-**Version:** 0.1.0 · Orchestration layer for a one-person AI product company (STRW).
+**Version:** 0.2.0 · Orchestration layer for a one-person AI product company (STRW).
 
 Runs the factory as **loops, not prompts**: scheduled/event-driven loops find work, execute it with maker/checker separation, write state to a git spine, and escalate only gate decisions and irreversible actions to the human CEO.
 
-Design sources: `STRW_Concept_v0.2_Loop_Factory.md`, Loop Engineering (Addy Osmani), proven patterns from grow-product-manager-plugin (data-integrity gate, subagent delegation, self-improvement, template protocol).
+Design sources: `STRW_Concept_v0.2_Loop_Factory.md`, Loop Engineering (Addy Osmani), whitepaper «The New SDLC with Vibe Coding» (Google/Kaggle 2026: evals не демо, trajectory-верифікація, детерміновані guardrails, економіка harness), proven patterns from grow-product-manager-plugin (data-integrity gate, subagent delegation, self-improvement, template protocol).
 
 ## Architecture
 
@@ -37,7 +37,12 @@ Andrii (CEO) ── triage-inbox ──┐
 G1 build-or-kill · G2 scope lock · G3 ready-to-ship · G4 portfolio review. Рішення — тільки людина, з підтвердженим прочитанням артефакту, логується в decisions-log.md.
 
 ## Constitution (references/)
-loop-passport · artifact-contracts · state-protocol · budget-policy · data-policy · data-integrity-protocol · subagent-delegation · self-improvement.
+loop-passport · artifact-contracts · state-protocol · budget-policy · data-policy · data-integrity-protocol · subagent-delegation · self-improvement · context-map · **evals/** (rubrics + golden set).
+
+## Verification layers
+1. **Рівень 0 (детермінований):** `scripts/validate-artifact.sh` — структура артефактів; pre-commit hook у strw-state; CI у продуктових репо (`templates/ci.yml`).
+2. **Рівень 1 (LLM-checker):** інша модель, ніж maker (hard rule) · рубрики `references/evals/rubrics.md` · output І trajectory (trace maker'а проти паспорта).
+3. **Регресія:** будь-яка зміна промпту/скіла/паспорта — прогін на golden-наборі перед bump версії.
 
 ## Setup
 1. Створи приватний GitHub-репозиторій `strw-state` із каркасу в `STRW/strw-state/` (готовий у робочій папці).
@@ -66,6 +71,6 @@ git push -u origin main
 Скрипт: bump `plugin.json` → промоує розділ `## [Unreleased]` у CHANGELOG у датовану версію → commit → tag `vX.Y.Z` → push → GitHub Release. Нотатки релізу бере з `[Unreleased]` (або з `-m "..."`). Прапорці: `--dry-run`, `--no-push`, `--no-gh`, `-y`. Перед релізом наповнюй `[Unreleased]` у `CHANGELOG.md`.
 
 ## Hard rules
-Maker ≠ Checker · State або не сталося · Один inbox · Бюджет = обмеження (стоп, не «доробити») · Незворотнє — тільки людина · Людина читає gate-артефакти.
+Maker ≠ Checker (інша модель для критичних артефактів) · Планка = eval, не демо · State або не сталося · Один inbox (тільки judgment) · Бюджет = обмеження (стоп, не «доробити») · Незворотнє — тільки людина · Людина читає gate-артефакти · Tests-first у Build · Prototype ≠ production.
 
 **Author:** Andrii Siletskyi · License: private

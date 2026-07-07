@@ -1,6 +1,6 @@
 ---
 name: strw-portfolio
-version: 0.1.0
+version: 0.2.0
 description: Weekly STRW portfolio review (L5 loop) — gather product metrics, compute factory metrics, produce the portfolio brief with next-week focuses and KILL/double-down candidates. Use when the user asks "портфель", "portfolio review", "тижневий огляд", "стан фабрики", "portfolio brief", "п'ятничний огляд", or when the L5 scheduled task fires.
 ---
 
@@ -19,6 +19,7 @@ description: Weekly STRW portfolio review (L5 loop) — gather product metrics, 
 - **autonomy ratio** — % запусків петель без ескалації (з git-логу `loop(...)` і inbox);
 - **inbox lag** — медіана часу OPEN→DONE;
 - **budget** — факт vs стеля (budget.md); **read coverage** — % gates із підтвердженим прочитанням;
+- **економіка harness** (з loops-log/): **first-pass accept rate** — % запусків із PASS з першої подачі; середні ітерації maker↔checker; вартість/тривалість запуску петлі. Тренд вниз по first-pass = ранній сигнал деградації harness → кандидат у фокуси;
 - **time-to-launch / portfolio MRR** — коли застосовно.
 Data Integrity Gate: неповний тиждень позначається, не екстраполюється.
 

@@ -1,6 +1,6 @@
 ---
 name: strw-gate-review
-version: 0.1.0
+version: 0.2.0
 description: Run a formal STRW gate decision (G1 build-or-kill, G2 scope lock, G3 ready-to-ship, G4 portfolio review) with debate pattern and logged GO/KILL/PIVOT outcome. Use when the user asks "проведи gate", "G1/G2/G3/G4 для продукту", "build or kill", "gate review", "ухвалимо рішення по продукту", or when strw-triage chains a gate-request.
 ---
 
@@ -19,7 +19,7 @@ description: Run a formal STRW gate decision (G1 build-or-kill, G2 scope lock, G
 ## Workflow
 
 ### Step 1 — Contract check
-Прочитай вхідний артефакт. Звір з `references/artifact-contracts.md`: пропущені обов'язкові поля → gate НЕ проводиться, поверни продукт на стадію з конкретним списком прогалин.
+Спершу детерміновано: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-artifact.sh <type> <file>`. Потім звір зміст з `references/artifact-contracts.md`. Пропущені обов'язкові поля → gate НЕ проводиться, поверни продукт на стадію з конкретним списком прогалин.
 
 ### Step 2 — Read confirmation (анти-cognitive-surrender)
 Покажи Andrii ключовий артефакт (не summary). Попроси явне підтвердження прочитання. Без нього — не продовжуй.
