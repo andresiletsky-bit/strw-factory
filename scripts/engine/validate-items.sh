@@ -151,11 +151,13 @@ for lid, (repo, owned) in lane_paths.items():
 # в межах однієї доби. Лог append-only → кількість датованих записів є монотонним
 # лічильником, і саме він дає точну відповідь «чи дописали щось ПІСЛЯ звірки».
 # Дати лишаються запасним варіантом для елементів без лічильника.
-decision_dates = []
+decision_dates, decision_titles = [], []
 if os.path.isfile(decisions_log):
     for line in open(decisions_log):
         m = re.match(r"^##\s+(\d{4}-\d{2}-\d{2})\b", line)
-        if m: decision_dates.append(m.group(1))
+        if m:
+            decision_dates.append(m.group(1))
+            decision_titles.append(line[3:].strip())
 else:
     err(f"немає {decisions_log}")
 newest_decision = max(decision_dates) if decision_dates else None
@@ -236,9 +238,17 @@ for path in item_files:
         if not isinstance(stored, int) or stored < 0:
             err(f"{name}: decisions_log_entries = {stored!r} — має бути невід'ємне ціле")
         elif decisions_count > stored:
+            # Називаємо, ЩО САМЕ дописали. Без цього людина мусить сама шукати різницю
+            # і в спішці «оновлює» лічильник, не перечитавши підставу, — тобто робить
+            # рівно те, проти чого acceptance_basis і придуманий.
+            fresh = decision_titles[stored:]
+            listed = "".join(f"\n         · {t}" for t in fresh[:5])
+            more = f"\n         … ще {len(fresh) - 5}" if len(fresh) > 5 else ""
             stale(f"{name}: звірено проти {stored} записів decisions-log, зараз їх "
-                  f"{decisions_count} (+{decisions_count - stored}) → ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ "
-                  f"(спека §3.3: такий елемент не 'ready', а 'blocked')")
+                  f"{decisions_count} (+{len(fresh)}) → ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ "
+                  f"(спека §3.3: такий елемент не 'ready', а 'blocked')."
+                  f"\n       Прочитати ці записи, звірити з ними `acceptance`, і лише потім "
+                  f"піднімати лічильник:{listed}{more}")
         elif decisions_count < stored:
             err(f"{name}: decisions_log_entries = {stored}, а в decisions-log лише "
                 f"{decisions_count} записів. Лог append-only — зменшення означає, що "
