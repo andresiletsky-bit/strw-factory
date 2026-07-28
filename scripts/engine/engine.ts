@@ -241,6 +241,15 @@ function cmdSettle(): number {
   Deno.writeTextFileSync(tmp, next);
   Deno.renameSync(tmp, statePath);
 
+  // --no-cycle: оновити дзеркало БЕЗ запису циклу. Потрібно, коли реєстр змінився
+  // поза тіком (бекфіл, ручна правка). Записати cycle-рядок там, де диспетчер
+  // нічого не виконував, означало б вигадану телеметрію — рівно той дефект, через
+  // який v1 списувала фальшиві цикли.
+  if (flag("no-cycle")) {
+    out({ state_md: statePath, cycles: null, items: reg.items.length });
+    return 0;
+  }
+
   const week = isoWeekFile(new Date());
   const cyclesPath = `${engineDir}/cycles/${week}.jsonl`;
   Deno.mkdirSync(`${engineDir}/cycles`, { recursive: true });
