@@ -1,7 +1,9 @@
 ---
 type: spec
 title: "STRW Dynamic Workflow Engine — паралельний рушій фабрики"
-status: draft
+status: superseded
+superseded_by: "2026-07-28-strw-dynamic-workflow-engine-design-v2.md"
+superseded_reason: "Аудит 4 моделями (2×Opus 5, Sonnet 5, Codex gpt-5.6-sol xhigh) 2026-07-27: одностайний вердикт «як є не будувати». Ядро відновлення (лізи) не дає ні at-least-once, ні at-most-once; ізоляція за шляхами вакуумна; діагноз затору CEO спростовано даними. Файл лишається як повний запис проаудитованого."
 created: 2026-07-27
 author: Andrii Siletskyi (CEO) + Claude
 scope: factory (L1–L6, усі продукти)
