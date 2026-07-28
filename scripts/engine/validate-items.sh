@@ -146,7 +146,11 @@ for lid, (repo, owned) in lane_paths.items():
             warn(f"смуга '{lid}' володіє шляхом(ами) з `shared` `{g}`: "
                  f"{', '.join(sorted(overlap)[:3])} — `shared` мав бути ПОЗА смугами (спека §3.4)")
 
-# ---------- 4. decisions-log: дати записів ----------
+# ---------- 4. decisions-log: дати й КІЛЬКІСТЬ записів ----------
+# Заголовки несуть лише дату, без часу, тож порівняння дат не розрізняє записи
+# в межах однієї доби. Лог append-only → кількість датованих записів є монотонним
+# лічильником, і саме він дає точну відповідь «чи дописали щось ПІСЛЯ звірки».
+# Дати лишаються запасним варіантом для елементів без лічильника.
 decision_dates = []
 if os.path.isfile(decisions_log):
     for line in open(decisions_log):
@@ -155,6 +159,7 @@ if os.path.isfile(decisions_log):
 else:
     err(f"немає {decisions_log}")
 newest_decision = max(decision_dates) if decision_dates else None
+decisions_count = len(decision_dates)
 
 # ---------- 5. items ----------
 REQUIRED = ["schema_version", "id", "product", "loop", "lane", "state",
@@ -223,11 +228,33 @@ for path in item_files:
     vdate = str(ver)[:10]
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", vdate):
         err(f"{name}: verified_against_decisions_log_at = {ver!r} — не ISO-дата"); continue
+
+    stored = ab.get("decisions_log_entries")
+    if stored is not None:
+        # ТОЧНИЙ шлях: лічильник записів. Ловить дописи в межах тієї самої доби,
+        # яких порівняння дат не бачить у принципі.
+        if not isinstance(stored, int) or stored < 0:
+            err(f"{name}: decisions_log_entries = {stored!r} — має бути невід'ємне ціле")
+        elif decisions_count > stored:
+            stale(f"{name}: звірено проти {stored} записів decisions-log, зараз їх "
+                  f"{decisions_count} (+{decisions_count - stored}) → ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ "
+                  f"(спека §3.3: такий елемент не 'ready', а 'blocked')")
+        elif decisions_count < stored:
+            err(f"{name}: decisions_log_entries = {stored}, а в decisions-log лише "
+                f"{decisions_count} записів. Лог append-only — зменшення означає, що "
+                f"записи ЗНИКЛИ (клас інциденту dcd6a6c) або лічильник вигаданий")
+        continue
+
+    # ЗАПАСНИЙ шлях для елементів без лічильника: порівняння дат. Свідомо грубіше —
+    # у межах доби нічого не розрізняє. Не додавай нових елементів без лічильника.
     newer = sorted({d for d in decision_dates if d > vdate})
     if newer:
         stale(f"{name}: acceptance_basis звірено на {vdate}, а в decisions-log є новіші "
               f"записи ({', '.join(newer[-3:])}) → ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ "
               f"(спека §3.3: такий елемент не 'ready', а 'blocked')")
+    else:
+        warn(f"{name}: немає `decisions_log_entries` — свіжість перевірено лише за датою, "
+             f"тобто дописи в межах {vdate} не виявляються")
 
 # ---------- 6. blocked_by: посилання і цикли ----------
 graph = {}

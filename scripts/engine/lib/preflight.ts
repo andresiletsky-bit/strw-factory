@@ -21,6 +21,24 @@ export function isWritable(dir: string): boolean {
 }
 
 /**
+ * Чи можна писати в `.git` — окремо від робочого дерева.
+ *
+ * Це НЕ дублікат isWritable(). У пісочниці headless-сесії робоче дерево
+ * записуване, а `.git` — ні (`rm .git/index.lock` → `Operation not permitted`).
+ * Тобто isWritable(strw-state) поверне true, тік дійде до фази 3 Settle і почне
+ * виконувати git-команди в `strw-state` — рівно те, що state-protocol §4c
+ * заборонив 28.07 після ТРЬОХ інцидентів класу за тиждень.
+ *
+ * Найдорожчий із них: обхід через temp GIT_INDEX_FILE + write-tree + update-ref
+ * повернув валідний хеш СТАРІШОГО дерева і перевів локальний main на `dcd6a6c`,
+ * який видаляв три ескалації, ратифікацію CEO і цілий цикл у state.md.
+ * Врятував лише провалений push. Обхід небезпечніший за блокування — тож блокуємо.
+ */
+export function isGitWritable(repoRoot: string): boolean {
+  return isWritable(`${repoRoot}/.git`);
+}
+
+/**
  * Незапушені коміти. HEAD і origin/main звіряються ОКРЕМИМИ командами —
  * так вимагає промт сесії, і так помилка одного виклику не маскує іншу.
  */
@@ -71,6 +89,19 @@ export function preflight(opts: PreflightOpts): PreflightResult {
     return stop(
       `strw-state незаписуваний (${opts.stateRepo}) — тік НЕ починається (§3.1). ` +
         `27.07 цей стан тривав 5 год 52 хв, поки продуктове репо робило 10 комітів.`,
+    );
+  }
+
+  // 1b. Записуваність `.git` — окремо. Фаза 3 Settle виконує git-команди в
+  //     strw-state; якщо `.git` не пише, сесія headless, і §4c їх забороняє.
+  //     Перевіряти ТУТ, а не у фазі 3: тік, який дійшов до Settle і там упав,
+  //     уже взяв лізи й витратив квоту. Тік, що не почався, не лишає нічого.
+  if (!isGitWritable(opts.stateRepo)) {
+    return stop(
+      `strw-state/.git незаписуваний — тік НЕ починається (state-protocol §4c). ` +
+        `Робоче дерево пише, а .git — ні: це ознака headless-сесії, якій §4c ` +
+        `забороняє git у strw-state взагалі. Результат кладеться в _outbox/, ` +
+        `вливає й комітить сесія з робочим git. Обхід дав тихий відкат dcd6a6c.`,
     );
   }
 

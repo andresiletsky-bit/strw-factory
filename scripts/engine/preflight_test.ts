@@ -4,7 +4,7 @@
 // тік НЕ ПОЧИНАЄТЬСЯ. Не «завершується чисто» — не починається. Формулювання зі
 // спеки дослівне, і воно тут пінується як окремий тест на кожну половину «або».
 import { assertEquals } from "jsr:@std/assert@1";
-import { hasUnpushedCommits, isWritable, preflight } from "./lib/preflight.ts";
+import { hasUnpushedCommits, isGitWritable, isWritable, preflight } from "./lib/preflight.ts";
 
 function sh(cwd: string, cmd: string[]): void {
   const r = new Deno.Command(cmd[0], { args: cmd.slice(1), cwd, stdout: "piped", stderr: "piped" })
@@ -185,4 +185,41 @@ Deno.test("STOP несе причину текстом — мовчазна зу
   const r = preflight({ stateRepo: root, validate: () => ({ ok: true, output: "" }) });
   assertEquals(typeof r.stop_reason, "string");
   assertEquals((r.stop_reason ?? "").length > 10, true);
+});
+
+// ── §4c: `.git` незаписуваний, робоче дерево — записуване ────────────────────────
+//
+// Саме ця комбінація і є headless-пісочниця: файли на диску пишуться, а `.git` —
+// ні. Без окремої перевірки isWritable(root) віддає true, тік доходить до фази 3
+// Settle і починає виконувати там git-команди — те, що §4c заборонив після трьох
+// інцидентів за тиждень, найдорожчий з яких (`dcd6a6c`) тихо стер записи стану.
+
+function unwritableGit<T>(root: string, body: () => T): T {
+  Deno.chmodSync(`${root}/.git`, 0o500);
+  try {
+    return body();
+  } finally {
+    Deno.chmodSync(`${root}/.git`, 0o700);
+  }
+}
+
+Deno.test("робоче дерево пише, а .git — ні: це headless, тік НЕ починається (§4c)", () => {
+  const { root } = clonedRepo();
+  unwritableGit(root, () => {
+    // Передумова, без якої тест доводив би не те: дерево справді записуване,
+    // тобто стара перевірка сама по собі пропустила б цей стан далі.
+    assertEquals(isWritable(root), true);
+    assertEquals(isGitWritable(root), false);
+
+    const r = preflight({ stateRepo: root, validate: () => ({ ok: true, output: "" }) });
+    assertEquals(r.started, false);
+    assertEquals(r.stop_reason?.includes("§4c"), true);
+  });
+});
+
+Deno.test(".git записуваний — ця перевірка не заважає нормальному тіку", () => {
+  const { root } = clonedRepo();
+  assertEquals(isGitWritable(root), true);
+  const r = preflight({ stateRepo: root, validate: () => ({ ok: true, output: "" }) });
+  assertEquals(r.started, true);
 });
