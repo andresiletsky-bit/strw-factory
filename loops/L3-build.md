@@ -7,7 +7,7 @@ checker: strw-code-reviewer (код) · strw-qa (передреліз)
 stop_condition: "/goal-умова циклу: тести зелені (написані ДО коду з AC) + lint чистий + tracking events реалізовані + dep-audit чистий + security-review по diff; стадії: build-report + launch-checklist за контрактами → gate-request G3"
 output: код у репо продукту (worktree) · build-report.md · launch-checklist.md
 escalation: gate-request G3; блокери безпеки → finding негайно; архітектурні розвилки з ціною >дня роботи → question
-budget: maker — opus; checker — ІНША модель, ніж maker (hard rule, budget-policy); ≤2 паралельні worktree на продукт; /goal-сесії групувати (1–2/день на продукт max)
+budget: maker — opus; checker — ІНША модель, ніж maker (hard rule, budget-policy); ≤2 паралельні worktree на продукт; /goal-сесії групувати (1–2/день на продукт max) — **амендмент CEO 2026-07-28: на час хвоста M2 pact-001 стеля 4 цикли/добу/продукт; повернути 1–2 після виходу pact-001 у TestFlight (M4)**
 state_writes: products/<id>/state.md (кожен цикл: Done/Next/Tried & failed) · budget.md · git commit loop(L3)
 ---
 
