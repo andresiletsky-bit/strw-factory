@@ -8,7 +8,16 @@ stop_condition: "/goal-умова циклу: тести зелені (напи�
 output: код у репо продукту (worktree) · build-report.md · launch-checklist.md
 escalation: gate-request G3; блокери безпеки → finding негайно; архітектурні розвилки з ціною >дня роботи → question
 budget: maker — opus; checker — ІНША модель, ніж maker (hard rule, budget-policy); ≤2 паралельні worktree на продукт; /goal-сесії групувати (1–2/день на продукт max) — **амендмент CEO 2026-07-28: на час хвоста M2 pact-001 стеля 4 цикли/добу/продукт; повернути 1–2 після виходу pact-001 у TestFlight (M4)**
-state_writes: products/<id>/state.md (кожен цикл: Done/Next/Tried & failed) · budget.md · git commit loop(L3)
+state_writes: products/<id>/state.md (кожен цикл: Done/Next/Tried & failed) · budget.md · git commit loop(L3) — **АЛЕ спершу прочитай `references/state-protocol.md` §4c: headless-сесія НЕ виконує git у `strw-state` взагалі, вона пише у `_outbox/`. Рядок вище описує сесію з робочим git на Mac.**
+environment_gate: |
+  Перевір середовище ПЕРЕД тим, як планувати цикл — двома командами, не припущенням:
+    which xcodebuild swift    # немає → iOS-цикл у цій сесії НЕМОЖЛИВИЙ
+    touch .git/.probe && rm .git/.probe   # у strw-state; немає прав → сесія headless, діє §4c
+  Заплановані завдання (`strw-l3-build-continue-*`) виконуються в Linux-пісочниці без
+  Xcode: там можлива лише синхронізація стану й запис у `_outbox/`, а не build-цикл.
+  Перевірено 2026-07-29 07:09 — сесія дійшла до git у `strw-state` і залишила два
+  застряглі локи, бо дізналась про §4c уже після падіння коміту. Гейт існує, щоб
+  дізнаватись про це ДО дії, а не після.
 ---
 
 # L3 · Build Loop — «/goal до зеленого»
