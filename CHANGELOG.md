@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+Впровадження STRW_Autonomy_Plan_v1 (2026-07-20, схвалено Andrii) — закриває головний розрив зі статті Loop Engineering (Osmani): реальний шар automations замість ручного «запусти».
+
+### Added
+- **Scheduled tasks (5, поза плагіном — Claude Code Remote triggers):** STRW L1 Discovery (Пн/Ср/Пт), STRW L3 Build Continue AM/PM (Пн–Пт, пріоритетні слоти), STRW Triage Digest AM/PM (Пн–Пт, push тільки якщо є що вирішити), STRW L4 Growth (Пн, dormant до першого прод-продукту), STRW L5+L6 Friday. Замінюють ручні headless-запуски.
+- **`references/budget-policy.md`:** новий розділ «Пріоритет ресурсу при дефіциті квоти Claude» — L3 Build ніколи не стискається першим; порядок стиснення: L1 → Triage Digest → (L5/L6 без змін) → Build останнім.
+
+### Changed
+- **`strw-loop-run` 0.2.0 → 0.3.0:** новий Step 7 «Auto-advance» — петля сама викликає наступну не-gate петлю (напр. L1 → L2) в межах WIP/секвенування, без очікування команди Andrii; до людини йдуть тільки gate-рішення, незворотні дії, budget-alert/error і genuine question (реалізація принципу №5 company-context.md, який раніше не був закодований). Step 8 (Escalate) вимагає «що змінилось з минулого разу» для продовжень старих inbox-записів.
+- **`strw-triage` 0.2.0 → 0.3.0:** inbox тепер тільки для того, що дійсно потребує Andrii — не-gate «запусти/продовж» більше не єдиний спосіб щось зрушити; запис такого типу в inbox тепер сам є сигналом регресії в петлі. Step 3 підсумовує «що змінилось» для продовжень.
 
 ## [0.2.0] — 2026-07-07
 Впровадження 15 покращень за whitepaper «The New SDLC with Vibe Coding» (Google/Kaggle, 2026) — див. `improvements-new-sdlc-vibe-coding.md` у робочій папці.

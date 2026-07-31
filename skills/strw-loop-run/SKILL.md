@@ -1,7 +1,7 @@
 ---
 name: strw-loop-run
-version: 0.2.0
-description: Execute an STRW factory loop (L1–L6) by its passport — read state, budget check, maker phase, checker phase, write state, escalate or archive. Use when the user asks to "запусти петлю", "run loop", "запусти discovery/validation/build/growth/portfolio/retro", "виконай L1/L2/L3/L4/L5/L6", "продовж петлю для продукту", or when a scheduled task fires a loop run. Also the headless entry point for all scheduled STRW loops.
+version: 0.3.0
+description: Execute an STRW factory loop (L1–L6) by its passport — read state, budget check, maker phase, checker phase, write state, auto-advance to the next non-gate stage, escalate or archive. Use when the user asks to "запусти петлю", "run loop", "запусти discovery/validation/build/growth/portfolio/retro", "виконай L1/L2/L3/L4/L5/L6", "продовж петлю для продукту", or when a scheduled task fires a loop run. Also the headless entry point for all scheduled STRW loops.
 ---
 
 # STRW Loop Run
@@ -36,8 +36,14 @@ description: Execute an STRW factory loop (L1–L6) by its passport — read sta
 - Додати рядок у `loops-log/` (схема — state-protocol.md): дата · петля · продукт · тривалість · ітерації maker↔checker · first-pass так/ні · вердикти · ескалації · моделі maker/checker.
 - Git commit: `loop(<id>): <підсумок одним рядком>` (+ push, якщо конектор доступний).
 
-### Step 7 — Escalate or archive
-- Знахідки/gate-запити/питання → append-top у `triage-inbox.md` за схемою inbox.
+### Step 7 — Auto-advance (не чекати на «запусти», версія 0.3.0, 2026-07-20)
+Якщо ця петля щойно відкрила прохід до наступної НЕ-gate стадії — напр. L1 додав картку в черзі і WIP (`portfolio.md`, ліміт 3) та секвенування (правило проти паралельної валідації карток на одній портфельній тезі, як зафіксовано в triage-inbox 2026-07-17) це дозволяють — одразу виклич `strw-loop-run` для наступної петлі (тут: L2-validation) В МЕЖАХ ЦЬОГО Ж headless-заходу. Не чекай, доки Andrii скаже «запусти/продовж» під час triage — це і є зміна, що прибирає головний bottleneck (STRW_Autonomy_Plan_v1, 2026-07-20).
+- До Andrii йде ТІЛЬКИ: gate-рішення (G1–G4), незворотна дія (гроші, прод-деплой, публічний реліз, видалення даних), і genuine `question` — петля дійсно не може вирішити сама (конфлікт, брак даних, портфельна колізія). Це буквально принцип №5 company-context.md, який просто досі не був реалізований у коді петлі.
+- Якщо WIP вичерпано або є конфлікт секвенування — це і є genuine question: ескалюй у inbox з поясненням «чому саме зараз не варто запускати паралельно», а не мовчки блокуй і не мовчки запускай.
+- L3 Build continuation (після G2) і L4 Growth (щотижня/продукт) вважаються auto-advance за визначенням — вони й так тригеряться подієво/розкладом, а не рішенням Andrii; ця секція формалізує те саме правило для L2.
+
+### Step 8 — Escalate or archive
+- Знахідки/gate-запити/питання → append-top у `triage-inbox.md` за схемою inbox. Для gate-request і будь-якого запису, що є продовженням старішого OPEN-запису по тому ж продукту, — додай 2–4 рядки **«що змінилось з моменту останнього запису»** (порівняй з попереднім OPEN/DONE записом по цьому продукту), а не лише посилання на артефакт. Мета — щоб Andrii не відновлював контекст з нуля (comprehension debt, STRW_Autonomy_Plan_v1 §3.5).
 - Порожній результат → один рядок логу, тихе завершення (без шуму в inbox).
 
 ## Rules
