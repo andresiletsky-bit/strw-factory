@@ -24,7 +24,7 @@ ID: коротке-слово-NNN (напр. tea-001).
    - Тека `prototypes/` з README: «disposable-код валідації; НІКОЛИ не мержиться в src/ без повного code-review».
 4. Worktree-політика: кожна паралельна фіча в Build — окремий worktree (`isolation: worktree` для субагентів).
 5. Notion-вітрина: сторінка продукту через strw-notion-sync (best-effort, не блокер).
-6. Git commit: `init(<id>): scaffolded after G1 GO`.
+6. Запис у git завершує контур M, повідомлення `init(<id>): scaffolded after G1 GO`. У контурі C — файл у `_outbox/`.
 
 ## Rules
 - Скаффолд мінімальний: репо + стан + сторінка. Ніяких «на виріст».

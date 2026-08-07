@@ -1,6 +1,6 @@
 ---
 name: strw-loop-run
-version: 0.3.0
+version: 0.4.0
 description: Execute an STRW factory loop (L1–L6) by its passport — read state, budget check, maker phase, checker phase, write state, auto-advance to the next non-gate stage, escalate or archive. Use when the user asks to "запусти петлю", "run loop", "запусти discovery/validation/build/growth/portfolio/retro", "виконай L1/L2/L3/L4/L5/L6", "продовж петлю для продукту", or when a scheduled task fires a loop run. Also the headless entry point for all scheduled STRW loops.
 ---
 
@@ -34,7 +34,8 @@ description: Execute an STRW factory loop (L1–L6) by its passport — read sta
 - Оновити `products/<id>/state.md` (Done/Next/Tried & failed) та/або `portfolio.md`.
 - Записати факт у `budget.md`.
 - Додати рядок у `loops-log/` (схема — state-protocol.md): дата · петля · продукт · тривалість · ітерації maker↔checker · first-pass так/ні · вердикти · ескалації · моделі maker/checker.
-- Git commit: `loop(<id>): <підсумок одним рядком>` (+ push, якщо конектор доступний).
+
+Записом у git завершує **контур M** — `strw-run` після зелених гейтів або сама сесія на Mac, пошляхово, повідомленням `loop(<id>): <підсумок одним рядком>`. **`commit-on-stop.sh` коміта НЕ робить:** він лише не дає сесії завершитись мовчки з незаписаним станом і повертає роботу тобі. Причина — коміт має описувати те, що агент справді зробив і перевірив, а хук цього не читав. У контурі C ці ж дані йдуть у `_outbox/` одним файлом — межу тримає `contour-guard.sh`, тож помилитись контуром петля не може.
 
 ### Step 7 — Auto-advance (не чекати на «запусти», версія 0.3.0, 2026-07-20)
 Якщо ця петля щойно відкрила прохід до наступної НЕ-gate стадії — напр. L1 додав картку в черзі і WIP (`portfolio.md`, ліміт 3) та секвенування (правило проти паралельної валідації карток на одній портфельній тезі, як зафіксовано в triage-inbox 2026-07-17) це дозволяють — одразу виклич `strw-loop-run` для наступної петлі (тут: L2-validation) В МЕЖАХ ЦЬОГО Ж headless-заходу. Не чекай, доки Andrii скаже «запусти/продовж» під час triage — це і є зміна, що прибирає головний bottleneck (STRW_Autonomy_Plan_v1, 2026-07-20).
