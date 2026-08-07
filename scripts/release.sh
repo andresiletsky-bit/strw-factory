@@ -226,7 +226,19 @@ fi
 
 # ----- 3) commit, tag, push --------------------------------------------------
 info "Committing"
-run "git add -A"
+# Пошляхово, ніколи `git add -A` — це пряме правило state-protocol.md, і сам
+# цей скрипт його порушував до 07.08. Реліз-коміт має містити РІВНО те, що
+# змінив реліз: два маніфести і CHANGELOG. Усе інше комітить той, хто це писав
+# і перевіряв; замітати чужу незавершену роботу в коміт із написом
+# «chore(release)» — найтихіший спосіб втратити її авторство й опис.
+# Явні блоки, а не `[ -f x ] && run ...`: під `set -e` хибний тест на
+# останньому рядку блоку завалив би весь скрипт посеред релізу.
+run "git add -- '$MANIFEST'"
+if [ -f "$MARKETPLACE" ]; then run "git add -- '$MARKETPLACE'"; fi
+if [ -f "$CHANGELOG" ];   then run "git add -- '$CHANGELOG'";   fi
+if [ "$DRY_RUN" = "false" ] && [ -z "$(git diff --cached --name-only)" ]; then
+  die "нічого не застейджено — реліз без змін у маніфестах не має сенсу"
+fi
 run "git commit -m 'chore(release): $TAG'"
 info "Tagging $TAG"
 run "git tag -a '$TAG' -m 'strw-factory $TAG'"
