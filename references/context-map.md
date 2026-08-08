@@ -16,7 +16,7 @@
 |----|------------------|
 | Тіло SKILL.md | збіг задачі з тригером |
 | Паспорт петлі loops/*.md | strw-loop-run Step 1 |
-| Конституція references/*.md | лише файли, названі у поточному skill |
+| Конституція references/*.md | файли, названі у поточному skill; ПЛЮС канони за подією, навіть якщо skill їх не називає: decision-protocol.md — рішення без очевидної відповіді чи дискусія агентів; dependency-policy.md — будь-яка нова залежність |
 | Рубрики/golden evals/ | checker phase і регресія |
 | Шаблони templates/ | product-init |
 | strw-state (стан, логи) | Step 2 Read state — лише релевантні файли продукту |

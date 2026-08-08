@@ -8,7 +8,7 @@ stop_condition: 0–3 пропозиції покращень у inbox АБО ч
 output: retro-note в briefs/ + пропозиції як question-записи в inbox
 escalation: усі пропозиції; health flags (read coverage↓, autonomy<50%, surrender-патерн, бюджет у стелю) → окремим finding
 budget: haiku для майнінгу логів; sonnet для синтезу; 1 запуск/тиждень
-state_writes: process-changelog.md (тільки після прийняття) · budget.md · git commit loop(L6)
+state_writes: process-changelog.md (тільки після прийняття) · budget.md · рядок у loops-log/. Запис у git робить strw-run на Mac; у контурі C сесія пише в _outbox/
 ---
 
 # L6 · Retro Loop — «фабрика вчить себе»

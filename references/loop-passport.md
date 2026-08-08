@@ -22,7 +22,7 @@ state_writes: <які файли strw-state оновлює>
 ## Життєвий цикл виконання (інваріант для всіх петель)
 
 1. **Read state** — company-context.md + portfolio.md + власний state продукту. Петля продовжує, не починає з нуля.
-2. **Budget check** — звірити budget.md; стеля вичерпана → STOP + budget-alert в inbox.
+2. **Budget check** — звірити budget.md. Плановий запуск понад стелю → тихий no-op (рядок у loops-log, без inbox). Перевитрат усередині заходу → STOP + budget-alert в inbox.
 3. **Maker phase** — виконати роботу за scope (fan-out за subagent-delegation, ≤6). Разом з артефактом maker повертає **trace**: які файли state читав, які перевірки виконав, які тули/скіли викликав, скільки ітерацій. Артефакт без trace не приймається.
 4. **Checker phase** — двоетапно: (0) `scripts/validate-artifact.sh` — детермінована перевірка обов'язкових секцій, fail → одразу назад maker'у без LLM; (1) верифікатор перевіряє вихід проти рубрики (references/evals/rubrics.md) — і **output** (результат), і **trajectory** (trace проти паспорта: читав state? виконав data-integrity? не виходив за scope?). Гарний вихід із пропущеними перевірками = FAIL. Fail → maker виправляє (max 2 ітерації) → далі ескалація.
 5. **Write state** — оновити state.md / portfolio.md / budget.md (факт) + **рядок у loops-log** (state-protocol: тривалість, ітерації maker↔checker, first-pass, вердикти, ескалації). Без цього кроку запуск вважається таким, що не відбувся.
@@ -32,5 +32,5 @@ state_writes: <які файли strw-state оновлює>
 
 - Maker і checker НІКОЛИ не одна роль/промпт.
 - «Done» від maker — заява; done петлі = stop_condition, перевірена checker'ом.
-- Незворотні дії (гроші, прод-деплой, публічний реліз, видалення даних) — заборонені всередині петлі; тільки запит у inbox.
+- Дії зі списку «що йде до CEO» (company-context.md, принцип 5 — єдине джерело) — заборонені всередині петлі; тільки запит у inbox.
 - Внутрішні дані не залишають периметр (data-policy.md).

@@ -17,9 +17,10 @@ strw-state/
 ├── _outbox/                # черга «контур C → Mac»
 └── products/<id>/
     ├── state.md            # хребет: Done / In progress / Next / Tried & failed
-    ├── gates.json          # контракт гейтів циклу (default-FAIL)
     └── idea-card.md · validation-report.md · prd.md · build-report.md
 ```
+
+`gates.json` (контракт гейтів циклу, default-FAIL) живе НЕ в strw-state, а в КОРЕНІ робочого дерева продуктового репо: створює його `strw-gates-init.sh` зі шаблону `bin/gates.<продукт>.template.json`, читає `strw-run` там само.
 
 ## Правила запису
 

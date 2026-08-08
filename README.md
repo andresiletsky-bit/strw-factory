@@ -1,10 +1,10 @@
 # STRW Factory
 
-**Version:** 0.2.0 · Orchestration layer for a one-person AI product company (STRW).
+**Version:** див. `.claude-plugin/plugin.json` — єдине джерело; число тут двічі протухало. Orchestration layer for a one-person AI product company (STRW).
 
 Runs the factory as **loops, not prompts**: scheduled/event-driven loops find work, execute it with maker/checker separation, write state to a git spine, and escalate only gate decisions and irreversible actions to the human CEO.
 
-Design sources: `STRW_Concept_v0.2_Loop_Factory.md`, Loop Engineering (Addy Osmani), whitepaper «The New SDLC with Vibe Coding» (Google/Kaggle 2026: evals не демо, trajectory-верифікація, детерміновані guardrails, економіка harness), proven patterns from grow-product-manager-plugin (data-integrity gate, subagent delegation, self-improvement, template protocol).
+Design sources: STRW Concept v0.2 «Loop Factory» (історичний документ, у репо не живе), Loop Engineering (Addy Osmani), whitepaper «The New SDLC with Vibe Coding» (Google/Kaggle 2026: evals не демо, trajectory-верифікація, детерміновані guardrails, економіка harness), proven patterns from grow-product-manager-plugin (data-integrity gate, subagent delegation, self-improvement, template protocol).
 
 ## Architecture
 
@@ -37,7 +37,7 @@ Andrii (CEO) ── triage-inbox ──┐
 G1 build-or-kill · G2 scope lock · G3 ready-to-ship · G4 portfolio review. Рішення — тільки людина, з підтвердженим прочитанням артефакту, логується в decisions-log.md.
 
 ## Constitution (references/)
-loop-passport · artifact-contracts · state-protocol · budget-policy · data-policy · data-integrity-protocol · subagent-delegation · self-improvement · context-map · **evals/** (rubrics + golden set).
+loop-passport · artifact-contracts · state-protocol · budget-policy · data-policy · data-integrity-protocol · subagent-delegation · self-improvement · context-map · decision-protocol · dependency-policy · **evals/** (rubrics + golden set).
 
 ## Verification layers
 1. **Рівень 0 (детермінований):** `scripts/validate-artifact.sh` — структура артефактів; pre-commit hook у strw-state; CI у продуктових репо (`templates/ci.yml`).

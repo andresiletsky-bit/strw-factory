@@ -7,8 +7,8 @@ checker: strw-brand-reviewer
 stop_condition: growth-report за контрактом + чернетки контенту PASS від checker
 output: growth-report.md · чернетки контенту в products/<id>/growth/
 escalation: пакет «до публікації» → gate-запит в inbox (Andrii публікує або підтверджує автопублікацію каналами з білого списку); бюджетні кампанії → завжди запит
-budget: maker/checker — sonnet; 1 запуск/тиждень/продукт
-state_writes: products/<id>/state.md · metrics.md (маркетинг-метрики) · budget.md · git commit loop(L4)
+budget: maker — sonnet; checker — ІНША модель, ніж maker (hard rule, budget-policy); 1 запуск/тиждень/продукт
+state_writes: products/<id>/state.md · metrics.md (маркетинг-метрики) · budget.md · рядок у loops-log/. Запис у git робить strw-run на Mac; у контурі C сесія пише в _outbox/
 ---
 
 # L4 · Growth Loop — «тижневий ринок»

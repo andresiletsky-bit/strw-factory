@@ -8,7 +8,7 @@ stop_condition: portfolio-brief за контрактом у strw-state/briefs/ 
 output: briefs/YYYY-MM-DD-portfolio-brief.md
 escalation: brief → finding; кандидати KILL/double-down → окремі gate-request G4
 budget: збір — haiku/sonnet субагенти ≤6; синтез — sonnet; 1 запуск/тиждень (групується з L6)
-state_writes: portfolio.md (оновлені стадії/метрики) · budget.md · git commit loop(L5)
+state_writes: portfolio.md (оновлені стадії/метрики) · budget.md · рядок у loops-log/. Запис у git робить strw-run на Mac; у контурі C сесія пише в _outbox/
 ---
 
 # L5 · Portfolio Loop — «п'ятничний G4»
