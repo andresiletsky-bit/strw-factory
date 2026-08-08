@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# strw-factory pre-commit. Активація (разово): git config core.hooksPath .githooks
+#
+# Єдина перевірка тут — гейт розміру конституції (спільний скрипт у strw-ops:
+# логіка одна на всі репо, копії розійшлись би). Відсутність скрипта — FAIL,
+# не пропуск: гейт, що мовчки зникає, гірший за відсутній.
+set -uo pipefail
+GATE="${STRW_ROOT:-$HOME/Developer/STRW}/bin/constitution-size-gate.sh"
+if [ ! -f "$GATE" ]; then
+  echo "pre-commit FAIL: немає $GATE — гейт розміру конституції недоступний."
+  echo "  Понови strw-ops (~/Developer/STRW) або постав STRW_ROOT."
+  exit 1
+fi
+bash "$GATE"
