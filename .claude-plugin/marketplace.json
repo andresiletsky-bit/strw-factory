@@ -7,14 +7,14 @@
   "_comment_version": "metadata.version — версія САМОГО маркетплейсу (1.0.0 → 1.0.1 → 1.0.2), плагін версіонується окремо в plugins[].version. Ці дві лінії ніколи не збігались; зрівняти їх означає відкотити маркетплейс назад.",
   "metadata": {
     "description": "STRW Loop Factory — orchestration plugin for a one-person AI product company.",
-    "version": "1.0.3"
+    "version": "1.0.4"
   },
   "plugins": [
     {
       "name": "strw-factory",
       "source": "./",
       "description": "STRW Loop Factory — runs scheduled/event-driven loops (Discovery, Validation, Build, Growth, Portfolio, Retro) with maker/checker separation, gate discipline (GO/KILL/PIVOT), a git-based state spine, and a single triage inbox for human escalations.",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "author": {
         "name": "Andrii Siletskyi",
         "email": "andre.siletsky@gmail.com"
