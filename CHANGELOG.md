@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.6] — 2026-08-08
+
 ### Changed
 - **Дієта під новий гейт розміру (рев'ю v3, П3.1–3.2).** `.githooks/pre-commit`
   тепер кличе `strw-ops/bin/constitution-size-gate.sh`: loops ≤60 рядків,
