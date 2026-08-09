@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-09
+
 ### Added
 - **Persona Layer Крок 0 (запит CEO 08.08, концепт `_v3-proposal/STRW_Persona_Layer_v1.md`;
   process-changelog [1.4.0]).** Контракт **persona-card** в `artifact-contracts.md`
