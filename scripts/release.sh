@@ -20,6 +20,8 @@
 #   -n, --dry-run          Print every action, modify nothing
 #       --no-push          Commit + tag locally, do not push
 #       --no-gh            Skip creating the GitHub Release
+#       --no-install       Skip installing/verifying the plugin cache (step 5);
+#                          you then owe: claude plugin update + scripts/verify-cache.sh
 #   -y, --yes              Do not prompt for confirmation
 #   -h, --help             Show this help
 # -----------------------------------------------------------------------------
@@ -56,7 +58,7 @@ die()   { printf '%s\n' "${RED}✗ $*${RST}" >&2; exit 1; }
 usage() { sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0; }
 
 # ----- arg parsing -----------------------------------------------------------
-BUMP=""; MESSAGE=""; DRY_RUN="false"; DO_PUSH="true"; CONFIRM="true"
+BUMP=""; MESSAGE=""; DRY_RUN="false"; DO_PUSH="true"; CONFIRM="true"; DO_INSTALL="true"
 SETUP_URL=""
 
 while [ $# -gt 0 ]; do
@@ -68,6 +70,7 @@ while [ $# -gt 0 ]; do
     -n|--dry-run)      DRY_RUN="true"; shift ;;
     --no-push)         DO_PUSH="false"; shift ;;
     --no-gh)           USE_GH="false"; shift ;;
+    --no-install)      DO_INSTALL="false"; shift ;;
     -y|--yes)          CONFIRM="false"; shift ;;
     -h|--help)         usage ;;
     *) die "Unknown argument: $1  (run with --help)" ;;
@@ -257,6 +260,36 @@ if [ "$USE_GH" = "true" ] && [ "$DO_PUSH" = "true" ]; then
   run "gh release create '$TAG' --title 'strw-factory $TAG' --notes-file '$NOTES_FILE'"
 elif [ "$USE_GH" = "true" ]; then
   warn "Skipping gh release because --no-push was set (nothing on remote to attach to)."
+fi
+
+# ----- 5) install into plugin cache + verify against the TAG -----------------
+# Урок 09.08 (inbox 11:2x, рішення CEO того ж дня): маркетплейс має тип
+# `directory` і вказує на живе робоче дерево, тож `claude plugin update` знімає
+# знімок ДЕРЕВА НА МОМЕНТ ІНСТАЛЯЦІЇ, не тега. Правки паралельної сесії,
+# зроблені у вікні між реліз-комітом і інсталяцією, мовчки їдуть у кеш повз
+# коміт, тег і рев'ю (виміряно: кеш 0.3.7 містив рядок, якого немає в v0.3.7).
+# Тому інсталяція — крок релізу, а кеш звіряється з ТЕГОМ (git show), не з
+# деревом: дерево на момент звірки може вже знову бути брудним, і це легально.
+# Звірку робить scripts/verify-cache.sh — ОДИН виконавець на всі записи кешу
+# в обидва боки (кеш→тег і тег→кеш). Придатний і для preflight раннера, щоб
+# реліз і раннер міряли одну рівність одним кодом — станом на 09.08 strw-run.sh
+# його ще НЕ кличе (окреме рішення в strw-ops, не тут).
+if [ "$DRY_RUN" = "false" ] && [ "$DO_PUSH" = "true" ] && [ "$DO_INSTALL" = "true" ]; then
+  if command -v claude >/dev/null 2>&1; then
+    info "Installing $TAG into the plugin cache"
+    claude plugin marketplace update strw-factory >/dev/null 2>&1 \
+      || warn "marketplace update failed — continuing to plugin update"
+    claude plugin update strw-factory@strw-factory \
+      || die "plugin update failed — installed cache still serves the previous version"
+    info "Verifying cache against tag $TAG (not the working tree)"
+    "$SCRIPT_DIR/verify-cache.sh" "$NEW_VERSION" \
+      || die "cache diverges from $TAG — uncommitted edits leaked into the install. Commit/stash them, re-run 'claude plugin update strw-factory@strw-factory', then scripts/verify-cache.sh $NEW_VERSION"
+  else
+    warn "claude CLI not found — install and verify manually: claude plugin update strw-factory@strw-factory && scripts/verify-cache.sh $NEW_VERSION"
+  fi
+elif [ "$DRY_RUN" = "false" ]; then
+  warn "інсталяцію в кеш пропущено ($([ "$DO_PUSH" = "false" ] && printf '%s' '--no-push' || printf '%s' '--no-install')) — сесії читатимуть старий кеш."
+  warn "Доведи реліз до кінця: claude plugin update strw-factory@strw-factory && scripts/verify-cache.sh $NEW_VERSION"
 fi
 
 echo
