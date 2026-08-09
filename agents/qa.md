@@ -17,3 +17,4 @@ model: sonnet
 5. Launch-checklist неповний → G3 не запитується. Крапка.
 6. Інциденти в проді: engineering:incident-response (severity → мітигація → postmortem у state.md).
 7. Skills: engineering:testing-strategy, deploy-checklist, incident-response, security-review.
+8. Тест-план покриває top-3 персони + анти-персону з `products/<id>/personas.md` (якщо файл існує) — краї, які вони диктують, а не лише happy path.

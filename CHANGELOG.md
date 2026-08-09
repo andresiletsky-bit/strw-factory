@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+- **Persona Layer Крок 0 (запит CEO 08.08, концепт `_v3-proposal/STRW_Persona_Layer_v1.md`;
+  process-changelog [1.4.0]).** Контракт **persona-card** в `artifact-contracts.md`
+  (3–5 карт/продукт у `products/<id>/personas.md`, одна — анти-персона, теги [E]/[I]/[A],
+  unexpected_trait лише з [E], tracking_binding); суміжно idea-card += «Гіпотеза аудиторії»,
+  validation-report += «Персони (predicted)», prd += прив'язка stories до persona_id.
+  Клас джерела **`synthetic`** у `data-integrity-protocol.md` — ніколи не evidence,
+  не стоїть у «Попит»/«Сигнали попиту», G1–G4 на нього не спираються.
+  `decision-protocol.md`: панель персон = проба рівня 0 (дієта −6 рядків там само,
+  файл лишився на межі 120). `validate-artifact.sh`: детермінований тип `persona-card`
+  (поля, 3–5 карт, анти-персона, [E] у context/unexpected_trait, [A]-частка ≤50% по файлу,
+  PII-патерни) + golden `persona-card.golden.md` + рубрика в `rubrics.md`.
+  Агенти validation-analyst/qa/support-analytics/validation-critic — по 1–2 рядки
+  персонних обов'язків. Механіка панелі та persona-QA свідомо НЕ реалізовані
+  (Кроки 1–2, чекають рішення CEO — triage-inbox 2026-08-09).
+
 ## [0.3.7] — 2026-08-09
 
 ### Added
