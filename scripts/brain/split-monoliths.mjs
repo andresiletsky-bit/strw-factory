@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env
 // split-monoliths.mjs — «дієта» B1: моноліти strw-state стають типізованими вузлами
 // з генерованим дайджест-фасадом на старому шляху.
 //
@@ -96,19 +96,36 @@ function readMonolith(rel) {
 }
 
 // --- decisions-log.md: 75 секцій `## YYYY-MM-DD · <об'єкт> · <заголовок>` ---
+// Та сама пара «строгий + грубий», що й для тріажу. Спершу її мали лише
+// ескалації — і це була непослідовність, а не рішення: `decisions-log.md`
+// такий самий append-only журнал, який ростиме, а заголовок повз `·` тихо
+// приклеївся б до тіла ПОПЕРЕДНЬОГО рішення.
+const DEC_HEAD = /^## (\d{4}-\d{2}-\d{2}) · ([^·]+?) · (.+)$/;
+const DEC_HEAD_LOOSE = /^## \d{4}-\d{2}-\d{2}/;
+
 function parseDecisions(text) {
   const lines = text.split("\n");
   const heads = [];
+  const unseen = [];
   let fence = false;
   lines.forEach((ln, i) => {
     if (/^```/.test(ln)) fence = !fence;
-    if (!fence && /^## \d{4}-\d{2}-\d{2} · /.test(ln)) heads.push(i);
+    if (fence) return;
+    if (DEC_HEAD.test(ln)) heads.push(i);
+    else if (DEC_HEAD_LOOSE.test(ln)) unseen.push(`${i + 1}: ${ln}`);
   });
+  if (unseen.length) {
+    throw new Error(
+      `decisions: ${unseen.length} заголовк(ів) схожі на рішення, але не розібрані — ` +
+      `вони приклеїлись би до попереднього вузла мовчки:\n  ${unseen.join("\n  ")}`,
+    );
+  }
+  if (fence) throw new Error("decisions: незакритий код-фенс — розбір сліпне саме там, де мовчить лічильник");
   const preamble = lines.slice(0, heads[0]).join("\n");
   const nodes = heads.map((start, k) => {
     const end = k + 1 < heads.length ? heads[k + 1] : lines.length;
     const body = lines.slice(start, end).join("\n");
-    const m = lines[start].match(/^## (\d{4}-\d{2}-\d{2}) · ([^·]+?) · (.+)$/);
+    const m = lines[start].match(DEC_HEAD);
     const [, date, objectRaw, title] = m;
     const object = objectRaw.trim();
     const verdict = (title.match(/\b(KILL|PIVOT|GO)\b/) ?? [])[1] ?? "—";
@@ -180,6 +197,10 @@ function parseTriage(text) {
       `вони випали б з розбивки мовчки:\n  ${unseen.join("\n  ")}`,
     );
   }
+  // Непарна кількість фенсів означає, що трекер десинхронізовано — і тоді
+  // `if (fence) return` глушить сам лічильник вище: розбір бадьоро звітує
+  // «0 вузлів», фасад друкує «Чекає рішення: 0» при живих ескалаціях.
+  if (fence) throw new Error("triage: незакритий код-фенс — розбір сліпне саме там, де мовчить лічильник");
   const preamble = lines.slice(0, heads[0]).join("\n");
   const nodes = heads.map((start, k) => {
     const end = k + 1 < heads.length ? heads[k + 1] : lines.length;
@@ -428,11 +449,32 @@ if (MODE === "dry-run") {
     for (const [n, ok] of b.checks) if (!ok) console.error(`  FAIL ${n}`);
     process.exit(1);
   }
+  // ГВАРДІЯ ІДЕМПОТЕНТНОСТІ. Без неї другий `--apply` читає ФАСАД як моноліт,
+  // розбирає його у три вузли і перезаписує ним `.trash/*.orig` — тобто
+  // знищує єдину копію 800 KB стану, звітує успіх, і `--verify` після цього
+  // каже OK. Відтворено: .trash 817 359 B → 17 616 B, rc=0 на обох кроках.
+  // Сценарій не екзотичний: «щось пішло не так, перезапущу» — це перше, що
+  // робить оператор.
+  const targets = ["decisions-log.md", "triage-inbox.md", "budget.md"];
+  const markHead = MARK.slice(0, MARK.indexOf("%SRC%"));
+  for (const f of targets) {
+    if (readState(f).includes(markHead)) {
+      console.error(`ВІДМОВА: ${f} уже фасад (є маркер генерації) — розбивка вже виконана.`);
+      console.error("  Перегенерувати фасади з вузлів: --regen · Перевірити: --verify");
+      process.exit(1);
+    }
+  }
   const trash = path.join(STATE, ".trash");
   fs.mkdirSync(trash, { recursive: true });
-  for (const f of ["decisions-log.md", "triage-inbox.md", "budget.md"]) {
-    fs.copyFileSync(path.join(STATE, f), path.join(trash, `${f}.orig`));
+  for (const f of targets) {
+    const dst = path.join(trash, `${f}.orig`);
+    if (fs.existsSync(dst)) {
+      console.error(`ВІДМОВА: ${dst} уже існує — перезапис затер би справжній оригінал.`);
+      console.error("  Прибери копію свідомо і руками, якщо вона більше не потрібна.");
+      process.exit(1);
+    }
   }
+  for (const f of targets) fs.copyFileSync(path.join(STATE, f), path.join(trash, `${f}.orig`));
   for (const f of [...b.files, ...b.facades]) {
     const abs = path.join(STATE, f.rel);
     fs.mkdirSync(path.dirname(abs), { recursive: true });
@@ -451,7 +493,17 @@ if (MODE === "dry-run") {
     if (!fs.existsSync(abs)) { console.log(`FAIL відсутній вузол · ${f.rel}`); bad++; continue; }
     if (fs.readFileSync(abs, "utf8") !== f.text) { console.log(`FAIL вузол розійшовся · ${f.rel}`); bad++; }
   }
-  console.log(bad === 0 ? `OK   ${b.files.length} вузлів на диску ≡ розбір` : `${bad} розбіжностей`);
+  // Третій клас, якого ітерація по очікуваних файлах не бачить у принципі:
+  // вузол, якого в розборі НЕМАЄ. Так виглядає осиротілий файл після того, як
+  // оператор виправив заголовок і перезапустив розбивку — нумерація зсунулась,
+  // а старий файл лишився назавжди і мовчки подвоює рішення.
+  const expected = new Set(b.files.map((f) => f.rel));
+  for (const dir of ["decisions", "triage", path.join("budget", "ledger")]) {
+    for (const rel of lsRec(dir)) {
+      if (!expected.has(rel)) { console.log(`FAIL зайвий вузол · ${rel}`); bad++; }
+    }
+  }
+  console.log(bad === 0 ? `OK   ${b.files.length} вузлів на диску ≡ розбір, зайвих немає` : `${bad} розбіжностей`);
   process.exit(bad === 0 ? 0 : 1);
 } else if (MODE === "check-facade" || MODE === "regen") {
   // Прапорець без значення: `--check-facade --state X` не має вважати "--state"
