@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "state": "/Users/Andrew/Developer/STRW/strw-state",
+  "mode": "before",
+  "queries": [
+    {
+      "id": "q1-tea-001",
+      "question": "що вирішено по tea-001 і чому",
+      "before_bytes": 215255,
+      "before_files": [
+        {
+          "file": "company-context.md",
+          "bytes": 10335
+        },
+        {
+          "file": "decisions-log.md",
+          "bytes": 204920
+        }
+      ],
+      "before_why": "company-context.md § «Де живуть факти»: «Що вже вирішено і чому → decisions-log.md»; ДНК читається перед будь-якою роботою (loop-passport.md крок 1)",
+      "floor_bytes": 2317,
+      "floor_spans": [
+        {
+          "file": "decisions-log.md",
+          "bytes": 2317,
+          "hits": 1
+        }
+      ],
+      "answer_is": "G1 не ухвалено, продукт явно заморожено до релізу Pact (2026-07-28)",
+      "ballast_pct": 98.9
+    },
+    {
+      "id": "q2-budget-ceiling",
+      "question": "скільки лишилось стелі зовнішніх витрат",
+      "before_bytes": 141480,
+      "before_files": [
+        {
+          "file": "company-context.md",
+          "bytes": 10335
+        },
+        {
+          "file": "budget.md",
+          "bytes": 131145
+        }
+      ],
+      "before_why": "company-context.md § «Де живуть факти»: «Стелі прогонів петель, моделі, зовнішні витрати → budget.md»; loop-passport.md крок 2 «Budget check — звірити budget.md»",
+      "floor_bytes": 126993,
+      "floor_spans": [
+        {
+          "file": "budget.md",
+          "bytes": 191,
+          "hits": 1
+        },
+        {
+          "file": "budget.md",
+          "bytes": 719,
+          "hits": 1
+        },
+        {
+          "file": "budget.md",
+          "bytes": 126083,
+          "hits": 1
+        }
+      ],
+      "answer_is": "стеля $200/міс; факт — сума 82 рядків «Факт» = $0; лишилось $200",
+      "ballast_pct": 10.2
+    },
+    {
+      "id": "q3-pact-001-waiting",
+      "question": "що чекає рішення Andrii по pact-001",
+      "before_bytes": 655890,
+      "before_files": [
+        {
+          "file": "company-context.md",
+          "bytes": 10335
+        },
+        {
+          "file": "triage-inbox.md",
+          "bytes": 477799
+        },
+        {
+          "file": "portfolio.md",
+          "bytes": 36611
+        },
+        {
+          "file": "budget.md",
+          "bytes": 131145
+        }
+      ],
+      "before_why": "skills/strw-triage/SKILL.md Step 1 (дослівно): «strw-state/triage-inbox.md (усі OPEN) + portfolio.md + budget.md (факт місяця)»",
+      "floor_bytes": 1851,
+      "floor_spans": [
+        {
+          "file": "triage-inbox.md",
+          "bytes": 1851,
+          "hits": 1
+        }
+      ],
+      "answer_is": "gate-request 14.08 19:0x — lock M3-скоупу (після B0 це єдиний OPEN по pact-001)",
+      "ballast_pct": 99.7
+    }
+  ]
+}
