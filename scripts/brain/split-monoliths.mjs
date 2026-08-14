@@ -120,7 +120,7 @@ function parseDecisions(text) {
       `вони приклеїлись би до попереднього вузла мовчки:\n  ${unseen.join("\n  ")}`,
     );
   }
-  if (fence) throw new Error("decisions: незакритий код-фенс — розбір сліпне саме там, де мовчить лічильник");
+  if (fence) throw new Error("decisions-log.md: незакритий код-фенс — розбір сліпне саме там, де мовчить лічильник");
   const preamble = lines.slice(0, heads[0]).join("\n");
   const nodes = heads.map((start, k) => {
     const end = k + 1 < heads.length ? heads[k + 1] : lines.length;
@@ -200,7 +200,7 @@ function parseTriage(text) {
   // Непарна кількість фенсів означає, що трекер десинхронізовано — і тоді
   // `if (fence) return` глушить сам лічильник вище: розбір бадьоро звітує
   // «0 вузлів», фасад друкує «Чекає рішення: 0» при живих ескалаціях.
-  if (fence) throw new Error("triage: незакритий код-фенс — розбір сліпне саме там, де мовчить лічильник");
+  if (fence) throw new Error("triage-inbox.md: незакритий код-фенс — розбір сліпне саме там, де мовчить лічильник");
   const preamble = lines.slice(0, heads[0]).join("\n");
   const nodes = heads.map((start, k) => {
     const end = k + 1 < heads.length ? heads[k + 1] : lines.length;
@@ -287,7 +287,17 @@ function ledgerNode(n) {
   // Рахуємо суму ЛИШЕ по рядках таблиці — абзаци-NB, що їдуть у тому ж шматку,
   // у суму потрапити не можуть за побудовою.
   const dataRows = n.rows.filter((r) => LEDGER_ROW.test(r));
-  const total = dataRows.reduce((s, r) => s + (parseFloat(r.split("|")[4]) || 0), 0);
+  // `parseFloat(...) || 0` мовчки перетворював «—», «$12» чи зсунуту колонку на
+  // нуль — тобто занижував витрати проти стелі. Це рівно те число, заради якого
+  // фасад узагалі існує (запит «скільки лишилось» — агрегат), тож хай падає.
+  const total = dataRows.reduce((sum, r) => {
+    const cell = (r.split("|")[4] ?? "").trim();
+    const v = Number(cell);
+    if (cell === "" || !Number.isFinite(v)) {
+      throw new Error(`budget ${n.month}: нерозбірна клітинка витрат «${cell}» у рядку:\n  ${r}`);
+    }
+    return sum + v;
+  }, 0);
   const fm = [
     "---",
     `id: ledger-${n.month}`,
