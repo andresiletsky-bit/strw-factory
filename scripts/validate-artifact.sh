@@ -2,7 +2,7 @@
 # validate-artifact.sh — детермінована перевірка обов'язкових секцій артефакту.
 # Рівень 0 checker-фази (loop-passport §4): структуру перевіряє скрипт, зміст — LLM.
 # Usage: validate-artifact.sh <type> <file>
-# Types: idea-card | validation-report | prd | build-report | launch-checklist | growth-report | portfolio-brief | persona-card
+# Types: idea-card | validation-report | prd | build-report | launch-checklist | growth-report | portfolio-brief | retro-note | persona-card
 set -euo pipefail
 
 usage() { echo "Usage: $0 <type> <file>" >&2; exit 2; }
@@ -67,12 +67,13 @@ fi
 # Канонічні секції за artifact-contracts.md (заголовки '## …')
 case "$TYPE" in
   idea-card)         REQUIRED=("Проблема" "Сигнали попиту" "Тип" "Гіпотеза монетизації" "Чому ми" "ICE");;
-  validation-report) REQUIRED=("TAM/SAM/SOM" "Конкуренти" "Попит" "Ризики" "Найдешевша перевірка" "ICE" "Рекомендація" "Critic-review");;
+  validation-report) REQUIRED=("TAM/SAM/SOM" "Конкуренти" "Попит" "Ризики" "Найдешевша перевірка" "ICE" "Рекомендація" "Critic-review" "Не встановлено");;
   prd)               REQUIRED=("Проблема і цілі" "Метрики успіху" "Scope MVP" "НЕ-цілі" "User stories" "Залежності" "Tracking" "Оцінка обсягу");;
   build-report)      REQUIRED=("Реалізовано vs PRD" "Тести" "Security" "Tracking" "Обмеження" "Deploy-checklist" "Code-review");;
   launch-checklist)  REQUIRED=("Тести" "Аналітика" "Security" "Rollback" "Сторінка продукту" "Ціни");;
   growth-report)     REQUIRED=("Кампанії" "Метрики" "Контент" "Наступний тиждень");;
-  portfolio-brief)   REQUIRED=("Продукти" "Метрики фабрики" "Фокуси" "KILL" "Чекає рішення");;
+  portfolio-brief)   REQUIRED=("Продукти" "Метрики фабрики" "Фокуси" "KILL" "Чекає рішення" "Не встановлено");;
+  retro-note)        REQUIRED=("Що спрацювало" "Патерни" "Health flags" "Пропозиції" "Не встановлено");;
   *) echo "FAIL: unknown type '$TYPE'" >&2; exit 2;;
 esac
 
@@ -82,12 +83,20 @@ for section in "${REQUIRED[@]}"; do
   grep -qiE "^#{2,3} .*${section}" "$FILE" || MISSING+=("$section")
 done
 
-# Порожні секції: заголовок, за яким одразу наступний заголовок або EOF
+# Порожні секції: заголовок, за яким одразу заголовок ТОГО Ж або вищого рівня, або EOF.
+# Глибший заголовок (## → ###) — це вміст секції, не порожнеча: retro-note тримає
+# патерни й пропозиції саме підсекціями (латентний баг, спійманий golden'ом 15.08).
 EMPTY=()
 while IFS= read -r line_no; do
   header=$(sed -n "${line_no}p" "$FILE")
+  hashes="${header%% *}"; level=${#hashes}
   next=$(awk -v n="$line_no" 'NR>n && NF {print; exit}' "$FILE")
-  [[ "$next" =~ ^#{1,3}\  || -z "$next" ]] && EMPTY+=("${header#\#\# }")
+  if [[ -z "$next" ]]; then
+    EMPTY+=("${header#\#\# }")
+  elif [[ "$next" =~ ^(#{1,6})[[:space:]] ]]; then
+    nlevel=${#BASH_REMATCH[1]}
+    (( nlevel <= level )) && EMPTY+=("${header#\#\# }")
+  fi
 done < <(grep -nE '^#{2,3} ' "$FILE" | cut -d: -f1)
 
 if [[ ${#MISSING[@]} -eq 0 && ${#EMPTY[@]} -eq 0 ]]; then
