@@ -118,7 +118,51 @@ for (const q of QUERIES) {
   });
 }
 
-if (mode === "before" || mode === "floor") {
+// ── Режим «після»: чи здешевшало І чи відповідь узагалі знайшлась ──────────
+//
+// Міряти самі байти тут недостатньо, і це головна пастка гейта §8: retrieval,
+// що повертає три випадкові секції, дає −99% обсягу і виглядає тріумфом.
+// Тому кожен запит несе КАНОНІЧНЕ місце відповіді, і запуск зараховується
+// лише тоді, коли видача це місце накрила.
+const ANSWER_AT = {
+  "q1-tea-001": { file: "decisions-log.md", startRe: /^## .*·\s*tea-001\s*·/ },
+  "q2-budget-ceiling": { file: "budget.md", startRe: /^## Стелі/ },
+  "q3-pact-001-waiting": { file: "triage-inbox.md", startRe: /^## \[OPEN\]/ },
+};
+
+function answerSpan(id) {
+  const spec = ANSWER_AT[id];
+  const lines = fs.readFileSync(path.join(STATE, spec.file), "utf8").split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (!spec.startRe.test(lines[i])) continue;
+    let j = i + 1;
+    while (j < lines.length && !/^## /.test(lines[j])) j++;
+    return { file: spec.file, from: i + 1, to: j };
+  }
+  return null;
+}
+
+if (mode === "after") {
+  const hitsJson = args[args.indexOf("--hits") + 1] ?? null;
+  if (args.indexOf("--hits") === -1 || !hitsJson) { console.error("after: потрібен --hits <файл з видачею query.mjs --json по кожному запиту>"); process.exit(2); }
+  const all = JSON.parse(fs.readFileSync(hitsJson, "utf8"));
+  for (const q of report.queries) {
+    const hits = all[q.id] ?? [];
+    const want = answerSpan(q.id);
+    const covered = want !== null && hits.some((h) =>
+      h.path === want.file && h.from <= want.to && h.to >= want.from);
+    q.after_bytes = hits.reduce((s, h) => s + (h.bytes ?? 0), 0);
+    q.after_sections = hits.length;
+    q.answer_covered = covered;
+    q.answer_at = want;
+    q.reduction_pct = +(100 * (1 - q.after_bytes / q.before_bytes)).toFixed(1);
+  }
+  const red = report.queries.map((q) => q.reduction_pct).sort((a, b) => a - b);
+  report.median_reduction_pct = red[Math.floor(red.length / 2)];
+  report.correct = report.queries.filter((q) => q.answer_covered).length;
+  report.gate_pass = report.median_reduction_pct >= 50 && report.correct === report.queries.length;
+  console.log(JSON.stringify(report, null, 1));
+} else if (mode === "before" || mode === "floor") {
   console.log(JSON.stringify(report, null, 2));
 } else {
   console.error("usage: bench.mjs before|floor [--state <dir>]");
