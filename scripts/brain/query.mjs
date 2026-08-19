@@ -24,6 +24,9 @@ const FLAGS_WITH_VALUE = new Set(["-k", "--index", "--state", "--out"]);
 const QUERY = argv.filter((a, i) =>
   !a.startsWith("-") && !FLAGS_WITH_VALUE.has(argv[i - 1])).join(" ").trim();
 const K = Number(valOf("-k") ?? 5);
+// Стеля обсягу видачі. 8 KB — приблизно те, що агент може прочитати, не
+// втрачаючи сенсу економії; змінюється прапорцем, коли запит того вартий.
+const BUDGET = Number(valOf("--budget") ?? 8000);
 const STATE = path.resolve(valOf("--state") ?? path.join(process.env.HOME ?? "", "Developer/STRW/strw-state"));
 const INDEX = valOf("--index") ?? path.join(STATE, "_brain", "index", "brain-index.json");
 
@@ -66,7 +69,7 @@ function expand(ts) {
 const tokens = (s) => [...new Set((s.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}_-]*/gu) ?? [])
   .filter((t) => t.length >= 3 && !STOP.has(t)).map(stem))];
 
-export function score(index, query, k = 5) {
+export function score(index, query, k = 5, BUDGET = 8000) {
   const qs = expand(tokens(query));
   if (qs.length === 0) return [];
 
@@ -98,8 +101,12 @@ export function score(index, query, k = 5) {
     // дев'ятирядковою, хоча коштує прочитання у 60 разів дорожче — а вся
     // затія саме про вартість прочитання. Логарифм, не лінійність: довга
     // секція має програвати, а не зникати.
-    const len = Math.max(1, s.to - s.from + 1);
-    sc /= 1 + Math.log10(1 + len / 20);
+    // Штраф рахується в БАЙТАХ, не рядках: агент платить байтами, і вся система
+    // існує заради цієї ціни. На рядках журнал бюджету за місяць — одна секція
+    // на 130 KB, але «лише» 95 рядків, тож штраф виходив як у середньої нотатки,
+    // і відповідь на запит про стелю коштувала 133 KB замість 3 KB.
+    const cost = Math.max(200, s.bytes ?? (s.to - s.from + 1) * 90);
+    sc /= 1 + Math.log10(1 + cost / 500);
 
     // Секція-обрубок відповісти не може. `# tea-001 · state` — заголовок із
     // порожнім тілом — виграла запит «що вирішено по tea-001», обійшовши сам
@@ -122,7 +129,21 @@ export function score(index, query, k = 5) {
   }
   // Детермінований порядок: за скором, далі за шляхом і рядком — щоб однакові
   // скори не переставлялись між запусками.
-  return out.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path) || a.from - b.from).slice(0, k);
+  // Видача обмежується БАЙТАМИ, не кількістю секцій. «Топ-5» — хибний контракт,
+  // коли секції різняться в 400 разів: для запиту про стелю топ-3 давали повну
+  // відповідь за 1 664 B, а 4-й і 5-й хіти (журнали за місяць) додавали 132 KB
+  // і перетворювали −97% на −5,6%. Ліміт у байтах — це і є те, чим платить агент.
+  const ranked = out.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path) || a.from - b.from);
+  const picked = [];
+  let spent = 0;
+  for (const h of ranked) {
+    if (picked.length >= k) break;
+    // Перший хіт беремо завжди: інакше запит, чия єдина відповідь велика,
+    // повертав би порожньо і виглядав як «не знаю».
+    if (picked.length && spent + h.bytes > BUDGET) continue;
+    picked.push(h); spent += h.bytes;
+  }
+  return picked;
 }
 
 if (import.meta.main) {
@@ -132,7 +153,7 @@ if (import.meta.main) {
     process.exit(1);
   }
   const index = JSON.parse(fs.readFileSync(INDEX, "utf8"));
-  const hits = score(index, QUERY, K);
+  const hits = score(index, QUERY, K, BUDGET);
   if (argv.includes("--json")) { console.log(JSON.stringify(hits, null, 1)); }
   else if (hits.length === 0) {
     // Чесна порожнеча — теж відповідь, і саме її перевіряє негативний контроль
