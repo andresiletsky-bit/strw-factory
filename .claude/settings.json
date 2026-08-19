@@ -69,6 +69,16 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/Andrew/Developer/STRW/.claude/hooks/registry-check.sh"
+          }
+        ]
+      }
     ]
   }
 }

@@ -18,7 +18,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STRW_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 ENGINE_DIR="${1:-$STRW_ROOT/strw-state/engine}"
-DECISIONS_LOG="$STRW_ROOT/strw-state/decisions-log.md"
+# Журнал рішень береться ПОРУЧ із реєстром, а не з $STRW_ROOT. Інакше аргумент
+# `engine-dir` бреше: елементи читаються з worktree, а журнал — зі спільної
+# копії, і 18.08 це дало точно хибний діагноз (обидві копії мали по 76
+# записів, але РІЗНИХ).
+DECISIONS_LOG="$(cd "$ENGINE_DIR/.." 2>/dev/null && pwd)/decisions-log.md"
 
 [[ -d "$ENGINE_DIR" ]] || { echo "ERROR: engine-теки немає: $ENGINE_DIR" >&2; exit 2; }
 command -v python3 >/dev/null || { echo "ERROR: потрібен python3" >&2; exit 2; }
@@ -164,15 +168,37 @@ for lid, (repo, owned) in lane_paths.items():
 # в межах однієї доби. Лог append-only → кількість датованих записів є монотонним
 # лічильником, і саме він дає точну відповідь «чи дописали щось ПІСЛЯ звірки».
 # Дати лишаються запасним варіантом для елементів без лічильника.
+#
+# Джерел два, і після розбивки Second Brain (19.08) головне — ДИРЕКТОРІЯ.
+# `decisions-log.md` став фасадом: записів у ньому нуль, вони живуть у
+# `decisions/YYYY/dec-NNN-*.md`. Валідатор, який рахував лише моноліт, бачив 0
+# і оголошував, що 53 елементи посилаються на зниклі записи — на здоровому
+# реєстрі. Порядок вузлів = порядок дописування (`dec-NNN`), бо саме він, а не
+# дата, є семантикою лічильника `decisions_log_entries`.
+def _entry(line):
+    m = re.match(r"^##\s+(\d{4}-\d{2}-\d{2})\b", line)
+    return (m.group(1), line[3:].strip()) if m else None
+
 decision_dates, decision_titles = [], []
-if os.path.isfile(decisions_log):
+decisions_dir = os.path.join(os.path.dirname(decisions_log), "decisions")
+node_files = sorted(globmod.glob(os.path.join(decisions_dir, "*", "*.md")))
+if node_files:
+    for path in node_files:
+        for line in open(path):
+            e = _entry(line)
+            if e:
+                decision_dates.append(e[0]); decision_titles.append(e[1])
+                break
+        else:
+            err(f"{os.path.relpath(path, decisions_dir)}: вузол рішення без заголовка "
+                f"`## YYYY-MM-DD · …` — його не видно лічильнику")
+elif os.path.isfile(decisions_log):
     for line in open(decisions_log):
-        m = re.match(r"^##\s+(\d{4}-\d{2}-\d{2})\b", line)
-        if m:
-            decision_dates.append(m.group(1))
-            decision_titles.append(line[3:].strip())
+        e = _entry(line)
+        if e:
+            decision_dates.append(e[0]); decision_titles.append(e[1])
 else:
-    err(f"немає {decisions_log}")
+    err(f"немає ні {decisions_dir}/, ні {decisions_log}")
 newest_decision = max(decision_dates) if decision_dates else None
 decisions_count = len(decision_dates)
 
@@ -243,6 +269,16 @@ for path in item_files:
     vdate = str(ver)[:10]
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", vdate):
         err(f"{name}: verified_against_decisions_log_at = {ver!r} — не ISO-дата"); continue
+
+    # `done` на свіжість НЕ перевіряється. Дія, яку спека §3.3 приписує
+    # протухлому елементу — «такий елемент не `ready`, а `blocked`» — для вже
+    # закритого не існує, отже червоне тут не має адресата. Вимір 19.08: 38 із
+    # 51 stale були саме `done`, тобто три чверті сигналу привчали його
+    # ігнорувати. Рішення сесії (мандат CEO «технічні рішення приймай сам»),
+    # оборотне видаленням цих двох рядків; ціна названа: критерій закритого
+    # елемента більше ніколи не звіряється з новими рішеннями.
+    if st == "done":
+        continue
 
     stored = ab.get("decisions_log_entries")
     if stored is not None:
