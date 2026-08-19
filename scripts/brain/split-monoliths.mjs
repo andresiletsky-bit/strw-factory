@@ -24,6 +24,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { slugify } from "./lib.mjs";
 
 // ── Аргументи ──────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
@@ -44,19 +45,7 @@ const MARK = "<!-- brain:generated нижче · не редагувати ру�
 // Свідомий компроміс: транслітерація, а не переклад. Переклад потребував би
 // моделі всередині скрипта — пряма не-ціль v1. Читабельність програє, зате
 // результат детермінований і відтворюваний на будь-якій машині.
-const TRANSLIT = {
-  а:"a",б:"b",в:"v",г:"h",ґ:"g",д:"d",е:"e",є:"ie",ж:"zh",з:"z",и:"y",і:"i",ї:"i",
-  й:"i",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"kh",
-  ц:"ts",ч:"ch",ш:"sh",щ:"shch",ь:"",ю:"iu",я:"ia",ы:"y",э:"e",ъ:"","'":"","’":"",
-};
-function slugify(s, max = 50) {
-  const t = [...s.toLowerCase()].map((c) => TRANSLIT[c] ?? c).join("");
-  const cleaned = t.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  if (cleaned.length <= max) return cleaned;
-  const cut = cleaned.slice(0, max);
-  const lastDash = cut.lastIndexOf("-");
-  return (lastDash > max * 0.6 ? cut.slice(0, lastDash) : cut).replace(/-+$/, "");
-}
+// TRANSLIT і slugify живуть у ./lib.mjs — див. коментар там про дрейф копій.
 
 // ── ISO-тиждень без залежностей (правило четверга) ─────────────────────────
 // Директорія береться за ISO-РОКОМ, не календарним: 2026-12-31 → 2027-W01.
