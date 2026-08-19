@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0] — 2026-08-19
+
+### Second Brain v1 — retrieval-шар вливається у скіли (гейт §8 зараховано CEO)
+- `references/loop-passport.md` крок 1 і `skills/strw-triage` Step 1: спершу `brain query`,
+  читати лише повернуті секції за діапазонами рядків. Виміряне скорочення прочитаного —
+  97,8% / 98,3% / 99,1% при планці 50%.
+- `scripts/brain/`: `split-monoliths.mjs` (моноліти → 213 вузлів + генеровані фасади),
+  `index.mjs` + `query.mjs` (детермінований retrieval, нуль векторів/БД/LLM),
+  `arms.mjs` (50 вузлів ARMS із реальних джерел), `health.mjs` (гігієна графа для L6),
+  `bench.mjs` (вимір гейта), `lib.mjs`.
+- `strw-retro` крок 5b: биті лінки · дублі · сироти рахує скрипт, а не абзац.
+- Відкриті ескалації переїхали у `triage/open/`; `triage-inbox.md` — генерований зріз.
+
+
 ## [Unreleased]
 
 ## [0.4.3] — 2026-08-18

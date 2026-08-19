@@ -21,7 +21,7 @@ state_writes: <які файли strw-state оновлює>
 
 ## Життєвий цикл виконання (інваріант для всіх петель)
 
-1. **Read state** — company-context.md + portfolio.md + власний state продукту. Петля продовжує, не починає з нуля.
+1. **Read state** — спершу `brain query "<питання>"`, і читай ЛИШЕ повернуті секції за їх діапазонами рядків; цілі файли — тільки якщо запит не влучив. База: company-context.md + portfolio.md + власний state продукту. Петля продовжує, не починає з нуля.
 2. **Budget check** — звірити budget.md. Плановий запуск понад стелю → тихий no-op (рядок у loops-log, без inbox). Перевитрат усередині заходу → STOP + budget-alert в inbox.
 3. **Maker phase** — виконати роботу за scope (fan-out за subagent-delegation, ≤6). Разом з артефактом maker повертає **trace**: які файли state читав, які перевірки виконав, які тули/скіли викликав, скільки ітерацій. Артефакт без trace не приймається.
 4. **Checker phase** — двоетапно: (0) `scripts/validate-artifact.sh` — детермінована перевірка обов'язкових секцій, fail → одразу назад maker'у без LLM; (1) верифікатор перевіряє вихід проти рубрики (references/evals/rubrics.md) — і **output** (результат), і **trajectory** (trace проти паспорта: читав state? виконав data-integrity? не виходив за scope?). Гарний вихід із пропущеними перевірками = FAIL. Fail → maker виправляє (max 2 ітерації) → далі ескалація.

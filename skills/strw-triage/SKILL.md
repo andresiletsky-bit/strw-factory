@@ -1,6 +1,6 @@
 ---
 name: strw-triage
-version: 0.3.0
+version: 0.4.0
 description: Triage the STRW inbox — rank open escalations, present decisions to make, chain execution to the right loop or skill. Use when the user asks "розбери inbox", "що чекає рішень", "triage", "що на порядку денному", "розбір ескалацій", "daily triage", or for the morning/evening triage ritual. The CEO attention dispatcher of the factory — since v0.3.0, inbox holds ONLY items that genuinely need Andrii (non-gate continuations auto-advance per strw-loop-run Step 7).
 ---
 
@@ -11,7 +11,7 @@ description: Triage the STRW inbox — rank open escalations, present decisions 
 ## Workflow
 
 ### Step 1 — Read
-`strw-state/triage-inbox.md` (усі OPEN) + `portfolio.md` + `budget.md` (факт місяця).
+Спершу `brain query`, читай лише повернуті секції. Відкриті ескалації живуть у `strw-state/triage/open/` (по файлу на запис); `triage-inbox.md` — ГЕНЕРОВАНИЙ зріз, рішення вписується у вузол, далі `split-monoliths.mjs --regen`. Далі `portfolio.md` + `portfolio.md` + `budget.md` (факт місяця).
 
 ### Step 2 — Rank (детермінований порядок)
 1. `budget-alert` та `error` (фабрика зупинена/зламана);
