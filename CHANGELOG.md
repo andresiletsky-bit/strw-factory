@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-19
+
 ### Second Brain v1 — retrieval-шар вливається у скіли (гейт §8 зараховано CEO)
 - `references/loop-passport.md` крок 1 і `skills/strw-triage` Step 1: спершу `brain query`,
   читати лише повернуті секції за діапазонами рядків. Виміряне скорочення прочитаного —
