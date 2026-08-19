@@ -23,6 +23,14 @@ description: Weekly STRW retro loop (L6) — mine loop logs and user corrections
 1. **Регресія:** прогін зміненого компонента на golden-наборі (`references/evals/rubrics.md`, розділ «Регресія»). Не пройшла → зміна відхиляється, повідом Andrii.
 2. Правка файлу → bump версії skill → bump plugin.json → CHANGELOG.md плагіну → strw-state/process-changelog.md (semver процесу). Незастосоване — залогуй як відхилене (щоб не пропонувати повторно без нових даних).
 
+### Step 5b — Гігієна графа (виконавець, не абзац)
+`deno run -A ${STRW_ROOT:-$HOME/Developer/STRW}/strw-factory/scripts/brain/health.mjs`
+дає три пункти чек-листа детерміновано: **биті wikilinks** (посилання в нікуди),
+**дублі** (два вузли з тим самим іменем/назвою) і **сироти** — вузли без жодного
+зв'язку, тобто кандидати в **gap-analysis**: або їх ніхто не знайде, або вони
+більше не потрібні. Перед прогоном перебудуй індекс (`index.mjs`), інакше
+міряєш учорашній граф.
+
 ### Step 5 — Health flags
 Окремо перевір і скажи прямо, якщо бачиш: read coverage падає (gates без читання) · autonomy ratio <50% (петлі погано спроєктовані) · рішення = рекомендація 3+ тижні поспіль (cognitive surrender) · budget-факт систематично б'є в стелю.
 
