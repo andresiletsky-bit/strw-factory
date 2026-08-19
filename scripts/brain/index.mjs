@@ -164,6 +164,16 @@ export function build(state) {
     const text = fs.readFileSync(path.join(state, rel), "utf8");
     const { data, endLine } = parseFrontmatter(text);
     const body = text.split("\n").slice(endLine).join("\n");
+    // Frontmatter бере участь у пошуку нарівні з текстом — за тим самим
+    // принципом, що й ребра: індексуємо те, що НАПИСАНО, а не здогадуємось.
+    // Без цього запит «що чекає рішення» не міг дістатись вузлів зі
+    // `status: open`, хоча поле існує саме для цього, і система віддавала
+    // прозу трьохтижневої давнини. Поля дописуються до ключових слів КОЖНОЇ
+    // секції файлу: frontmatter описує весь файл, а не його першу секцію.
+    const fmWords = ["type", "status", "kind", "product", "loop"]
+      .map((k) => data[k]).filter((v) => typeof v === "string" && v)
+      .concat(Array.isArray(data.tags) ? data.tags : [])
+      .join(" ").replace(/\[\[|\]\]/g, " ");
     nodes.push({
       id: rel,
       title: data.title || path.basename(rel, ".md"),
@@ -175,7 +185,11 @@ export function build(state) {
       bytes: Buffer.byteLength(text, "utf8"),
     });
     edges.push(...extractEdges(rel, data, body));
-    secs.push(...sections(rel, text, endLine));
+    const fmKeys = keywords(fmWords, 12);
+    for (const sec of sections(rel, text, endLine)) {
+      sec.keywords = [...new Set([...sec.keywords, ...fmKeys])];
+      secs.push(sec);
+    }
   }
   return { schema_version: 1, nodes, edges, sections: secs };
 }

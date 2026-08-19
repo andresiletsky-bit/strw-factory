@@ -35,11 +35,39 @@ the and for that with this from are was were has have not you your our its
 `.split(/\s+/).filter(Boolean));
 
 const stem = (t) => (t.length > 6 ? t.slice(0, 6) : t);
+
+// ── Місток між мовою питання і мовою розмітки ──────────────────────────────
+//
+// Виміряна діра, а не здогад: запит «status open triage» знаходив обидві живі
+// ескалації, а «що чекає рішення Andrii» — жодної, віддаючи натомість липневі
+// брифи з ідеальним збігом заголовка. Стан промаркований `status: open`,
+// людина питає «чекає». Ключові слова тут ні до чого — розходяться СЛОВНИКИ.
+//
+// Правило розширення, щоб це не стало підгонкою під тести: праворуч дозволені
+// ЛИШЕ терміни, які вже існують у `_brain/Таксономія тегів.md` (`#status/`,
+// `#type/`). Нове слово ліворуч заводиться разом із наявним терміном праворуч,
+// або не заводиться. Стемовані форми — той самий 6-символьний ключ, що й в
+// індексі.
+const EXPAND = {
+  // #status/
+  "чекає": ["open", "waitin"], "чекают": ["open", "waitin"], "очікує": ["open", "waitin"],
+  "відкри": ["open"], "pending": ["open", "waitin"], "waiting": ["open", "waitin"],
+  "заморо": ["parked", "killed"], "вбито": ["killed"], "живий": ["live", "active"],
+  // #type/
+  "ескала": ["triage"], "рішенн": ["decisi"], "виріше": ["decisi"], "ухвале": ["decisi"],
+  "стеля": ["budget"], "стелі": ["budget"], "витрат": ["budget", "ledger"],
+  "бюджет": ["budget", "ledger"],
+};
+function expand(ts) {
+  const out = new Set(ts);
+  for (const t of ts) for (const e of EXPAND[t] ?? []) out.add(stem(e));
+  return [...out];
+}
 const tokens = (s) => [...new Set((s.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}_-]*/gu) ?? [])
   .filter((t) => t.length >= 3 && !STOP.has(t)).map(stem))];
 
 export function score(index, query, k = 5) {
-  const qs = tokens(query);
+  const qs = expand(tokens(query));
   if (qs.length === 0) return [];
 
   // df рахується по секціях: слово, що є всюди, майже нічого не звужує.
