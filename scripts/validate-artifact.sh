@@ -2,7 +2,7 @@
 # validate-artifact.sh — детермінована перевірка обов'язкових секцій артефакту.
 # Рівень 0 checker-фази (loop-passport §4): структуру перевіряє скрипт, зміст — LLM.
 # Usage: validate-artifact.sh <type> <file>
-# Types: idea-card | validation-report | prd | build-report | launch-checklist | growth-report | portfolio-brief | retro-note | persona-card
+# Types: idea-card | validation-report | prd | design-delta | build-report | launch-checklist | growth-report | portfolio-brief | retro-note | persona-card
 set -euo pipefail
 
 usage() { echo "Usage: $0 <type> <file>" >&2; exit 2; }
@@ -69,6 +69,7 @@ case "$TYPE" in
   idea-card)         REQUIRED=("Проблема" "Сигнали попиту" "Тип" "Гіпотеза монетизації" "Чому ми" "ICE");;
   validation-report) REQUIRED=("TAM/SAM/SOM" "Конкуренти" "Попит" "Ризики" "Найдешевша перевірка" "ICE" "Рекомендація" "Critic-review" "Не встановлено");;
   prd)               REQUIRED=("Проблема і цілі" "Метрики успіху" "Scope MVP" "НЕ-цілі" "User stories" "Залежності" "Tracking" "Оцінка обсягу");;
+  design-delta)      REQUIRED=("Змінені одиниці" "Спільні причини" "Непояснене" "Нечитані джерела" "Не встановлено");;
   build-report)      REQUIRED=("Реалізовано vs PRD" "Тести" "Security" "Tracking" "Обмеження" "Deploy-checklist" "Code-review");;
   launch-checklist)  REQUIRED=("Тести" "Аналітика" "Security" "Rollback" "Сторінка продукту" "Ціни");;
   growth-report)     REQUIRED=("Кампанії" "Метрики" "Контент" "Наступний тиждень");;
