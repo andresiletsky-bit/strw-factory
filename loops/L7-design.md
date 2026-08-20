@@ -1,14 +1,14 @@
 ---
 id: L7-design
 trigger: event — хеш дизайн-одиниці розійшовся з index.yaml; або команда Andrii
-scope: від зміни дизайну до заведених елементів беклогу. НЕ робить: реалізацію (це L3), рішення про обсяг (це гейт).
-maker: strw-design-sync (виявлення) + strw-designer (коли різницю треба домалювати)
+scope: від зміни дизайну до поясненого й перевіреного критиком діфу. НЕ робить: заведення елементів реєстру (план 3), реалізацію (L3), рішення про обсяг (гейт).
+maker: strw-designer (інструменти: скіл strw-design-sync — виявлення; design-emit.py — пояснення діфу)
 checker: strw-design-critic (adversarial: «чому ця зміна макета бреше»)
-stop_condition: "strw-design-sync --verify виходить 0 — кожна змінена одиниця має або елемент, або записану причину, чому його немає"
-output: design-delta звіт + нові елементи в реєстрі + оновлений index.yaml
+stop_condition: "design-hash.py <index> --verify → 0: у кожної watched-одиниці є hash, є tokens, і всі working_files читаються"
+output: design-delta звіт (контракт) + design-handoff, коли різницю домальовує дизайнер + оновлений index.yaml
 escalation: потоп (>5 непояснених груп, rc=4 від емітера) → question; суперечність усередині спеки → gate-request; unwatched-одиниця не звірялась понад build-цикл → finding
 budget: maker — sonnet; checker — opus (ІНША модель, ніж maker — hard rule budget-policy)
-state_writes: products/<id>/design/index.yaml · engine/items/*.yaml · рядок у loops-log/
+state_writes: products/<id>/design/index.yaml · рядок у loops-log/
 ---
 
 # L7 · Design Loop — «макет, що доходить до реєстру»
@@ -33,5 +33,7 @@ state_writes: products/<id>/design/index.yaml · engine/items/*.yaml · рядо
 5. **Базова лінія записується окремим кроком.** Оновити хеш в `index.yaml`
    одразу після звіту про зміну — значить стерти доказ, що зміна була.
 
-6. **Рішення CEO №81 діє й тут:** елемент у стані `done` не протухає від
-   дизайну. Емітер не переводить `done` у інший стан.
+6. **Реєстру елементів ця петля НЕ чіпає.** Емітер пояснює діф і рахує
+   непояснені групи — заводити елементи й позначати протухле він не вміє, і
+   паспорт цього не обіцяє (обсяг плану 3). Коли вміння з'явиться, рішення CEO
+   №81 діє одразу: елемент у стані `done` не протухає від дизайну.
