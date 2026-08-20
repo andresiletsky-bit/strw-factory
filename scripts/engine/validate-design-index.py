@@ -11,7 +11,18 @@ ALLOWED_STATE = {"watched", "unwatched"}
 ALLOWED_SURFACE = {"canvas-artifact", "claude-design"}
 
 def main(path):
-    doc = yaml.safe_load(open(path)) or {}
+    # try/except — той самий клас, що Critical 3 у validate-items.sh: гейт, що
+    # падає traceback'ом, не друкує ЖОДНОГО рядка `ERROR:`, а споживач (крок 2
+    # strw-design-sync) саме їх і читає.
+    try:
+        doc = yaml.safe_load(open(path)) or {}
+    except Exception as e:
+        print(f"ERROR: {path} не парситься: {e}", file=sys.stderr)
+        return 1
+    if not isinstance(doc, dict):
+        print(f"ERROR: {path}: корінь не мапа, а {type(doc).__name__}",
+              file=sys.stderr)
+        return 1
     errors = []
     if doc.get("schema_version") != 1:
         errors.append("schema_version має бути 1")
