@@ -1,8 +1,8 @@
 ---
 id: L3-build
 trigger: event — G2 scope lock пройдено (далі: зауваження reviewer'а, фікси QA)
-scope: Definition→Design→Build до ready-to-ship. Деплой у прод і публічний реліз — незворотні, йдуть через G3.
-maker: strw-engineer (+ strw-designer паралельно; strw-product-manager для уточнень PRD)
+scope: Definition→Build до ready-to-ship. Дизайн — окрема петля L7. Деплой у прод і публічний реліз — незворотні, йдуть через G3.
+maker: strw-engineer (strw-product-manager для уточнень PRD; дизайн — L7-design)
 checker: strw-code-reviewer (код) · strw-qa (передреліз)
 stop_condition: "усі гейти в gates.json продукту зелені — кожен своєю командою check, не оцінкою агента"
 output: код у репо продукту · build-report.md · launch-checklist.md
