@@ -270,6 +270,28 @@ for path in item_files:
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", vdate):
         err(f"{name}: verified_against_decisions_log_at = {ver!r} — не ISO-дата"); continue
 
+    # design_sources: лише форма. Ще без висновків про протухання (те — окреме
+    # завдання) — навмисно, щоб контракт даних і логіку протухання можна було
+    # прийняти чи відхилити рев'ю окремо. Тому перевіряється тут, ДО `done`-виходу
+    # і до гілки decisions_log_entries: жодна з них не повинна відсікати перевірку
+    # форми.
+    ds = ab.get("design_sources")
+    if ds is not None:
+        if not isinstance(ds, list):
+            err(f"{name}: design_sources має бути списком")
+        else:
+            for j, entry in enumerate(ds):
+                at = f"{name}: design_sources[{j}]"
+                if not isinstance(entry, dict):
+                    err(f"{at} — має бути записом {{ref, hash, verified_at}}")
+                    continue
+                for key in ("ref", "hash", "verified_at"):
+                    if not entry.get(key):
+                        err(f"{at} — немає {key}")
+                h = entry.get("hash")
+                if h and not (isinstance(h, str) and h.startswith("sha256:")):
+                    err(f"{at} — hash має починатись із 'sha256:', отримано {h!r}")
+
     # `done` НЕ перевіряється на свіжість — рішення CEO 2026-08-19 №81, після
     # питання, яке цикл `factory.validate-items-owner` виніс замість вирішити
     # тихо (і чекер справедливо назвав ту тиху правку блокером).
