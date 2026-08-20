@@ -307,6 +307,32 @@ for path in item_files:
     if st == "done":
         continue
 
+    # Друга гілка протухання: дизайн. Індекс живе поруч із реєстром, тим самим
+    # правилом, що й журнал рішень (інакше аргумент engine-dir бреше на worktree).
+    design_index = os.path.join(os.path.dirname(engine_dir), "products",
+                                it.get("product", ""), "design", "index.yaml")
+    ds = ab.get("design_sources") or []
+    if ds:
+        if not os.path.exists(design_index):
+            err(f"{name}: design_sources є, а індексу немає: {design_index}")
+        else:
+            idx = yaml.safe_load(open(design_index)) or {}
+            by_ref = {u.get("ref"): u for u in idx.get("units", [])}
+            for entry in ds:
+                ref, stored = entry.get("ref"), entry.get("hash")
+                unit = by_ref.get(ref)
+                if unit is None:
+                    err(f"{name}: design_source вказує на одиницю {ref!r}, якої в "
+                        f"індексі немає. Елемент тихо втратив підставу — це не "
+                        f"попередження")
+                elif unit.get("state") != "watched":
+                    pass  # за unwatched стежити неможливо; це не мовчання, а розділ 6.2
+                elif unit.get("hash") and unit["hash"] != stored:
+                    stale(f"{name}: дизайн-одиниця {ref} розійшлась із записаною "
+                          f"підставою → ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ.\n"
+                          f"       Переглянути макет, звірити з ним `acceptance`, "
+                          f"і лише потім оновлювати hash.")
+
     stored = ab.get("decisions_log_entries")
     if stored is not None:
         # ТОЧНИЙ шлях: лічильник записів. Ловить дописи в межах тієї самої доби,
