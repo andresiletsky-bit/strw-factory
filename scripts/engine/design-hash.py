@@ -28,15 +28,19 @@
       `working_files`. Це НЕ «без змін» і НЕ «змінилось» — читати не було чого,
       і споживач, який розрізняє лише 0/1, прочитав би тишу як відповідь.
   5 — `--verify`: базова лінія неповна (немає `hash` або `tokens`)
+  6 — `--fail-on-figma-stale`: хоч один дублікат у Figma розійшовся з
+      пораховним хешем свого джерела (`figma.rendered_from != hash`). Про
+      свіжість ДУБЛІКАТА, не про читаність джерела — з `--verify` не змішувати.
 """
 import argparse, hashlib, io, json, os, re, sys, yaml
 
 from design_tokens import tokens_of
 
-RC_CHANGED    = 1
-RC_INDEX      = 2
-RC_TRUNCATED  = 3
-RC_UNVERIFIED = 5
+RC_CHANGED     = 1
+RC_INDEX       = 2
+RC_TRUNCATED   = 3
+RC_UNVERIFIED  = 5
+RC_FIGMA_STALE = 6
 
 
 def read_unit(root, ref, working_files):
@@ -195,6 +199,10 @@ def main():
     ap.add_argument("--verify", action="store_true",
                     help="не рахувати діф, а перевірити повноту базової лінії: у кожної "
                          "watched-одиниці є hash, є tokens, і всі working_files читаються.")
+    ap.add_argument("--fail-on-figma-stale", action="store_true",
+                    help="вийти з rc=6 (RC_FIGMA_STALE), якщо хоч у одної watched-одиниці "
+                         "з блоком `figma` `rendered_from` розійшовся з пораховним hash. "
+                         "Без прапорця — лише звіт (поле figmaStale), як --fail-on-change.")
     args = ap.parse_args()
 
     try:
@@ -210,13 +218,14 @@ def main():
     if args.verify:
         return verify(doc, args.repo_root)
 
-    out, changed_any, computed = [], False, {}
+    out, changed_any, figma_stale_any, computed = [], False, False, {}
     for u in doc.get("units", []):
         if u.get("state") != "watched":
             out.append({"ref": u.get("ref"), "hash": None,
                         "state": u.get("state"), "changed": False,
                         "working_files": list(u.get("working_files") or []),
-                        "stored_tokens": u.get("tokens")})
+                        "stored_tokens": u.get("tokens"),
+                        "figmaStale": None})
             continue
         ref = u.get("ref")
         working_files = list(u.get("working_files") or [])
@@ -225,6 +234,15 @@ def main():
         changed = stored is not None and stored != actual
         changed_any = changed_any or changed
         computed[ref] = (actual, tokens)
+
+        # figmaStale: одиниця без блоку `figma` — null, не false. Відсутність
+        # дубліката і свіжий дублікат — різні стани, і плутати їх означає
+        # брехати про перевірку, якої не було.
+        figma = u.get("figma")
+        figma_stale = figma.get("rendered_from") != actual if figma else None
+        if figma_stale:
+            figma_stale_any = True
+
         # `working_files` і `stored_tokens` їдуть у звіт, бо емітер — окремий
         # процес, і єдина альтернатива — щоб він вигадував їх із `ref`. Саме це
         # він і робив: `ref.split("/")[-1]` як ім'я теки. На справжній одиниці
@@ -233,7 +251,8 @@ def main():
         out.append({"ref": ref, "hash": actual,
                     "state": "watched", "changed": changed,
                     "working_files": working_files,
-                    "stored_tokens": u.get("tokens")})
+                    "stored_tokens": u.get("tokens"),
+                    "figmaStale": figma_stale})
 
     # Звіт ПЕРШИЙ, запис ДРУГИЙ, і `changed` рахується проти хеша, який стояв
     # в індексі ДО запису. Порядок тут не косметика: записати базову лінію
@@ -245,7 +264,11 @@ def main():
         if not write_baseline(args.index, computed):
             return RC_INDEX
 
-    return RC_CHANGED if (args.fail_on_change and changed_any) else 0
+    if args.fail_on_change and changed_any:
+        return RC_CHANGED
+    if args.fail_on_figma_stale and figma_stale_any:
+        return RC_FIGMA_STALE
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main())

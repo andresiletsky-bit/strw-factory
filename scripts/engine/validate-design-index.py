@@ -4,11 +4,23 @@
 `unwatched` БЕЗ `reason` — помилка навмисно: сенс цього стану в тому, що
 система вголос каже, ЧОМУ вона за одиницею не стежить. Без причини це вже не
 чесна заява, а тиха діра.
+
+`surface: code` — одиниця, чиє джерело лежить у репозиторії коду (наприклад
+`tokens.json`), а не в канвас-артефакті чи claude.ai/design. Хешується тією
+самою машинерією: `watched`, `working_files`, `hash`, `tokens`.
+
+Необов'язковий блок `figma` на будь-якій одиниці описує дублікат у Figma —
+`file_key` (обов'язково), `node_id` (необов'язково), `rendered_from` (хеш, з
+якого малювався дублікат; обов'язково, `sha256:…`). `figma` на `unwatched`-
+одиниці — помилка: за `unwatched` хеш не рахується, тож `rendered_from` буде
+НІ З ЧИМ звіряти, і блок мовчки не працював би. Мовчазна непрацездатність
+гірша за відмову.
 """
 import sys, yaml
 
 ALLOWED_STATE = {"watched", "unwatched"}
-ALLOWED_SURFACE = {"canvas-artifact", "claude-design"}
+ALLOWED_SURFACE = {"canvas-artifact", "claude-design", "code"}
+ALLOWED_FIGMA_KEYS = {"file_key", "node_id", "rendered_from"}
 
 def main(path):
     # try/except — той самий клас, що Critical 3 у validate-items.sh: гейт, що
@@ -56,6 +68,27 @@ def main(path):
                 errors.append(f"{where}: watched без working_files")
             if "hash" not in u:
                 errors.append(f"{where}: watched без ключа hash (null допустимий)")
+
+        figma = u.get("figma")
+        if figma is not None:
+            if not isinstance(figma, dict):
+                errors.append(f"{where}: figma має бути мапою")
+            else:
+                unknown = sorted(set(figma) - ALLOWED_FIGMA_KEYS)
+                if unknown:
+                    errors.append(f"{where}: figma містить невідомі ключі: "
+                                  f"{', '.join(unknown)} — друкарська помилка тут не мала б "
+                                  f"проходити тихо")
+                if not figma.get("file_key"):
+                    errors.append(f"{where}: figma.file_key обов'язковий і непорожній")
+                rendered_from = figma.get("rendered_from")
+                if not rendered_from or not str(rendered_from).startswith("sha256:"):
+                    errors.append(f"{where}: figma.rendered_from обов'язковий і мусить "
+                                  f"починатись із sha256:")
+            if state == "unwatched":
+                errors.append(f"{where}: figma на unwatched-одиниці — помилка: за "
+                              f"unwatched хеш не рахується, rendered_from буде НІ З ЧИМ "
+                              f"звіряти, і блок мовчки не працював би")
 
     for e in errors:
         print(f"ERROR: {e}", file=sys.stderr)
