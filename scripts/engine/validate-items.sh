@@ -272,9 +272,14 @@ for path in item_files:
 
     # design_sources: лише форма. Ще без висновків про протухання (те — окреме
     # завдання) — навмисно, щоб контракт даних і логіку протухання можна було
-    # прийняти чи відхилити рев'ю окремо. Тому перевіряється тут, ДО `done`-виходу
-    # і до гілки decisions_log_entries: жодна з них не повинна відсікати перевірку
-    # форми.
+    # прийняти чи відхилити рев'ю окремо.
+    #
+    # Місце вибране точно: ДО `done`-виходу і ДО гілки decisions_log_entries —
+    # жодна з них форму не відсікає. Два `continue` ВИЩЕ її таки відсікають
+    # (acceptance_basis не мапа; немає verified_against_decisions_log_at), і це
+    # не діра: обидва вже поклали ERROR, елемент червоний, а форма поля всередині
+    # структури, якої немає, невизначена. Раніше цей коментар твердив, що не
+    # відсікає ЖОДНА — неправда, за яку рев'ю справедливо вчепилось.
     ds = ab.get("design_sources")
     if ds is not None:
         if not isinstance(ds, list):
@@ -309,29 +314,58 @@ for path in item_files:
 
     # Друга гілка протухання: дизайн. Індекс живе поруч із реєстром, тим самим
     # правилом, що й журнал рішень (інакше аргумент engine-dir бреше на worktree).
-    design_index = os.path.join(os.path.dirname(engine_dir), "products",
-                                it.get("product", ""), "design", "index.yaml")
-    ds = ab.get("design_sources") or []
+    # normpath — бо `engine-dir` із хвостовим слешем робить dirname() тотожним:
+    # os.path.dirname("…/strw-state/engine/") == "…/strw-state/engine", і індекс
+    # шукається на рівень глибше, ніж лежить. Журнал рішень цього не помічав, бо
+    # береться через bash `cd ..`, який слеш переживає.
+    design_index = os.path.join(os.path.dirname(os.path.normpath(engine_dir)),
+                                "products", it.get("product", ""), "design", "index.yaml")
+    # Свідомо isinstance, а не `or []`: design_sources-рядок пройшов би `if ds:`,
+    # цикл нижче ітерував би його ПОСИМВОЛЬНО і впав на `entry.get` — сирим
+    # traceback, тобто рівно тим класом, що Critical 3. Форму вже названо вище.
+    ds = ab.get("design_sources")
+    ds = ds if isinstance(ds, list) else []
     if ds:
         if not os.path.exists(design_index):
             err(f"{name}: design_sources є, а індексу немає: {design_index}")
         else:
-            idx = yaml.safe_load(open(design_index)) or {}
-            by_ref = {u.get("ref"): u for u in idx.get("units", [])}
-            for entry in ds:
-                ref, stored = entry.get("ref"), entry.get("hash")
-                unit = by_ref.get(ref)
-                if unit is None:
-                    err(f"{name}: design_source вказує на одиницю {ref!r}, якої в "
-                        f"індексі немає. Елемент тихо втратив підставу — це не "
-                        f"попередження")
-                elif unit.get("state") != "watched":
-                    pass  # за unwatched стежити неможливо; це не мовчання, а розділ 6.2
-                elif unit.get("hash") and unit["hash"] != stored:
-                    stale(f"{name}: дизайн-одиниця {ref} розійшлась із записаною "
-                          f"підставою → ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ.\n"
-                          f"       Переглянути макет, звірити з ним `acceptance`, "
-                          f"і лише потім оновлювати hash.")
+            # try/except — так само, як для lanes.yaml і item-файлів поруч.
+            # Без нього зіпсований index.yaml валив увесь звіт сирим traceback:
+            # ані `ERROR:`, ані `STALE:`, ані підсумку — а хук registry-check.sh
+            # ґрепає саме ці префікси, тож лишалось голе «🔴 FAIL» без причини,
+            # і ОДНА поламана дизайн-одиниця ховала всі інші помилки реєстру.
+            try:
+                idx = yaml.safe_load(open(design_index)) or {}
+            except Exception as e:
+                err(f"{name}: дизайн-індекс {design_index} не парситься: {e}")
+                idx = None
+            if idx is None:
+                pass
+            elif not isinstance(idx, dict):
+                err(f"{name}: дизайн-індекс {design_index}: корінь не мапа, "
+                    f"а {type(idx).__name__}")
+            elif not idx.get("units"):
+                # Називаємо порожній ІНДЕКС. Інакше цикл нижче звинуватив би
+                # кожну одиницю в тому, що її «немає в індексі» — той самий клас
+                # брехні про причину, який випадок 9e вже одного разу зловив.
+                err(f"{name}: дизайн-індекс {design_index} не містить жодної "
+                    f"одиниці — підстава не втрачена одиницею, її немає де взяти")
+            else:
+                by_ref = {u.get("ref"): u for u in idx.get("units", [])}
+                for entry in ds:
+                    ref, stored = entry.get("ref"), entry.get("hash")
+                    unit = by_ref.get(ref)
+                    if unit is None:
+                        err(f"{name}: design_source вказує на одиницю {ref!r}, якої в "
+                            f"індексі немає. Елемент тихо втратив підставу — це не "
+                            f"попередження")
+                    elif unit.get("state") != "watched":
+                        pass  # за unwatched стежити неможливо; це не мовчання, а розділ 6.2
+                    elif unit.get("hash") and unit["hash"] != stored:
+                        stale(f"{name}: дизайн-одиниця {ref} розійшлась із записаною "
+                              f"підставою → ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ.\n"
+                              f"       Переглянути макет, звірити з ним `acceptance`, "
+                              f"і лише потім оновлювати hash.")
 
     stored = ab.get("decisions_log_entries")
     if stored is not None:
