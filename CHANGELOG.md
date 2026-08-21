@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [0.5.8] — 2026-08-21
+
 ### Added
 - `design-emit.py --write-elements <тека items>`: емітер заводить елементи
   реєстру — по одному на ГРУПУ, з обов'язковим `acceptance_basis.design_sources`
