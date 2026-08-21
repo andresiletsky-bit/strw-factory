@@ -27,14 +27,16 @@
   3 — ДЖЕРЕЛО НЕЧИТАНЕ: обірваний файл, відсутній файл, `watched`-одиниця без
       `working_files`. Це НЕ «без змін» і НЕ «змінилось» — читати не було чого,
       і споживач, який розрізняє лише 0/1, прочитав би тишу як відповідь.
-  5 — `--verify`: базова лінія неповна (немає `hash` або `tokens`)
+  5 — `--verify`: базова лінія неповна (немає `hash` або `tokens`), джерело
+      нечитане, або є змінена одиниця без вердикту — пораховний хеш
+      розійшовся з базовою лінією, і крок 4 її не оновив
   6 — `--fail-on-figma-stale`: хоч один дублікат у Figma розійшовся з
       пораховним хешем свого джерела (`figma.rendered_from != hash`). Про
       свіжість ДУБЛІКАТА, не про читаність джерела — з `--verify` не змішувати.
 """
 import argparse, hashlib, io, json, os, re, sys, yaml
 
-from design_tokens import tokens_of
+from design_tokens import dc_truncated, tokens_of
 
 RC_CHANGED     = 1
 RC_INDEX       = 2
@@ -70,10 +72,12 @@ def read_unit(root, ref, working_files):
         except OSError as e:
             return None, None, (f"{ref}: {rel} не читається ({path}): {e.strerror}. "
                                 f"Це НЕ «змінилось» — це нечитане джерело.")
-        # Доказ повноти: обірваний .dc.html не має закриватись мовчки.
-        if rel.endswith(".dc.html") and b"</html>" not in data[-4096:]:
-            return None, None, (f"{ref}: {rel} обірваний — немає </html> у хвості. "
-                                f"Це НЕ «без змін», це нечитане джерело.")
+        # Доказ повноти: обірваний .dc.html не має закриватись мовчки. Умова
+        # живе в `design_tokens.py` однією копією на два скрипти — див. там,
+        # чому вікно в 4 КіБ хибило в обидва боки.
+        if dc_truncated(rel, data):
+            return None, None, (f"{ref}: {rel} обірваний — файл не закінчується "
+                                f"на </html>. Це НЕ «без змін», це нечитане джерело.")
         h.update(os.path.basename(rel).encode("utf-8"))
         h.update(b"\0")
         h.update(data)
@@ -149,16 +153,48 @@ def write_baseline(path, computed):
             flat = f'{indent[ref]}tokens: {json.dumps(computed[ref][1], ensure_ascii=False)}'
             lines.insert(at_hash[ref] + 1, flat)
 
-    io.open(path, "w", encoding="utf-8").write("\n".join(lines))
+    # Запис через сусідній тимчасовий файл і `os.replace` (M3 рев'ю
+    # 2026-08-21). Було `io.open(path, "w")` — відкриття вже обрізало продуктовий
+    # індекс, тож перерваний запис лишав його недописаним: базова лінія
+    # ПОРАХОВАНА, але в файлі половина одиниць. `os.replace` атомарний у межах
+    # однієї теки, тому індекс або старий, або новий, третього стану немає.
+    # Ім'я з PID: у strw-state пишуть паралельні сесії, і спільний `.tmp`
+    # перетворив би гонку на змішаний файл.
+    tmp = f"{path}.{os.getpid()}.tmp"
+    try:
+        with io.open(tmp, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines))
+        os.replace(tmp, path)
+    except OSError as e:
+        # Ціна атомарності названа вголос: тимчасовий файл створюється поруч,
+        # отже потрібна запис-права на ТЕКУ, не лише на файл. Немає — це тверда
+        # відмова з іменем, а не половина індексу.
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        print(f"ERROR: {path}: не вдалося записати через тимчасовий файл {tmp}: "
+              f"{e.strerror}. Індекс НЕ змінено.", file=sys.stderr)
+        return False
     return True
 
 
 def verify(doc, root):
-    """`--verify`: базова лінія повна і джерела читаються.
+    """`--verify`: базова лінія повна, джерела читаються, непереглянутого діфу немає.
 
-    Це та умова, на яку посилається `stop_condition` паспорта L7. Вона
-    навмисно НЕ про «елементи заведені» — заведення елементів жоден вузол
-    сьогодні не робить, і умова зупинки, яку неможливо перевірити, зупинкою не є.
+    Це та умова, на яку посилається `stop_condition` паспорта L7. Спека §7
+    формулює зупинку так: «кожна змінена одиниця має або елемент, або записану
+    причину». Перша редакція перевіряла ЛИШЕ повноту базової лінії й нічого про
+    зміни — при справжньому дрейфі `--fail-on-change` віддавав rc=1, а
+    `--verify` тієї ж миті віддавав 0, тобто петля закривалась над
+    непереглянутим діфом (I3 рев'ю 2026-08-21).
+
+    Тому сюди додано третю умову: жодна `watched`-одиниця не має пораховного
+    хеша, відмінного від записаного. Межа названа чесно і в паспорті теж:
+    ЄДИНИЙ вердикт, який фабрика сьогодні вміє записати, — це оновлена базова
+    лінія (крок 4 скіла, і він вимагає, щоб зміну побачили очима). Заведення
+    елементів реєстру не робить жоден вузол (обсяг плану 3), тож «має елемент»
+    ця умова не перевіряє й не вдає, що перевіряє.
     """
     problems = []
     watched = 0
@@ -167,14 +203,20 @@ def verify(doc, root):
             continue
         watched += 1
         ref = u.get("ref")
-        if not u.get("hash"):
+        stored = u.get("hash")
+        if not stored:
             problems.append(f"{ref}: немає записаного `hash` — базової лінії не існує")
         if not u.get("tokens"):
             problems.append(f"{ref}: немає записаної сигнатури `tokens` — "
                             f"різницю токенів рахувати нема від чого")
-        _, _, problem = read_unit(root, ref, u.get("working_files") or [])
+        actual, _, problem = read_unit(root, ref, u.get("working_files") or [])
         if problem:
             problems.append(problem)
+        elif stored and stored != actual:
+            problems.append(f"{ref}: змінена одиниця без вердикту — пораховний хеш "
+                            f"розійшовся з базовою лінією, а базову лінію не "
+                            f"оновлено (крок 4 скіла, ПІСЛЯ перегляду макета). "
+                            f"Петля не закривається над непереглянутим діфом.")
     if not watched:
         problems.append("жодної `watched`-одиниці — звіряти нема чого")
 
@@ -183,7 +225,7 @@ def verify(doc, root):
     if problems:
         return RC_UNVERIFIED
     print(f"OK: базова лінія повна для {watched} watched-одиниць "
-          f"(hash + tokens + усі working_files читаються)")
+          f"(hash + tokens + усі working_files читаються), непереглянутих змін немає")
     return 0
 
 
@@ -239,6 +281,17 @@ def main():
         # дубліката і свіжий дублікат — різні стани, і плутати їх означає
         # брехати про перевірку, якої не було.
         figma = u.get("figma")
+        # Покручений `figma:` (рядок замість мапи) давав AttributeError →
+        # traceback → rc=1, тобто «змінилось»: та сама підміна причини, проти
+        # якої написані rc=2 і rc=3 (I6 рев'ю 2026-08-21). Валідатор схеми це
+        # ловить, але з цього шляху його ніхто не кличе, тож форма
+        # перевіряється тут — і віддає rc=2, «індекс не в тій формі».
+        if figma is not None and not isinstance(figma, dict):
+            print(f"ERROR: {args.index}: `figma` одиниці {ref} — "
+                  f"{type(figma).__name__}, а не мапа. Індекс не в тій формі; "
+                  f"це НЕ «змінилось». Прогнати validate-design-index.py.",
+                  file=sys.stderr)
+            return RC_INDEX
         figma_stale = figma.get("rendered_from") != actual if figma else None
         if figma_stale:
             figma_stale_any = True

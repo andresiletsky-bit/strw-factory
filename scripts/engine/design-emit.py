@@ -35,14 +35,18 @@
       `design-hash.py`: читати не було чого. Мовчазне «пояснень немає» тут
       перетворювало зниклу теку однієї одиниці на потоп із тринадцяти.
   4 — ПОТОП: непояснених груп більше порога
+  5 — У ЗВІТІ НЕМАЄ ЖОДНОЇ ЗМІНЕНОЇ ОДИНИЦІ: пояснювати нічого. Окремий код
+      саме тому, що rc=0 тут читався б як «діф чистий», а найчастіша причина
+      порожнього входу — звіт, знятий ПІСЛЯ `design-hash.py --write`.
 """
 import argparse, json, os, sys
 
-from design_tokens import tokens_of
+from design_tokens import dc_truncated, tokens_of
 
 RC_REPORT = 2
 RC_SOURCE = 3
 RC_FLOOD = 4
+RC_EMPTY = 5
 FLOOD_THRESHOLD = 5
 
 
@@ -62,10 +66,11 @@ def signature(root, ref, working_files):
                           f"Це НЕ «пояснень немає» — це нечитане джерело.")
         # Емітер — ДРУГИЙ читач тих самих файлів, і між прогоном хешера і його
         # власним прогоном файл міг обірватись. Обрубок дає обрізану сигнатуру,
-        # тобто хибну різницю — доказ повноти той самий, що в design-hash.py.
-        if rel.endswith(".dc.html") and b"</html>" not in data[-4096:]:
-            return None, (f"{ref}: {rel} обірваний — немає </html> у хвості. "
-                          f"Сигнатура з обрубка була б хибною різницею.")
+        # тобто хибну різницю — доказ повноти той самий, що в design-hash.py,
+        # і буквально той самий: одна функція на два скрипти.
+        if dc_truncated(rel, data):
+            return None, (f"{ref}: {rel} обірваний — файл не закінчується на "
+                          f"</html>. Сигнатура з обрубка була б хибною різницею.")
         found |= tokens_of(data)
     return found, None
 
@@ -83,6 +88,17 @@ def main():
         return RC_REPORT
 
     changed = [u for u in doc.get("units", []) if u.get("changed")]
+
+    # Порожній вхід — окремий стан, не «чисто» (I2 рев'ю 2026-08-21). rc=0
+    # означав три різні речі одразу: «пояснено», «непояснених ≤5» і «у звіті
+    # змінених одиниць узагалі немає». Останнє трапляється рівно тоді, коли
+    # оператор переганяє хешер ПІСЛЯ `--write` — базова лінія вже переписана,
+    # діф зник, і найгучніший результат петлі виглядає як найчистіший.
+    if not changed:
+        print("ERROR: у звіті немає жодної зміненої одиниці — пояснювати нічого. "
+              "Це НЕ «діф чистий»: найчастіша причина — звіт знято ПІСЛЯ "
+              "`design-hash.py --write`, який уже стер різницю.", file=sys.stderr)
+        return RC_EMPTY
 
     # РІЗНИЦЯ сигнатур, по одиниці. Порожня різниця — законний результат
     # (змінилась проза, не токени), і тоді одиниця нічим не пояснена.
@@ -120,12 +136,27 @@ def main():
         # `color.brand.primary` лежала поруч.
         causes = sorted(common)
 
-    if causes:
-        groups = [{"causes": causes, "refs": sorted(diffs)}]
-        unexplained = 0
-    else:
-        groups = [{"causes": [], "refs": [r]} for r in sorted(diffs)]
-        unexplained = len(groups)
+    # Групування НЕ все-або-нічого (I1 рев'ю 2026-08-21). Було: є спільна
+    # причина → одна група з усіма `refs` і `unexplained: 0`. Залишок
+    # `diff − causes` по одиниці не рахувався ніде, тож власна зміна одиниці
+    # зникала у спільній причині: `color.text.disabled` чіпає 13 компонентів, і
+    # доданий у той самий прохід `border.focus` на Button — «перший кандидат на
+    # елемент» зі спеки §12 — не отримав би елемента ніколи.
+    #
+    # Пояснена одиниця — та, чия різниця НЕПОРОЖНЯ і вся зводиться до спільних
+    # причин. Порожня різниця (змінилась проза, не токени) поясненням не є:
+    # хеш розійшовся, а сказати чому нічим.
+    common = set(causes)
+    explained = [r for r in sorted(diffs) if diffs[r] and not (diffs[r] - common)]
+    leftover = [r for r in sorted(diffs) if r not in explained]
+
+    groups = []
+    if causes and explained:
+        groups.append({"causes": causes, "refs": explained})
+    for ref in leftover:
+        groups.append({"causes": [], "refs": [ref],
+                       "unexplained_tokens": sorted(diffs[ref] - common)})
+    unexplained = len(leftover)
 
     json.dump({"groups": groups, "unexplained": unexplained,
                "changed_tokens": {r: sorted(t) for r, t in sorted(diffs.items())}},
