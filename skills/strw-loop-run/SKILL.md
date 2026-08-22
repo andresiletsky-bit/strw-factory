@@ -1,7 +1,7 @@
 ---
 name: strw-loop-run
 version: 0.4.0
-description: Execute an STRW factory loop (L1–L7) by its passport — read state, budget check, maker phase, checker phase, write state, auto-advance to the next non-gate stage, escalate or archive. Use when the user asks to "запусти петлю", "run loop", "запусти discovery/validation/build/growth/portfolio/retro/design", "виконай L1/L2/L3/L4/L5/L6/L7", "продовж петлю для продукту", or when a scheduled task fires a loop run. Also the headless entry point for all scheduled STRW loops.
+description: Execute an STRW factory loop (L1–L8) by its passport — read state, budget check, maker phase, checker phase, write state, auto-advance to the next non-gate stage, escalate or archive. Use when the user asks to "запусти петлю", "run loop", "запусти discovery/validation/build/growth/portfolio/retro/design/регресію", "виконай L1/L2/L3/L4/L5/L6/L7/L8", "продовж петлю для продукту", or when a scheduled task fires a loop run. Also the headless entry point for all scheduled STRW loops.
 ---
 
 # STRW Loop Run
@@ -15,7 +15,7 @@ description: Execute an STRW factory loop (L1–L7) by its passport — read sta
 ## Workflow
 
 ### Step 1 — Resolve loop
-Визнач петлю з запиту (L1-discovery … L7-design). Неоднозначно → запитай. Прочитай паспорт повністю.
+Визнач петлю з запиту (L1-discovery … L8-regression). Неоднозначно → запитай. Прочитай паспорт повністю.
 
 ### Step 2 — Read state (обов'язково ПЕРЕД роботою)
 `company-context.md` + `portfolio.md` + для продуктових петель `products/<id>/state.md` (включно з Tried & failed). Петля продовжує роботу, не починає з нуля.
