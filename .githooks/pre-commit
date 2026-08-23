@@ -30,9 +30,21 @@ if git diff --cached --name-only | grep -q '^loops/'; then
     echo "  а коміт чіпає loops/. Понови strw-ops або постав STRW_ROOT."
     exit 1
   fi
-  bash "$DRIFT" >/dev/null 2>&1 || {
-    echo "pre-commit FAIL: дрейф паспортів. Прожени й подивись, що саме:"
-    echo "  bash $DRIFT"
+  # STAGED-версія, не робоче дерево. Урок сусіднього гейта в цьому ж файлі
+  # (constitution-size-gate.sh: «рахується staged-версія, інакше гейт мірив би
+  # не те, що комітиться»). Перша редакція його не успадкувала: відредагував →
+  # add → передумав → відредагував назад → забув переstage-ити, і якір виходив
+  # з історії при зеленому хуку. Відтворено на живому хуку. Рев-ю 6b, G1.
+  STAGED="$(mktemp -d)"
+  trap 'rm -rf "$STAGED"' EXIT
+  git diff --cached --name-only --diff-filter=ACM -- 'loops/*.md' | while IFS= read -r f; do
+    git show ":$f" > "$STAGED/$(basename "$f")" 2>/dev/null
+  done
+  STRW_LOOPS_DIR="$STAGED" bash "$DRIFT" >/dev/null 2>&1 || {
+    echo "pre-commit FAIL: перевірка дрейфу в strw-ops впала."
+    echo "  Причина НЕ обовʼязково в паспорті — той самий набір стереже й інші"
+    echo "  речі. Прожени й подивись, що саме (G4):"
+    echo "  STRW_LOOPS_DIR=<staged> bash $DRIFT"
     exit 1
   }
 fi
