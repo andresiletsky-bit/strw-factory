@@ -2,7 +2,7 @@
 # validate-artifact.sh — детермінована перевірка обов'язкових секцій артефакту.
 # Рівень 0 checker-фази (loop-passport §4): структуру перевіряє скрипт, зміст — LLM.
 # Usage: validate-artifact.sh <type> <file>
-# Types: idea-card | validation-report | prd | design-delta | regression-report | build-report | launch-checklist | growth-report | portfolio-brief | retro-note | persona-card
+# Types: idea-card | validation-report | prd | design-delta | regression-report | build-report | launch-checklist | growth-report | portfolio-brief | retro-note | persona-card | copy-guide | design-research | design-options
 set -euo pipefail
 
 usage() { echo "Usage: $0 <type> <file>" >&2; exit 2; }
@@ -76,6 +76,13 @@ case "$TYPE" in
   growth-report)     REQUIRED=("Кампанії" "Метрики" "Контент" "Наступний тиждень");;
   portfolio-brief)   REQUIRED=("Продукти" "Метрики фабрики" "Фокуси" "KILL" "Чекає рішення" "Не встановлено");;
   retro-note)        REQUIRED=("Що спрацювало" "Патерни" "Health flags" "Пропозиції" "Не встановлено");;
+  # Три типи заведено 2026-08-24 (рішення CEO: якість дизайну і текстів).
+  # copy-guide: секції 0–7 + машинний блок rules — його наявність тут теж
+  # примушується, бо гайд без блоку лінтер відкидає (rc=2), і артефакт,
+  # що пройшов рівень 0 без блоку, був би валідним гайдом-нездарою.
+  copy-guide)        REQUIRED=("Що виміряно" "Звертання" "Тон" "Словник" "Шаблони" "Чорний список" "Мови" "Не встановлено");;
+  design-research)   REQUIRED=("Задача і контекст" "Як це розв'язують інші" "Що беремо" "Що свідомо відкидаємо" "Ризики вибору" "Не встановлено");;
+  design-options)    REQUIRED=("Варіанти" "Критерії порівняння" "Обраний і чому" "Програшний і чому збережений" "Не встановлено");;
   *) echo "FAIL: unknown type '$TYPE'" >&2; exit 2;;
 esac
 
@@ -100,6 +107,14 @@ while IFS= read -r line_no; do
     (( nlevel <= level )) && EMPTY+=("${header#\#\# }")
   fi
 done < <(grep -nE '^#{2,3} ' "$FILE" | cut -d: -f1)
+
+# copy-guide без машинного блоку — гайд-нездара: проза є, гейта немає.
+# Перевіряється ІМЕННО ключ rules усередині yaml-блоку, не сам блок: гайд із
+# ```yaml без rules пройшов би на самому факті трьох бектиків.
+if [[ "$TYPE" == "copy-guide" ]]; then
+  awk '/^```yaml/{f=1; next} /^```$/{f=0} f' "$FILE" | grep -qE '^rules:' \
+    || MISSING+=("машинний блок \`\`\`yaml з ключем rules:")
+fi
 
 if [[ ${#MISSING[@]} -eq 0 && ${#EMPTY[@]} -eq 0 ]]; then
   echo "PASS: $TYPE structure OK ($FILE)"

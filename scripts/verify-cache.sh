@@ -49,13 +49,13 @@ while IFS= read -r e; do
   case "$e" in .DS_Store|.orphaned_at) continue ;; esac
   if ! diff -rq "$CACHE/$e" "$TMP/tag/$e" > "$TMP/delta" 2>&1; then
     FAIL=1
-    echo "verify-cache FAIL — «$e» у кеші $PV ≠ тег $TAG:"
+    echo "verify-cache FAIL — «${e}» у кеші $PV ≠ тег $TAG:"
     sed 's/^/  /' "$TMP/delta"
   fi
 done < <(ls -A "$CACHE")
 # Тег → кеш: файл канону, який не доїхав, — теж провал, а не дрібниця.
 while IFS= read -r e; do
-  [ -e "$CACHE/$e" ] || { FAIL=1; echo "verify-cache FAIL — «$e» є в тегу $TAG, але відсутній у кеші $PV."; }
+  [ -e "$CACHE/$e" ] || { FAIL=1; echo "verify-cache FAIL — «${e}» є в тегу $TAG, але відсутній у кеші $PV."; }
 done < <(ls -A "$TMP/tag")
 
 if [ "$FAIL" = 1 ]; then
