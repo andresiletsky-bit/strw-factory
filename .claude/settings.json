@@ -30,7 +30,7 @@
         ]
       },
       {
-        "matcher": "Task",
+        "matcher": "Task|Agent",
         "hooks": [
           {
             "type": "command",
@@ -80,6 +80,10 @@
           {
             "type": "command",
             "command": "/Users/Andrew/Developer/STRW/.claude/hooks/design-check.sh"
+          },
+          {
+            "type": "command",
+            "command": "/Users/Andrew/Developer/STRW/.claude/hooks/plugin-freshness-check.sh"
           }
         ]
       }
