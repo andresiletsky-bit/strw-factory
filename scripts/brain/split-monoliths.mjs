@@ -575,13 +575,34 @@ function preambleOf(rel) {
   return cur.slice(0, mark).replace(/\n+$/, "");
 }
 
+// Порядок виводу НЕ МОЖЕ спиратись на порядок перерахунку теки.
+//
+// Було `sort((a, b) => a.seq - b.seq)`, і ключ неунікальний: `2026-08-19-003-finding`
+// та `-003-question` обидва дають 3. JS-sort стабільний, тож рівні ключі зберігають
+// порядок ВХОДУ — а вхід це `lsRec` → `fs.readdirSync`, чий порядок у node і в
+// deno різний. Наслідок був не косметичний: пре-коміт звіряє фасад через deno,
+// інструкції кажуть запускати просто «--regen» (тобто node), і чесно
+// перегенерований файл відбивався з написом «фасад правили рукою» — гейт
+// звинувачував у ручній правці, якої не було, і радив дію, що відтворює збій
+// (`tri-027`, вимір 2026-08-27).
+//
+// Шлях вузла унікальний за побудовою, тож компаратор із ним стає ТОТАЛЬНИМ і
+// вивід перестає залежати від чого-небудь поза вмістом.
+function byKeyThenPath(key) {
+  return (a, b) => {
+    const ka = key(a), kb = key(b);
+    const primary = typeof ka === "number" ? ka - kb : String(ka).localeCompare(String(kb));
+    return primary || a.rel.localeCompare(b.rel);
+  };
+}
+
 function facadesFromNodes() {
   const dec = lsRec("decisions").map((rel) => {
     const t = fs.readFileSync(path.join(STATE, rel), "utf8");
     const body = stripFm(t);
     const title = (body.match(/^## \d{4}-\d{2}-\d{2} · [^·]+ · (.+)$/m) ?? [])[1] ?? "";
     return { rel, seq: seqOf(t), date: fmVal(t, "date"), object: fmVal(t, "object"), verdict: fmVal(t, "verdict"), title };
-  }).sort((a, b) => a.seq - b.seq);
+  }).sort(byKeyThenPath((x) => x.seq));
 
   const tri = lsRec("triage").map((rel) => {
     const t = fs.readFileSync(path.join(STATE, rel), "utf8");
@@ -589,7 +610,7 @@ function facadesFromNodes() {
       rel, seq: seqOf(t), status: fmVal(t, "status"), date: fmVal(t, "date"),
       loop: fmVal(t, "loop"), kind: fmVal(t, "kind"), body: stripFm(t),
     };
-  }).sort((a, b) => a.seq - b.seq);
+  }).sort(byKeyThenPath((x) => x.seq));
 
   const led = lsRec(path.join("budget", "ledger")).map((rel) => {
     const t = fs.readFileSync(path.join(STATE, rel), "utf8");
@@ -597,7 +618,7 @@ function facadesFromNodes() {
       rel, month: fmVal(t, "month"), total: Number(fmVal(t, "external_usd")),
       rows: t.split("\n").filter((l) => LEDGER_ROW.test(l)),
     };
-  }).sort((a, b) => a.month.localeCompare(b.month));
+  }).sort(byKeyThenPath((x) => x.month));
 
   return [
     { rel: "decisions-log.md", text: facadeDecisions(preambleOf("decisions-log.md"), dec) },
