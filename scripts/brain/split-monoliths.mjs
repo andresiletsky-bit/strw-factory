@@ -612,13 +612,27 @@ function facadesFromNodes() {
     };
   }).sort(byKeyThenPath((x) => x.seq));
 
-  const led = lsRec(path.join("budget", "ledger")).map((rel) => {
+  // Вузол журналу — це МІСЯЦЬ, і пізнається він полем `month:`, а не тим, що
+  // файл лежить у теці. `budget/ledger/README.md` полем не володіє, і без
+  // цього фільтра він ставав рядком таблиці: місяць порожній, сума `$0` (бо
+  // Number("") === 0), рядків 0. Тобто фасад друкував НЕІСНУЮЧИЙ місяць із
+  // вигаданою сумою — той самий клас, що «порожній набір як усе гаразд».
+  // Дефект латентний із 668f5df: видно його лише при першій перегенерації
+  // після появи README.
+  const ledAll = lsRec(path.join("budget", "ledger")).map((rel) => {
     const t = fs.readFileSync(path.join(STATE, rel), "utf8");
     return {
       rel, month: fmVal(t, "month"), total: Number(fmVal(t, "external_usd")),
       rows: t.split("\n").filter((l) => LEDGER_ROW.test(l)),
     };
-  }).sort(byKeyThenPath((x) => x.month));
+  });
+  const led = ledAll.filter((x) => x.month).sort(byKeyThenPath((x) => x.month));
+  // Пропуск не мовчазний: файл без `month:` — це або README (тоді все гаразд),
+  // або зламаний вузол місяця, і другий випадок мусить бути видно.
+  const skipped = ledAll.filter((x) => !x.month).map((x) => x.rel);
+  if (skipped.length) {
+    console.error(`  ⬜ у budget/ledger/ пропущено без поля month: ${skipped.join(", ")}`);
+  }
 
   return [
     { rel: "decisions-log.md", text: facadeDecisions(preambleOf("decisions-log.md"), dec) },
