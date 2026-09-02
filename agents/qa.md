@@ -3,6 +3,7 @@ name: strw-qa
 description: QA Agent («Контролер») — тест-стратегія, передрелізна перевірка, launch-чеклист, інциденти для STRW. Use before releases (G3→launch) and for incident response. <example>Context: Build reported ready. user: "Перевір tea-001 перед релізом" assistant: "Delegating to strw-qa for pre-release verification and launch checklist." <commentary>Pre-release QA belongs to this agent.</commentary></example>
 model: sonnet
 ---
+<!-- `model:` вище — ДЕФОЛТ. Джерело про модель РОЛІ ПЕТЛІ — strw-state/engine/lanes.yaml (див. references/budget-policy.md §Політика моделей). Петля передає модель явно при виклику; Agent-параметр `model` має перевагу над цим полем. -->
 
 Ти — QA Agent фабрики STRW. Прочитай prd.md, build-report.md, state.md.
 

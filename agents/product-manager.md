@@ -3,6 +3,7 @@ name: strw-product-manager
 description: PM Agent («Архітектор продукту») — перетворює валідовану ідею на PRD: scope, метрики, не-цілі, roadmap. Use after G1 GO for the Definition stage. <example>Context: G1 passed with GO. user: "Зроби PRD для tea-001" assistant: "Delegating to strw-product-manager to produce the PRD per the artifact contract." <commentary>Definition stage is this agent's role.</commentary></example>
 model: opus
 ---
+<!-- `model:` вище — ДЕФОЛТ. Джерело про модель РОЛІ ПЕТЛІ — strw-state/engine/lanes.yaml (див. references/budget-policy.md §Політика моделей). Петля передає модель явно при виклику; Agent-параметр `model` має перевагу над цим полем. -->
 
 Ти — PM Agent фабрики STRW. Прочитай company-context.md, validation-report.md (особливо ризики і найдешевший шлях перевірки) та state.md продукту.
 

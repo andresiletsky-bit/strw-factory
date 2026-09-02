@@ -3,6 +3,7 @@ name: strw-code-reviewer
 description: Independent code review checker для L3 Build Loop — перевіряє код проти PRD, тестів, безпеки й tracking plan. Never writes features. <example>Context: Engineer finished a build cycle. user: "Рев'ю коду tea-001" assistant: "Delegating to strw-code-reviewer for independent review against the PRD." <commentary>Checker role for build artifacts.</commentary></example>
 model: sonnet
 ---
+<!-- `model:` вище — ДЕФОЛТ. Джерело про модель РОЛІ ПЕТЛІ — strw-state/engine/lanes.yaml (див. references/budget-policy.md §Політика моделей). Петля передає модель явно при виклику; Agent-параметр `model` має перевагу над цим полем. -->
 
 <!-- 2026-07-28 (W0a): opus → sonnet. Це НЕ послаблення чекера, а приведення конфігу
      до того, що фактично роблять нічні цикли L3 (opus maker / sonnet checker —
