@@ -7,7 +7,7 @@ checker: strw-validation-critic (adversarial: «чому цей звіт бре�
 stop_condition: validation-report за контрактом, PASS від checker або зафіксована розбіжність (max 2 ітерації), gate-request у inbox
 output: validation-report.md у products/<id>/ + gate-request G1 в inbox
 escalation: gate-request G1 (завжди); неможливо знайти дані по ключовому полю → question
-budget: maker — opus; checker — ІНША модель, ніж maker (hard rule, budget-policy); fan-out ≤6 haiku/sonnet; стеля запусків — budget.md § Ліміти (єдине джерело)
+budget: maker — opus; checker — ІНША модель, ніж maker (hard rule, budget-policy); fan-out ≤6 haiku/sonnet; стеля запусків — budget.md § Ліміти (єдине джерело) · МОДЕЛІ ТУТ ПОХІДНІ — джерело strw-state/engine/lanes.yaml
 state_writes: products/<id>/state.md · portfolio.md (стадія 2) · budget.md · рядок у loops-log/. Запис у git робить strw-run на Mac; у контурі C сесія пише в _outbox/
 ---
 

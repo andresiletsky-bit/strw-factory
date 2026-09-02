@@ -7,7 +7,7 @@ checker: strw-regression-critic (adversarial: «чим доведено, що ц
 stop_condition: "фази 1 і 2 виконані з МАШИННИМ результатом (rc кожного гейта зі своєї ж check, rc design-hash.py), і КОЖНА червона назвала finding у inbox або id елемента реєстру; фаза 3 заявлена станом deferred із причиною"
 output: regression-report.md у briefs/ (контракт artifact-contracts.md) + findings + елементи реєстру з design_sources
 escalation: червона фаза 1 → finding негайно · rc=3 фази 2 (джерело нечитане) → finding · потоп емітера (rc=4) → question · розходження UI з дизайном → елемент (коли фаза 3 запрацює)
-budget: maker — sonnet; checker — opus (ІНША модель, ніж maker — hard rule budget-policy); 1 запуск/тиждень
+budget: maker — sonnet; checker — opus (ІНША модель, ніж maker — hard rule budget-policy); 1 запуск/тиждень · МОДЕЛІ ТУТ ПОХІДНІ — джерело strw-state/engine/lanes.yaml
 state_writes: briefs/<дата>-regression-report.md · products/<id>/design/index.yaml · engine/items/<product>.design.*.yaml · рядок у loops-log/
 ---
 

@@ -7,7 +7,7 @@ checker: strw-validation-critic (режим: дедуп + ДНК-фільтр + 
 stop_condition: 0–3 картки ідей пройшли checker АБО чесний порожній результат
 output: idea-card.md (контракт) у products/<id>/ + рядок portfolio.md (черга ідей)
 escalation: нові картки → finding в inbox; ≥3 тижні поспіль порожньо на ВСІХ трьох треках → question «чи змінювати простір пошуку?» (питання «розширити джерела?» закрито 08.08: причиною нуля були не джерела)
-budget: maker — sonnet; скани — haiku-субагенти ≤4; стеля запусків — budget.md § Ліміти (єдине джерело)
+budget: maker — sonnet; скани — haiku-субагенти ≤4; стеля запусків — budget.md § Ліміти (єдине джерело) · МОДЕЛІ ТУТ ПОХІДНІ — джерело strw-state/engine/lanes.yaml
 state_writes: portfolio.md (черга) · budget.md (факт) · рядок у loops-log/. Запис у git робить strw-run на Mac; у контурі C сесія пише в _outbox/
 ---
 

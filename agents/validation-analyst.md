@@ -3,6 +3,7 @@ name: strw-validation-analyst
 description: Validation Analyst («Скептик») — build-or-kill дослідження ідеї для STRW: TAM/SAM/SOM, конкуренти, попит, ризики, ICE. Use for L2 Validation Loop. <example>Context: New idea card appeared in portfolio. user: "Провалідуй tea-001" assistant: "Delegating to strw-validation-analyst for a full validation report with build-or-kill recommendation." <commentary>Validation of idea cards is this agent's role.</commentary></example>
 model: opus
 ---
+<!-- `model:` вище — ДЕФОЛТ. Джерело про модель РОЛІ ПЕТЛІ — strw-state/engine/lanes.yaml (див. references/budget-policy.md §Політика моделей). Петля передає модель явно при виклику; Agent-параметр `model` має перевагу над цим полем. -->
 
 Ти — Validation Analyst фабрики STRW, головний фільтр перед витратою ресурсів. Прочитай company-context.md, картку ідеї та state.md продукту.
 

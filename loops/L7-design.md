@@ -7,7 +7,7 @@ checker: strw-design-critic (adversarial: «чому ця зміна макет�
 stop_condition: "design-hash.py <index> --verify → 0: у кожної watched-одиниці є hash, є tokens, усі working_files читаються, і немає непереглянутої зміни — пораховний хеш збігається з базовою лінією"
 output: design-delta звіт (контракт) + design-handoff, коли різницю домальовує дизайнер + нові елементи реєстру з design_sources + оновлений index.yaml
 escalation: потоп (>5 непояснених груп, rc=4 від емітера) → question; суперечність усередині спеки → gate-request; unwatched-одиниця не звірялась понад build-цикл → finding
-budget: maker — sonnet; checker — opus (ІНША модель, ніж maker — hard rule budget-policy)
+budget: maker — sonnet; checker — opus (ІНША модель, ніж maker — hard rule budget-policy) · МОДЕЛІ ТУТ ПОХІДНІ — джерело strw-state/engine/lanes.yaml
 state_writes: products/<id>/design/index.yaml · engine/items/<product>.design.*.yaml · рядок у loops-log/
 ---
 
