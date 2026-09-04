@@ -144,6 +144,8 @@ else:
             err(f"смуга '{lid}': `resources` має бути списком, а не {type(lane.get('resources')).__name__}")
         elif tools_declared:   # без `tools:` ресурси лишаються іменами, як до 04.09
             for rname in lane.get("resources"):
+                if not isinstance(rname, str):
+                    err(f"смуга '{lid}': ресурс {rname!r} має бути рядком"); continue
                 if rname not in tools:
                     err(f"смуга '{lid}': ресурс '{rname}' не має probe у lanes.yaml `tools:` — фільтр Step 3a не зможе його виміряти")
                 elif isinstance(tools[rname], dict) and tools[rname].get("kind") == "tool":

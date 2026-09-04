@@ -15,8 +15,9 @@
 # елементу в ній; `requires:` звужує окремий елемент (tri-053: гейт фікстур
 # називав swiftc в acceptance, а смуга ios-tooling мала `resources: []`).
 #
-# ВИХІД. stdout — РІВНО ОДИН рядок вердикту; уся діагностика (виміри інструментів,
-# по-елементні рядки) — stderr. Три слова вердикту не склеюються:
+# ВИХІД. stdout — РІВНО ОДИН рядок вердикту для кодів 0/3/4; на коді 2 stdout
+# порожній, причина — у stderr; уся діагностика (виміри інструментів, по-елементні
+# рядки) — stderr. Три слова вердикту не склеюються:
 #   взято: <id> · смуга <lane> · підтверджено: a, b · здійсненних: N із M [· чекають: x×k]   → 0
 #   немає інструмента: N елемент(ів) чекають: swiftc×2                                   → 3
 #   немає роботи                                                                            → 4
@@ -24,10 +25,12 @@
 # потребах, інструмент поза словником (названо елементи-винуватці — один такий
 # зупиняє всю чергу, це навмисно: fail-closed), смуга елемента не оголошена або
 # без ключа `resources`, probe завис (таймаут) або не запустився, будь-який
-# необроблений збій. «Взято» — перший здійсненний за id; це замовчування, а не
+# необроблений збій. «Взято» — перший здійсненний за id (plan відсортовано за id,
+# не за іменем файлу); це замовчування, а не
 # пріоритет: порядок черги — Step 3a п.3 паспорта.
 set -uo pipefail
-ENGINE="${1:?вкажи engine-dir (strw-state/engine)}"
+[ $# -ge 1 ] || { echo "toolchain-filter: вкажи engine-dir (strw-state/engine) (код 2)" >&2; exit 2; }
+ENGINE="$1"
 [ -d "$ENGINE" ] || { echo "toolchain-filter: немає $ENGINE (код 2)" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "toolchain-filter: немає python3 (код 2)" >&2; exit 2; }
 PROBE_TIMEOUT="${TOOLCHAIN_PROBE_TIMEOUT:-10}"   # секунд на один probe; таймаут = «не поміряти»
@@ -93,6 +96,7 @@ def main():
             if not isinstance(tools.get(t), dict) or not str(tools[t].get("probe", "")).strip():
                 bad_tools.setdefault(t, []).append(iid)
         plan.append((iid, lid, needs))
+    plan.sort(key=lambda x: x[0])
     if bad_lane:
         die("елементи з неоголошеною смугою/формою: " + "; ".join(bad_lane))
     if bad_tools:
