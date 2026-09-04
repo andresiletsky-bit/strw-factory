@@ -3,6 +3,30 @@
 
 ## [Unreleased]
 
+### Added
+- **Чотири seeded-фікстури рівня 1 з пам'яті сесій** (П2.4 плану 2026-09-04,
+  dec-094 §7): `checker-verdict/proof-cannot-tell-fix-from-noop` (перевірка,
+  зелена і без фікса), `build-report/tests-without-negative-control` (тести
+  після коду, зелені з першого прогону), `build-report/mutation-not-applied`
+  (несподівано зелена мутація без відбитку дерева), `regression-report/
+  absence-without-instrument` («0 знахідок» без gitleaks у контурі). Разом
+  seeded 34; офлайн PASS=25 FAIL=0 SKIP=18.
+
+### Changed
+- `references/review-policy.md` § Детермінована дія: питання дії — «чи
+  підробка провалює»; несподівано зелена мутація → `git diff --stat` до/після
+  і повторний прогін.
+- `references/data-integrity-protocol.md` п.9: відсутність і агрегат — теж
+  вимір (інструмент названо; «повний прогін» — з переліком складу).
+- `references/evals/rubrics.md`: build-report — показаний червоний стан і
+  відбиток мутації; checker-verdict — дія відрізняє фікс від no-op;
+  regression-report — «0 знахідок» лише з наявним інструментом.
+- Межі розміру (dec-094 §4, `constitution-size-gate` у strw-ops, pre-commit
+  цього репо): `skills/*/SKILL.md` тіло ≤60, `CLAUDE.md` ≤120, `AGENTS.md`
+  ≤80. Два скіли зараз над межею (`strw-loop-run` 63, `strw-design-sync`
+  181) — блокуються лише при власній правці; дієта `strw-design-sync` — окремий
+  елемент.
+
 ## [0.10.0] — 2026-09-04
 
 ### Changed
