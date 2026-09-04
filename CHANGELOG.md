@@ -3,6 +3,13 @@
 
 ## [Unreleased]
 
+### Changed
+- **Дієта скілів за dec-094 §4 (тіло ≤60):** `strw-design-sync` 181 → 60 — команди й коди виходу
+  лишились у скілі, куплені причини порядку кроків переїхали в
+  `references/design-sync-rationale.md` (94 рядки, дослівно); `strw-loop-run` 0.6.0 → 0.6.1 —
+  63 → 60 (історія Step 3a в CHANGELOG, три пункти Step 7 — в один). Гейт
+  `constitution-size-gate` тепер зелений на всіх скілах.
+
 ## [0.10.2] — 2026-09-04
 
 ### Fixed
