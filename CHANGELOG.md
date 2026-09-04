@@ -2,6 +2,8 @@
 
 
 ## [Unreleased]
+
+## [0.10.6] — 2026-09-05
 - **`strw-loop-run` 0.6.2 → 0.6.3 — Step 3a: детермінований тулчейн-фільтр + поле `requires:`** (dec-095 §2, tri-053; елемент `factory.item-requires-field`). `scripts/engine/toolchain-filter.sh` міряє інструменти probe'ами з `lanes.yaml tools:` (probe ВИКОНУЄ інструмент — `swiftc -version`, не `command -v`: шим xcode-select на Mac без Xcode дає хибне «є»; `kind: tool|resource`; таймаут; stdout — один рядок вердикту, діагностика в stderr) і бере елемент лише коли доступні всі `resources:` смуги І кожен `requires:` елемента; коди 0 взято · 3 немає інструмента · 4 немає роботи · 2 не поміряти (неоголошена смуга, інструмент поза словником, завислий probe — fail-closed). `validate-items.sh`: схема `requires:` (список імен зі словника `tools:`; покручена форма — ERROR), ресурси смуги мусять мати probe, коли словник оголошено; без `tools:` — як досі.
 
 ## [0.10.5] — 2026-09-04
