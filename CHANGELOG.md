@@ -3,6 +3,18 @@
 
 ## [Unreleased]
 
+### Changed
+- **`strw-triage` 0.4.0 → 0.5.0 — розбір іде по полях картки, не по наративу**
+  (план 2026-09-04, П1.6; пара до strw-state #41). Step 1 читає `summary` /
+  `options` / `default_if_silent` / `decide_by` і `decisions-log.md` (щоб не
+  показати картку, яку рішення вже закрило — `tri-015`, 03.09); Step 2 ставить
+  прострочені за `decide_by` першими; Step 3 подає бриф з полів і НЕ цитує тіло;
+  Step 5 бере підсумок `scripts/triage-deadline-check.sh` і правило «спливла, CEO
+  мовчить → `default_if_silent` виконується і записується». Виправлено одрук
+  Step 1 (`portfolio.md` двічі).
+- **`references/state-protocol.md` — сесія у власному worktree** (П2.6, F17):
+  `strw-ops/bin/strw-worktree.sh`, спільна копія чиста, інтегратор комітить.
+
 ### Added
 - **Evals-раннер для агентів — правило «регресія на golden перед bump» нарешті
   має виконавця** (аудит 2026-09-03 §4.2 **F7**, **F10**, **F21**; план П1.2).
