@@ -16,7 +16,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STRW_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# `$STRW_ROOT` — парасолька ~/Developer/STRW, під якою лежать усі клони; та сама
+# змінна й та сама семантика, що в `.githooks/pre-commit` обох репо. Виведення з
+# розташування скрипта лишається дефолтом, але перестає бути ЄДИНИМ джерелом:
+# із worktree (`strw-factory-worktrees/<гілка>/`) `../../..` вказує на теку
+# worktree-ів, де сусідніх репо немає, і валідатор оголошував 20 глобів `owns`
+# помилкою конфігурації на здоровому реєстрі. Тобто інструмент червонів від
+# того, ЗВІДКИ його покликали, — рівно клас `measure-of-the-wrong-subject`.
+STRW_ROOT="${STRW_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 ENGINE_DIR="${1:-$STRW_ROOT/strw-state/engine}"
 # Журнал рішень береться ПОРУЧ із реєстром, а не з $STRW_ROOT. Інакше аргумент
 # `engine-dir` бреше: елементи читаються з worktree, а журнал — зі спільної
@@ -179,24 +186,85 @@ def _entry(line):
     m = re.match(r"^##\s+(\d{4}-\d{2}-\d{2})\b", line)
     return (m.group(1), line[3:].strip()) if m else None
 
-decision_dates, decision_titles = [], []
+# ПОЛЕ `affects:` (аудит 2026-09-03, П1.5) — і чому воно не може бути
+# необовʼязковою прикрасою. До нього протухання було ТОТАЛЬНИМ: +1 будь-яке
+# рішення робило STALE кожен `ready`-елемент, отже кожен ставав `blocked`
+# (спека §3.3), отже черга спинялась цілком. Вимір 03.09: 18 елементів
+# протухли, з них 8 — через `dec-093`, яке стосується трьох.
+#
+# СТАРА СЕМАНТИКА ЗБЕРЕЖЕНА ДОСЛІВНО: **вузол без `affects` торкається
+# ВСЬОГО**. Це не поблажка до 93 історичних вузлів, а єдиний безпечний
+# дефолт: «поля немає» означає «ніхто не звужував», а не «нікого не
+# стосується». Звуження без свідка — це те саме fail-open, проти якого весь
+# цей валідатор. Нові вузли без поля не проходять pre-commit strw-state
+# (блок «П1.5 affects»), тож борг не росте.
+FM_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
+
+def _affects(path, rel):
+    """Список `affects` вузла, або None — «торкається всього» (стара семантика)."""
+    raw = open(path, encoding="utf-8").read()
+    m = FM_RE.match(raw)
+    if not m:
+        return None
+    try:
+        fm = yaml.safe_load(m.group(1)) or {}
+    except Exception as e:
+        err(f"{rel}: frontmatter вузла рішення не читається: {e}")
+        return None
+    if not isinstance(fm, dict) or "affects" not in fm:
+        return None
+    a = fm.get("affects")
+    if not isinstance(a, list) or not a:
+        # Порожній список — не «нікого не стосується», а недописаний рядок.
+        # Прийняти його означало б дати найтихіший спосіб вимкнути протухання:
+        # `affects: []` у вузлі, і жоден елемент більше не протухає ніколи.
+        err(f"{rel}: `affects` мусить бути НЕПОРОЖНІМ списком "
+            f"(відсутність поля = «торкається всього»; порожній список — недописаний рядок)")
+        return None
+    bad = [x for x in a if not (str(x) == "factory" or
+           str(x).startswith(("product:", "lane:", "item:")))]
+    if bad:
+        # Одрук у префіксі звузив би вплив рішення до НУЛЯ мовчки — тобто
+        # зробив би реєстр зеленим саме тоді, коли підстава протухла.
+        err(f"{rel}: `affects` містить непізнані записи {bad} — "
+            f"очікується factory | product:<id> | lane:<id> | item:<id>")
+    return [str(x) for x in a]
+
+def touches(affects, it):
+    if affects is None:
+        return True
+    for a in affects:
+        if a == "factory" and it.get("product") == "factory":
+            return True
+        if a.startswith("item:") and a[5:] == it.get("id"):
+            return True
+        if a.startswith("product:") and a[8:] == it.get("product"):
+            return True
+        if a.startswith("lane:") and a[5:] == it.get("lane"):
+            return True
+    return False
+
+decision_dates, decision_titles, decision_affects = [], [], []
 decisions_dir = os.path.join(os.path.dirname(decisions_log), "decisions")
 node_files = sorted(globmod.glob(os.path.join(decisions_dir, "*", "*.md")))
 if node_files:
     for path in node_files:
+        rel = os.path.relpath(path, decisions_dir)
         for line in open(path):
             e = _entry(line)
             if e:
                 decision_dates.append(e[0]); decision_titles.append(e[1])
+                decision_affects.append(_affects(path, rel))
                 break
         else:
-            err(f"{os.path.relpath(path, decisions_dir)}: вузол рішення без заголовка "
+            err(f"{rel}: вузол рішення без заголовка "
                 f"`## YYYY-MM-DD · …` — його не видно лічильнику")
 elif os.path.isfile(decisions_log):
     for line in open(decisions_log):
         e = _entry(line)
         if e:
             decision_dates.append(e[0]); decision_titles.append(e[1])
+            decision_affects.append(None)   # моноліт полів не має — стара семантика
 else:
     err(f"немає ні {decisions_dir}/, ні {decisions_log}")
 newest_decision = max(decision_dates) if decision_dates else None
@@ -297,6 +365,56 @@ for path in item_files:
                 if h and not (isinstance(h, str) and h.startswith("sha256:")):
                     err(f"{at} — hash має починатись із 'sha256:', отримано {h!r}")
 
+    # ---------- схема `plan` (аудит 2026-09-03, П1.4) ----------
+    # ЧОМУ ПОЛЕ. 30 із 60 PR — «великі» за критерієм L3 6a, раунди чекера 2–6,
+    # до 11. Без плану, який рецензують ДО коду, рев'ю читає диф, а не рішення,
+    # і ціна росте лінійно з розміром. `acceptance` каже, ЩО мусить бути
+    # правдою; `plan` каже, ЧИМ і В ЯКОМУ ПОРЯДКУ це робиться.
+    #
+    # Місце вибране, як і для `design_sources`: ДО `done`-виходу. Форма поля не
+    # залежить від стану елемента — покручений `plan` у закритому елементі
+    # лишається помилкою реєстру, а не історією.
+    PLAN_KEYS = {"files", "order", "risks", "proof", "risks_none_because"}
+    plan = it.get("plan")
+    if plan is not None:
+        if not isinstance(plan, dict):
+            err(f"{name}: `plan` має бути мапою з `files`, `order`, `risks`, `proof`, "
+                f"а не {type(plan).__name__}")
+        else:
+            unknown = sorted(set(plan) - PLAN_KEYS)
+            if unknown:
+                # Закритий словник, а не відкритий: одрук у назві ключа інакше
+                # мовчки викидає половину плану з-під перевірки.
+                err(f"{name}: plan має непізнані ключі {unknown} — "
+                    f"дозволені {sorted(PLAN_KEYS)}")
+            for f_ in ("files", "order"):
+                v = plan.get(f_)
+                if not isinstance(v, list) or not v:
+                    err(f"{name}: plan.{f_} мусить бути НЕПОРОЖНІМ списком "
+                        f"(отримано {v!r})")
+            r = plan.get("risks")
+            if not isinstance(r, list):
+                err(f"{name}: plan.risks мусить бути списком (порожній — лише разом "
+                    f"із рядком plan.risks_none_because)")
+            elif not r:
+                why = plan.get("risks_none_because")
+                if not (isinstance(why, str) and why.strip()):
+                    # «Ризиків немає» без причини — це не вимір, а пропуск поля.
+                    err(f"{name}: plan.risks порожній без plan.risks_none_because — "
+                        f"«ризиків немає» мусить бути ТВЕРДЖЕННЯМ, а не мовчанням")
+            pr = plan.get("proof")
+            if not (isinstance(pr, str) and pr.strip()):
+                err(f"{name}: plan.proof мусить бути непорожнім рядком — чим саме "
+                    f"буде доведено, що план виконано")
+    elif st == "ready" and str(it.get("size")) in ("M", "L"):
+        # WARN, а не ERROR — свідомо. ERROR зробив би елемент `blocked`, тобто
+        # черга спинилась би на кожному елементі M/L разом, а це рівно та шкода,
+        # яку П1.5 щойно прибрав з іншого боку. Старт без плану забороняє раннер
+        # і скіл `strw-loop-run` (Step 4), тобто там, де це дешево полагодити.
+        warn(f"{name}: size={it.get('size')} і state=ready, а `plan` немає — "
+             f"maker мусить подати plan (files/order/risks/proof) ДО першого коміту "
+             f"(L3 правило 10)")
+
     # `done` НЕ перевіряється на свіжість — рішення CEO 2026-08-19 №81, після
     # питання, яке цикл `factory.validate-items-owner` виніс замість вирішити
     # тихо (і чекер справедливо назвав ту тиху правку блокером).
@@ -374,17 +492,27 @@ for path in item_files:
         if not isinstance(stored, int) or stored < 0:
             err(f"{name}: decisions_log_entries = {stored!r} — має бути невід'ємне ціле")
         elif decisions_count > stored:
-            # Називаємо, ЩО САМЕ дописали. Без цього людина мусить сама шукати різницю
-            # і в спішці «оновлює» лічильник, не перечитавши підставу, — тобто робить
-            # рівно те, проти чого acceptance_basis і придуманий.
-            fresh = decision_titles[stored:]
-            listed = "".join(f"\n         · {t}" for t in fresh[:5])
-            more = f"\n         … ще {len(fresh) - 5}" if len(fresh) > 5 else ""
-            stale(f"{name}: звірено проти {stored} записів decisions-log, зараз їх "
-                  f"{decisions_count} (+{len(fresh)}) → ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ "
-                  f"(спека §3.3: такий елемент не 'ready', а 'blocked')."
-                  f"\n       Прочитати ці записи, звірити з ними `acceptance`, і лише потім "
-                  f"піднімати лічильник:{listed}{more}")
+            # ТОЧКОВО, а не тотально: із дописаних беруться лише ті, чий `affects`
+            # перетинається з цим елементом. Вузол без `affects` торкається всього —
+            # стара семантика, збережена дослівно.
+            fresh = [(decision_titles[i], decision_affects[i])
+                     for i in range(stored, decisions_count)]
+            hits = [t for t, a in fresh if touches(a, it)]
+            if hits:
+                # Називаємо, ЩО САМЕ дописали. Без цього людина мусить сама шукати
+                # різницю і в спішці «оновлює» лічильник, не перечитавши підставу, —
+                # тобто робить рівно те, проти чого acceptance_basis і придуманий.
+                listed = "".join(f"\n         · {t}" for t in hits[:5])
+                more = f"\n         … ще {len(hits) - 5}" if len(hits) > 5 else ""
+                skipped = len(fresh) - len(hits)
+                aside = (f" ({skipped} дописаних елемента не стосуються)"
+                         if skipped else "")
+                stale(f"{name}: звірено проти {stored} записів decisions-log, зараз їх "
+                      f"{decisions_count}; ТОРКАЮТЬСЯ ЦЬОГО ЕЛЕМЕНТА: {len(hits)}{aside} "
+                      f"→ ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ "
+                      f"(спека §3.3: такий елемент не 'ready', а 'blocked')."
+                      f"\n       Прочитати ці записи, звірити з ними `acceptance`, і лише потім "
+                      f"піднімати лічильник:{listed}{more}")
         elif decisions_count < stored:
             err(f"{name}: decisions_log_entries = {stored}, а в decisions-log лише "
                 f"{decisions_count} записів. Лог append-only — зменшення означає, що "
@@ -393,7 +521,11 @@ for path in item_files:
 
     # ЗАПАСНИЙ шлях для елементів без лічильника: порівняння дат. Свідомо грубіше —
     # у межах доби нічого не розрізняє. Не додавай нових елементів без лічильника.
-    newer = sorted({d for d in decision_dates if d > vdate})
+    # Датова гілка — ТА САМА логіка звуження, інакше елемент без лічильника
+    # лишився б під тотальним протуханням, і «точкове» було б неправдою для
+    # частини реєстру.
+    newer = sorted({decision_dates[i] for i in range(len(decision_dates))
+                    if decision_dates[i] > vdate and touches(decision_affects[i], it)})
     if newer:
         stale(f"{name}: acceptance_basis звірено на {vdate}, а в decisions-log є новіші "
               f"записи ({', '.join(newer[-3:])}) → ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ "
