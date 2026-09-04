@@ -5,100 +5,144 @@
 #
 #   toolchain-filter.sh <engine-dir>
 #
-# ЩО МІРЯЄТЬСЯ, НЕ ПРИПУСКАЄТЬСЯ. Кожен інструмент — probe з `lanes.yaml tools:`
-# (`command -v …`, код 0 = є), виміряний тут і зараз, один раз на інструмент.
+# ЩО МІРЯЄТЬСЯ, НЕ ПРИПУСКАЄТЬСЯ. Кожен інструмент — probe з `lanes.yaml tools:`,
+# виконаний тут і зараз, один раз на інструмент, з таймаутом. КОНТРАКТ PROBE:
+# він мусить ВИКОНАТИ інструмент (`swiftc -version`, `xcodebuild -version`), а
+# не лише знайти його в PATH: на Mac без Xcode `/usr/bin/swiftc` і `/usr/bin/xcrun`
+# — шими xcode-select, `command -v` дає 0, а виклик падає. Код 0 = інструмент є.
 # Елемент здійсненний, якщо доступні ВСІ ресурси його смуги (`resources:`) І
 # кожен інструмент із його власного `requires:`. Смуга каже, що треба будь-якому
 # елементу в ній; `requires:` звужує окремий елемент (tri-053: гейт фікстур
-# називав swiftc в acceptance, а смуга ios-tooling мала `resources: []` — фільтр
-# читав прозу і брав елемент у контур без компілятора).
+# називав swiftc в acceptance, а смуга ios-tooling мала `resources: []`).
 #
-# ВИХІД — три слова, які не склеюються (паспорт, Step 3a п.4):
-#   взято: <id> · смуга <lane> · підтверджено: a, b     → код 0
-#   немає інструмента: N елемент(ів) чекають: swiftc×2  → код 3
-#   немає роботи                                          → код 4
-# Не поміряти (немає engine/lanes.yaml/tools:, покручена форма) → код 2, не 4:
-# «нічого не здійсненне» і «нічим міряти» — різні речі.
+# ВИХІД. stdout — РІВНО ОДИН рядок вердикту; уся діагностика (виміри інструментів,
+# по-елементні рядки) — stderr. Три слова вердикту не склеюються:
+#   взято: <id> · смуга <lane> · підтверджено: a, b · здійсненних: N із M [· чекають: x×k]   → 0
+#   немає інструмента: N елемент(ів) чекають: swiftc×2                                   → 3
+#   немає роботи                                                                            → 4
+# «Не поміряти» → 2, НІКОЛИ 0/3/4: немає engine/items/, немає `tools:` при непорожніх
+# потребах, інструмент поза словником (названо елементи-винуватці — один такий
+# зупиняє всю чергу, це навмисно: fail-closed), смуга елемента не оголошена або
+# без ключа `resources`, probe завис (таймаут) або не запустився, будь-який
+# необроблений збій. «Взято» — перший здійсненний за id; це замовчування, а не
+# пріоритет: порядок черги — Step 3a п.3 паспорта.
 set -uo pipefail
 ENGINE="${1:?вкажи engine-dir (strw-state/engine)}"
 [ -d "$ENGINE" ] || { echo "toolchain-filter: немає $ENGINE (код 2)" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "toolchain-filter: немає python3 (код 2)" >&2; exit 2; }
+PROBE_TIMEOUT="${TOOLCHAIN_PROBE_TIMEOUT:-10}"   # секунд на один probe; таймаут = «не поміряти»
 
-python3 - "$ENGINE" <<'PY'
+python3 - "$ENGINE" "$PROBE_TIMEOUT" <<'PY'
 import glob, os, subprocess, sys
-try:
-    import yaml
-except ImportError:
-    print("toolchain-filter: немає pyyaml — lanes.yaml не прочитати (код 2)", file=sys.stderr); sys.exit(2)
 
-engine = sys.argv[1]
-lanes_path = os.path.join(engine, "lanes.yaml")
-if not os.path.isfile(lanes_path):
-    print(f"toolchain-filter: немає {lanes_path} (код 2)", file=sys.stderr); sys.exit(2)
-doc = yaml.safe_load(open(lanes_path, encoding="utf-8")) or {}
-tools = doc.get("tools")
-if not isinstance(tools, dict) or not tools:
-    print("toolchain-filter: у lanes.yaml немає словника `tools:` — інструменти нічим міряти (код 2)", file=sys.stderr); sys.exit(2)
-lanes = {l.get("id"): l for l in (doc.get("lanes") or []) if isinstance(l, dict) and l.get("id")}
+def die(msg, code=2):
+    print(f"toolchain-filter: {msg} (код {code})", file=sys.stderr); sys.exit(code)
 
-# Вимір — один раз на інструмент, у тому самому оточенні (PATH), що й цей процес.
-measured = {}
-def have(tool):
-    if tool not in measured:
-        spec = tools.get(tool)
-        probe = spec.get("probe") if isinstance(spec, dict) else None
-        if not probe:
-            measured[tool] = None            # у словнику немає — не «немає», а «не поміряти»
-        else:
-            rc = subprocess.run(["bash", "-c", probe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
-            measured[tool] = (rc == 0)
-    return measured[tool]
-
-items = []
-for p in sorted(glob.glob(os.path.join(engine, "items", "*.yaml"))):
+def main():
     try:
-        it = yaml.safe_load(open(p, encoding="utf-8")) or {}
-    except Exception as e:
-        print(f"toolchain-filter: {os.path.basename(p)} не парситься: {e} (код 2)", file=sys.stderr); sys.exit(2)
-    if it.get("state") != "ready" or it.get("blocked_by"):
-        continue
-    items.append(it)
+        import yaml
+    except ImportError:
+        die("немає pyyaml — lanes.yaml не прочитати")
+    engine, timeout = sys.argv[1], float(sys.argv[2])
+    lanes_path = os.path.join(engine, "lanes.yaml")
+    items_dir = os.path.join(engine, "items")
+    if not os.path.isfile(lanes_path):
+        die(f"немає {lanes_path}")
+    if not os.path.isdir(items_dir):
+        die(f"немає {items_dir} — це «нічим міряти», не «немає роботи»")
+    doc = yaml.safe_load(open(lanes_path, encoding="utf-8")) or {}
+    tools = doc.get("tools")
+    if tools is not None and not isinstance(tools, dict):
+        die("lanes.yaml: `tools:` має бути мапою")
+    tools = tools or {}
+    lanes = {}
+    for l in (doc.get("lanes") or []):
+        if isinstance(l, dict) and l.get("id"):
+            lanes[l["id"]] = l
 
-if not items:
-    print("немає роботи"); sys.exit(4)
+    items = []
+    for p in sorted(glob.glob(os.path.join(items_dir, "*.yaml"))):
+        try:
+            it = yaml.safe_load(open(p, encoding="utf-8")) or {}
+        except Exception as e:
+            die(f"{os.path.basename(p)} не парситься: {e}")
+        if it.get("state") != "ready" or it.get("blocked_by"):
+            continue
+        items.append(it)
+    if not items:
+        print("немає роботи"); sys.exit(4)
 
-feasible, waiting = [], {}
-unmeasurable = set()
-for it in items:
-    iid = it.get("id", "?"); lane = lanes.get(it.get("lane"), {})
-    needs = list(lane.get("resources") or []) + list(it.get("requires") or [])
-    missing = []
-    for t in needs:
-        h = have(t)
-        if h is None:
-            unmeasurable.add(t)
-        elif not h:
-            missing.append(t)
-    for t in needs:
-        print(f"tool {t}: {'ok' if have(t) else ('НЕ В СЛОВНИКУ' if have(t) is None else 'missing')}")
-    if unmeasurable & set(needs):
-        continue
-    if missing:
-        print(f"waits {iid} ← {', '.join(missing)}")
-        for t in missing:
-            waiting[t] = waiting.get(t, 0) + 1
-    else:
-        print(f"feasible {iid} ({it.get('lane')}; підтверджено: {', '.join(needs) or 'нічого не треба'})")
-        feasible.append((iid, it.get("lane"), needs))
+    # Потреби кожного елемента — з явними відмовами, не з мовчазних замовчувань.
+    plan = []          # (id, lane, needs)
+    bad_lane, bad_tools = [], {}
+    for it in items:
+        iid = it.get("id", "?"); lid = it.get("lane")
+        lane = lanes.get(lid)
+        if lane is None:
+            bad_lane.append(f"{iid} (lane: {lid!r} не оголошена)"); continue
+        if "resources" not in lane or not isinstance(lane.get("resources"), list):
+            bad_lane.append(f"{iid} (смуга {lid}: немає списку `resources` — це не «нічого не треба»)"); continue
+        req = it.get("requires") or []
+        if not isinstance(req, list) or not all(isinstance(x, str) for x in req):
+            bad_lane.append(f"{iid} (`requires` не список рядків)"); continue
+        needs = []
+        for t in list(lane["resources"]) + list(req):
+            if t not in needs:
+                needs.append(t)
+        for t in needs:
+            if not isinstance(tools.get(t), dict) or not str(tools[t].get("probe", "")).strip():
+                bad_tools.setdefault(t, []).append(iid)
+        plan.append((iid, lid, needs))
+    if bad_lane:
+        die("елементи з неоголошеною смугою/формою: " + "; ".join(bad_lane))
+    if bad_tools:
+        if not tools:
+            die("у lanes.yaml немає словника `tools:`, а елементи потребують інструментів: "
+                + "; ".join(f"{t} ← {', '.join(ids)}" for t, ids in sorted(bad_tools.items())))
+        die("інструменти поза словником tools: (fail-closed, зупиняє всю чергу): "
+            + "; ".join(f"{t} ← {', '.join(ids)}" for t, ids in sorted(bad_tools.items())))
 
-if unmeasurable:
-    print(f"toolchain-filter: інструмент(и) поза словником tools: {', '.join(sorted(unmeasurable))} — не поміряти (код 2)", file=sys.stderr)
-    sys.exit(2)
-if feasible:
-    iid, lane, needs = feasible[0]
-    print(f"взято: {iid} · смуга {lane} · підтверджено: {', '.join(needs) or 'нічого не треба'} · здійсненних: {len(feasible)} із {len(items)}")
-    sys.exit(0)
-tally = ", ".join(f"{t}×{n}" for t, n in sorted(waiting.items(), key=lambda x: -x[1]))
-print(f"немає інструмента: {len(items)} елемент(ів) чекають: {tally}")
-sys.exit(3)
+    # Вимір — один раз на інструмент; stdin закритий; таймаут = не поміряти.
+    measured = {}
+    def have(tool):
+        if tool in measured:
+            return measured[tool]
+        probe = tools[tool]["probe"]
+        try:
+            rc = subprocess.run(["bash", "-c", probe], stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                timeout=timeout).returncode
+        except subprocess.TimeoutExpired:
+            die(f"probe інструмента '{tool}' не завершився за {timeout:g} с — не поміряти")
+        except OSError as e:
+            die(f"probe інструмента '{tool}' не запустився: {e}")
+        measured[tool] = (rc == 0)
+        print(f"tool {tool}: {'ok' if measured[tool] else 'missing'} ({probe})", file=sys.stderr)
+        return measured[tool]
+
+    feasible, waiting = [], {}
+    for iid, lid, needs in plan:
+        missing = [t for t in needs if not have(t)]
+        if missing:
+            print(f"waits {iid} ← {', '.join(missing)}", file=sys.stderr)
+            for t in missing:
+                waiting[t] = waiting.get(t, 0) + 1
+        else:
+            print(f"feasible {iid} ({lid}; підтверджено: {', '.join(needs) or 'нічого не треба'})", file=sys.stderr)
+            feasible.append((iid, lid, needs))
+    tally = ", ".join(f"{t}×{n}" for t, n in sorted(waiting.items(), key=lambda x: (-x[1], x[0])))
+    if feasible:
+        iid, lid, needs = feasible[0]
+        tail = f" · чекають: {tally}" if tally else ""
+        print(f"взято: {iid} · смуга {lid} · підтверджено: {', '.join(needs) or 'нічого не треба'} · здійсненних: {len(feasible)} із {len(plan)}{tail}")
+        sys.exit(0)
+    print(f"немає інструмента: {len(plan)} елемент(ів) чекають: {tally}")
+    sys.exit(3)
+
+try:
+    main()
+except SystemExit:
+    raise
+except Exception as e:   # будь-який необроблений збій — «не поміряти», не 1 і не 0
+    die(f"необроблений збій: {type(e).__name__}: {e}")
 PY

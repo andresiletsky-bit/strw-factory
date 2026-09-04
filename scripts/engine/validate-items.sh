@@ -119,7 +119,9 @@ else:
     else:
         for tname, spec in tools.items():
             if not isinstance(spec, dict) or not isinstance(spec.get("probe"), str) or not spec.get("probe").strip():
-                err(f"lanes.yaml: tools.{tname} — потрібне поле `probe` (рядок-команда, код 0 = інструмент є)")
+                err(f"lanes.yaml: tools.{tname} — потрібне поле `probe` (рядок-команда, що ВИКОНУЄ інструмент; код 0 = є)")
+            elif spec.get("kind") not in ("tool", "resource"):
+                err(f"lanes.yaml: tools.{tname} — потрібне поле `kind: tool|resource` (resources: смуги → resource, requires: елемента → tool)")
     for lane in (doc.get("lanes") or []):
         lid = lane.get("id")
         if not lid: err("lanes.yaml: смуга без `id`"); continue
@@ -144,6 +146,8 @@ else:
             for rname in lane.get("resources"):
                 if rname not in tools:
                     err(f"смуга '{lid}': ресурс '{rname}' не має probe у lanes.yaml `tools:` — фільтр Step 3a не зможе його виміряти")
+                elif isinstance(tools[rname], dict) and tools[rname].get("kind") == "tool":
+                    err(f"смуга '{lid}': ресурс '{rname}' оголошено в tools: як kind: tool — ресурс смуги мусить бути kind: resource")
         lanes[lid] = lane
 
 # ---------- 2. кожен глоб `owns` матчить ≥1 шлях на HEAD свого репо ----------
@@ -345,6 +349,8 @@ for path in item_files:
     # список рядків, кожен — ключ `tools:`; покручена форма — ERROR, не WARN, бо
     # Step 3a читає це поле машинно і «список із мапою» мовчки став би «нічого».
     req = it.get("requires")
+    if req == []:
+        req = None   # порожній список = поля немає: міряти нема чого
     if req is not None and not tools_declared:
         err(f"{name}: є `requires`, а в lanes.yaml немає словника `tools:` — інструменти нічим виміряти")
     elif req is not None:
@@ -354,6 +360,8 @@ for path in item_files:
             for tname in req:
                 if tname not in tools:
                     err(f"{name}: requires '{tname}' — інструмента немає в lanes.yaml `tools:` (є: {', '.join(sorted(tools)) or 'нічого'})")
+                elif isinstance(tools[tname], dict) and tools[tname].get("kind") == "resource":
+                    err(f"{name}: requires '{tname}' — це ресурс смуги (kind: resource), а не інструмент; ресурси задає смуга")
 
     ab = it.get("acceptance_basis")
     if not isinstance(ab, dict):
