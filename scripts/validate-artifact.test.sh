@@ -182,11 +182,20 @@ fi
 # Файл, який grep не може прочитати (chmod 000), — 2 з причиною. Доки заголовки
 # читались через `done < <(grep … | cut …)`, падіння grep = «порожніх секцій
 # немає» (форма procsub-loop-input, strw-state/scripts/lib/nonportable-forms.tsv).
-printf '## Що спрацювало\nx\n' > "$TMP/unreadable.md"; chmod 000 "$TMP/unreadable.md"
-OUT_U="$(bash "$V" retro-note "$TMP/unreadable.md" 2>&1)"; RC_U=$?
+printf '## Що спрацювало\nx\n' > "$TMP/unreadable.md"; cp "$TMP/unreadable.md" "$TMP/readable.md"; chmod 000 "$TMP/unreadable.md"
+if cat "$TMP/unreadable.md" >/dev/null 2>&1; then
+  printf 'SKIP · (видимий) chmod 000 не блокує читання (uid=%s) — проба «файл не читається» тут не вимірюється\n' "$(id -u)"
+else
+  OUT_U="$(bash "$V" retro-note "$TMP/unreadable.md" 2>&1)"; RC_U=$?
+  if [ "$RC_U" = 2 ] && printf '%s' "$OUT_U" | grep -q 'не прочитав'; then ok "файл не читається → 2 з причиною (grep не прочитав), не «порожніх секцій немає»"
+  else bad "файл не читається мав дати 2 з причиною (дав $RC_U)" "$OUT_U"; fi
+fi
 chmod 644 "$TMP/unreadable.md"
-if [ "$RC_U" = 2 ] && printf '%s' "$OUT_U" | grep -q 'не прочитав'; then ok "файл не читається → 2 з причиною (grep не прочитав), не «порожніх секцій немає»"
-else bad "файл не читається мав дати 2 з причиною (дав $RC_U)" "$OUT_U"; fi
+# Контроль-близнюк: той самий вміст читабельним — НЕ 2 і без «не прочитав»
+# (інакше регресія «завжди exit 2 з цим текстом» пройшла б проба вище).
+OUT_R="$(bash "$V" retro-note "$TMP/readable.md" 2>&1)"; RC_R=$?
+if [ "$RC_R" != 2 ] && ! printf '%s' "$OUT_R" | grep -q 'не прочитав'; then ok "контроль: читабельна копія — не 2 і без «не прочитав» (rc=$RC_R)"
+else bad "контроль: читабельна копія дала 2 або «не прочитав»" "$OUT_R"; fi
 
 echo
 echo "Разом: PASS=$PASS FAIL=$FAIL"

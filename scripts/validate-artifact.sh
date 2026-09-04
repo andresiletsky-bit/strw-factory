@@ -104,11 +104,17 @@ EMPTY=()
 # (форма procsub-loop-input, strw-state/scripts/lib/nonportable-forms.tsv; pact-ios #167).
 # grep=1 — «заголовків немає», це легально; >1 — файл не прочитано, і це FAIL,
 # а не «порожніх розділів немає».
-_hdr_lines="$(mktemp)"
-grep -nE '^#{2,3} ' "$FILE" > "$_hdr_lines.raw" || [[ $? -eq 1 ]] || { echo "FAIL: grep не прочитав $FILE"; exit 2; }
-cut -d: -f1 "$_hdr_lines.raw" > "$_hdr_lines"
-while IFS= read -r line_no; do
-  header=$(sed -n "${line_no}p" "$FILE")
+# Один файл із mktemp (повний шаблон — і BSD, і GNU; код виходу перевірено),
+# trap прибирає його на будь-якому виході. Редирект — у цей самий файл, не в
+# похідне ім'я: провал відкриття тут гучний (код 2), а не «grep=1 = порожньо».
+# Без другого ступеня (cut): номер рядка ріжеться в bash із того ж запису.
+_hdr="$(mktemp "${TMPDIR:-/tmp}/validate-artifact-hdr.XXXXXX")" || { echo "FAIL: mktemp не дав файлу"; exit 2; }
+trap 'rm -f "$_hdr"' EXIT
+if ! : > "$_hdr"; then echo "FAIL: не відкрити $_hdr для запису"; exit 2; fi
+grep -nE '^#{2,3} ' "$FILE" > "$_hdr"; _grc=$?
+[[ $_grc -le 1 ]] || { echo "FAIL: grep не прочитав $FILE (код $_grc)"; exit 2; }
+while IFS= read -r _rec; do
+  line_no="${_rec%%:*}"; header="${_rec#*:}"
   hashes="${header%% *}"; level=${#hashes}
   next=$(awk -v n="$line_no" 'NR>n && NF {print; exit}' "$FILE")
   if [[ -z "$next" ]]; then
@@ -117,8 +123,7 @@ while IFS= read -r line_no; do
     nlevel=${#BASH_REMATCH[1]}
     (( nlevel <= level )) && EMPTY+=("${header#\#\# }")
   fi
-done < "$_hdr_lines"
-rm -f "$_hdr_lines" "$_hdr_lines.raw"
+done < "$_hdr"
 
 # copy-guide без машинного блоку — гайд-нездара: проза є, гейта немає.
 # Перевіряється ІМЕННО ключ rules усередині yaml-блоку, не сам блок: гайд із
