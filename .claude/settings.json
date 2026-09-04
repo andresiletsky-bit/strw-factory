@@ -1,5 +1,17 @@
 {
   "_comment": "STRW v3 · hooks живуть в одному місці: ~/Developer/STRW/.claude/hooks/. Цей файл лише вмикає їх. Дозволи — у settings.local.json, він окремо.",
+  "permissions": {
+    "_comment": "deny — політика, не локальний дозвіл: секрети не читаються сесією ні в якому репо (аудит 2026-09-03, F14; пейпер AI-native SDLC: permissions.deny на секрети). Allow-списки лишаються в settings.local.json.",
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(~/.aws/**)",
+      "Read(~/.ssh/**)",
+      "Read(~/.config/gh/hosts.yml)",
+      "Bash(security find-generic-password *)",
+      "Bash(security find-internet-password *)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -17,6 +29,14 @@
           {
             "type": "command",
             "command": "/Users/Andrew/Developer/STRW/.claude/hooks/contour-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "/Users/Andrew/Developer/STRW/.claude/hooks/destructive-git-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "/Users/Andrew/Developer/STRW/.claude/hooks/release-guard.sh"
           }
         ]
       },

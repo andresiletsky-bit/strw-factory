@@ -3,7 +3,7 @@ id: L7-design
 trigger: event — хеш дизайн-одиниці розійшовся з index.yaml; або команда Andrii
 scope: від зміни дизайну до заведених елементів беклогу. НЕ робить: реалізацію (L3), рішення про обсяг (гейт).
 maker: strw-designer (інструменти: скіл strw-design-sync — виявлення; design-emit.py — пояснення діфу і --write-elements — заведення елементів)
-checker: strw-design-critic (adversarial: «чому ця зміна макета бреше»)
+checker: strw-design-critic (adversarial: «чому ця зміна макета бреше») · шкала і формат вердикту — `references/review-policy.md`
 stop_condition: "design-hash.py <index> --verify → 0: у кожної watched-одиниці є hash, є tokens, усі working_files читаються, і немає непереглянутої зміни — пораховний хеш збігається з базовою лінією"
 output: design-delta звіт (контракт) + design-handoff, коли різницю домальовує дизайнер + нові елементи реєстру з design_sources + оновлений index.yaml
 escalation: потоп (>5 непояснених груп, rc=4 від емітера) → question; суперечність усередині спеки → gate-request; unwatched-одиниця не звірялась понад build-цикл → finding

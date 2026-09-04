@@ -2,7 +2,7 @@
 # validate-artifact.sh — детермінована перевірка обов'язкових секцій артефакту.
 # Рівень 0 checker-фази (loop-passport §4): структуру перевіряє скрипт, зміст — LLM.
 # Usage: validate-artifact.sh <type> <file>
-# Types: idea-card | validation-report | prd | design-delta | regression-report | build-report | launch-checklist | growth-report | portfolio-brief | retro-note | persona-card | copy-guide | design-research | design-options
+# Types: idea-card | validation-report | prd | design-delta | regression-report | build-report | launch-checklist | growth-report | portfolio-brief | retro-note | persona-card | copy-guide | design-research | design-options | checker-verdict
 set -euo pipefail
 
 usage() { echo "Usage: $0 <type> <file>" >&2; exit 2; }
@@ -83,6 +83,10 @@ case "$TYPE" in
   copy-guide)        REQUIRED=("Що виміряно" "Звертання" "Тон" "Словник" "Шаблони" "Чорний список" "Мови" "Не встановлено");;
   design-research)   REQUIRED=("Задача і контекст" "Як це розв'язують інші" "Що беремо" "Що свідомо відкидаємо" "Ризики вибору" "Не встановлено");;
   design-options)    REQUIRED=("Варіанти" "Критерії порівняння" "Обраний і чому" "Програшний і чому збережений" "Не встановлено");;
+  # checker-verdict: єдиний формат вердикту всіх чекерів (references/review-policy.md,
+  # заведено 2026-09-04 за П1.3 аудиту). Секцій мало навмисно — цінність не в
+  # заголовках, а в трьох машинних перевірках нижче (VERDICT, severity, стеля Nit).
+  checker-verdict)   REQUIRED=("Проходи" "Знахідки" "Детермінована дія" "Не перевірено");;
   *) echo "FAIL: unknown type '$TYPE'" >&2; exit 2;;
 esac
 
@@ -116,11 +120,48 @@ if [[ "$TYPE" == "copy-guide" ]]; then
     || MISSING+=("машинний блок \`\`\`yaml з ключем rules:")
 fi
 
-if [[ ${#MISSING[@]} -eq 0 && ${#EMPTY[@]} -eq 0 ]]; then
+# checker-verdict: три перевірки, яких заголовок не робить. Вони тут, а не в
+# рубриці, бо кожна детермінована — і саме через їхню відсутність F8 аудиту
+# нарахував чотири різні шкали в п'яти чекерів.
+EXTRA=()
+if [[ "$TYPE" == "checker-verdict" ]]; then
+  # (а) рядок вердикту. «Перший рядок» — перший рядок САМОГО вердикту, тож
+  # преамбула golden'а (заголовок + цитата) легальна, а от вердикт, схований
+  # після першої секції, — ні: читач бачить знахідки раніше за присуд.
+  # `|| true` обов'язкові: під `set -e` + `pipefail` пайп, де grep нічого не
+  # знайшов, завалює САМЕ ПРИСВОЄННЯ — і скрипт мовчки виходить кодом 1 без
+  # жодного рядка діагностики. Тобто «немає VERDICT» і «скрипт помер» стали б
+  # невідрізненні. Знайдено власним тестом (§6), не оком.
+  VLINE="$(grep -nE '^VERDICT:[[:space:]]*(PASS|PASS-WITH-NOTES|FAIL)[[:space:]]*$' "$FILE" | head -1 | cut -d: -f1 || true)"
+  FIRSTH="$(grep -nE '^#{2,3} ' "$FILE" | head -1 | cut -d: -f1 || true)"
+  if [[ -z "$VLINE" ]]; then
+    EXTRA+=("немає рядка 'VERDICT: PASS|PASS-WITH-NOTES|FAIL'")
+  elif [[ -n "$FIRSTH" && "$VLINE" -gt "$FIRSTH" ]]; then
+    EXTRA+=("рядок VERDICT стоїть після першої секції (рядок $VLINE проти $FIRSTH)")
+  fi
+
+  # (б) severity на КОЖНІЙ знахідці. Знахідка без severity — це і є та сама
+  # «шкала на око», яку політика скасовує.
+  FINDINGS="$(awk '/^#{2,3} .*Знахідки/{f=1; next} /^#{2,3} /{f=0} f' "$FILE")"
+  NOSEV="$(grep -cE '^- ' <<<"$FINDINGS" || true)"
+  WITHSEV="$(grep -cE '^- \[(Blocker|Important|Nit)\]' <<<"$FINDINGS" || true)"
+  if [[ "${NOSEV:-0}" -ne "${WITHSEV:-0}" ]]; then
+    EXTRA+=("знахідок без severity: $((NOSEV - WITHSEV)) (формат: '- [Blocker|Important|Nit] файл:рядок — …')")
+  fi
+
+  # (в) стеля дрібниць. 5 — з політики; решта подається числом, не списком.
+  NITS="$(grep -cE '^- \[Nit\]' <<<"$FINDINGS" || true)"
+  if [[ "${NITS:-0}" -gt 5 ]]; then
+    EXTRA+=("Nit-знахідок ${NITS} при стелі 5 — решта подається числом (review-policy.md)")
+  fi
+fi
+
+if [[ ${#MISSING[@]} -eq 0 && ${#EMPTY[@]} -eq 0 && ${#EXTRA[@]} -eq 0 ]]; then
   echo "PASS: $TYPE structure OK ($FILE)"
   exit 0
 fi
 echo "FAIL: $TYPE ($FILE)"
 [[ ${#MISSING[@]} -gt 0 ]] && printf '  missing section: %s\n' "${MISSING[@]}"
 [[ ${#EMPTY[@]} -gt 0 ]]   && printf '  empty section: %s\n'   "${EMPTY[@]}"
+[[ ${#EXTRA[@]} -gt 0 ]]   && printf '  %s\n'                   "${EXTRA[@]}"
 exit 1

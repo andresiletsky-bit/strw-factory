@@ -4,3 +4,9 @@ scripts/release.conf
 # OS / editor cruft
 .DS_Store
 *.swp
+
+# Результати прогонів evals. Датовані звіти (і будь-який онлайн-прогін) —
+# локальний вимір, не артефакт репозиторію; у git лишається лише останній
+# офлайн-знімок, щоб було з чим порівняти червоний прогін.
+references/evals/results/*
+!references/evals/results/latest-offline.json

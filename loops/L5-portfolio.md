@@ -3,7 +3,7 @@ id: L5-portfolio
 trigger: scheduled — щоп'ятниці (scheduled task «STRW L5+L6 Friday»)
 scope: Тижневий зріз портфеля + метрики фабрики + фокуси наступного тижня → portfolio-brief. НЕ робить: gate-рішень (готує G4-кандидатів для Andrii).
 maker: strw-support-analytics (збір) + логіка skill strw-portfolio (синтез)
-checker: data-integrity перевірка чисел (checker-прохід за data-integrity-protocol; окремий субагент)
+checker: data-integrity перевірка чисел (checker-прохід за data-integrity-protocol; окремий субагент) · шкала і формат вердикту — `references/review-policy.md`
 stop_condition: portfolio-brief за контрактом у strw-state/briefs/ + finding в inbox
 output: briefs/YYYY-MM-DD-portfolio-brief.md
 escalation: brief → finding; кандидати KILL/double-down → окремі gate-request G4

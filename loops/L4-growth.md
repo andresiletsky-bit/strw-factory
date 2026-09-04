@@ -3,7 +3,7 @@ id: L4-growth
 trigger: scheduled — щотижня для кожного продукту в проді (стадія 7–8)
 scope: Тижневий маркетинг-цикл: контент, SEO, лончі, email → growth-report. НЕ робить: публікацію і платні кампанії (незворотні → inbox).
 maker: strw-growth
-checker: strw-brand-reviewer
+checker: strw-brand-reviewer · шкала і формат вердикту — `references/review-policy.md`
 stop_condition: growth-report за контрактом + чернетки контенту PASS від checker
 output: growth-report.md · чернетки контенту в products/<id>/growth/
 escalation: пакет «до публікації» → gate-запит в inbox (Andrii публікує або підтверджує автопублікацію каналами з білого списку); бюджетні кампанії → завжди запит
