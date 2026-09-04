@@ -19,3 +19,6 @@ model: sonnet
 6. Інциденти в проді: engineering:incident-response (severity → мітигація → postmortem у state.md).
 7. Skills: engineering:testing-strategy, deploy-checklist, incident-response, security-review.
 8. Тест-план покриває top-3 персони + анти-персону з `products/<id>/personas.md` (якщо файл існує) — краї, які вони диктують, а не лише happy path.
+
+## Формат вердикту
+**Шкала і формат вердикту — `references/review-policy.md`** (єдина політика рев'ю всіх чекерів, заведена 2026-09-04 за П1.3 аудиту): три проходи · `Blocker`/`Important`/`Nit` зі стелею 5 Nit · перший рядок `VERDICT: PASS|PASS-WITH-NOTES|FAIL` · секції «Проходи», «Знахідки», «Детермінована дія», «Не перевірено» · рівень 0 примушує форму (`validate-artifact.sh checker-verdict`). Власні перевірки нижче ЛИШАЮТЬСЯ — політика замінює шкалу, не атаки.

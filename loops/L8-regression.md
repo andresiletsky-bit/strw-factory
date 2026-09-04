@@ -3,7 +3,7 @@ id: L8-regression
 trigger: scheduled — раз на тиждень; або команда Andrii
 scope: наскрізна перевірка продукту — технічні гейти, тоді синк дизайну. НЕ робить: реалізації знайденого (L3), рішень про обсяг (гейт), UI-фази (див. п.3).
 maker: strw-qa (інструменти: bin/regression-phase1.sh — фаза 1; скіл strw-design-sync — фаза 2)
-checker: strw-regression-critic (adversarial: «чим доведено, що ця фаза виконалась»)
+checker: strw-regression-critic (adversarial: «чим доведено, що ця фаза виконалась») · шкала і формат вердикту — `references/review-policy.md`
 stop_condition: "фази 1 і 2 виконані з МАШИННИМ результатом (rc кожного гейта зі своєї ж check, rc design-hash.py), і КОЖНА червона назвала finding у inbox або id елемента реєстру; фаза 3 заявлена станом deferred із причиною"
 output: regression-report.md у briefs/ (контракт artifact-contracts.md) + findings + елементи реєстру з design_sources
 escalation: червона фаза 1 → finding негайно · rc=3 фази 2 (джерело нечитане) → finding · потоп емітера (rc=4) → question · розходження UI з дизайном → елемент (коли фаза 3 запрацює)
