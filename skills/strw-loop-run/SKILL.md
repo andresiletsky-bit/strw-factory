@@ -1,6 +1,6 @@
 ---
 name: strw-loop-run
-version: 0.6.1
+version: 0.6.2
 description: Execute an STRW factory loop (L1–L8) by its passport — read state, budget check, maker phase, checker phase, write state, auto-advance to the next non-gate stage, escalate or archive. Use when the user asks to "запусти петлю", "run loop", "запусти discovery/validation/build/growth/portfolio/retro/design/регресію", "виконай L1/L2/L3/L4/L5/L6/L7/L8", "продовж петлю для продукту", or when a scheduled task fires a loop run. Also the headless entry point for all scheduled STRW loops.
 ---
 
@@ -43,8 +43,8 @@ description: Execute an STRW factory loop (L1–L8) by its passport — read sta
 2. **LLM-checker** з паспорта (ЗАВЖДИ інший промпт; для критичних артефактів — інша модель, ніж maker, budget-policy). Передай йому артефакт + trace maker'а + рубрику (references/evals/rubrics.md). Перевіряє output І trajectory. Вердикт FAIL → поверни maker'у (max 2 ітерації), далі — розбіжність фіксується в артефакті, ескалація.
 
 ### Step 6 — Write state (без цього запуск не відбувся)
-- Оновити `products/<id>/state.md` (Done/Next/Tried & failed) та/або `portfolio.md`.
-- Записати факт у `budget.md`.
+- Оновити `products/<id>/state.md` (Done/Next/Tried & failed) та/або `portfolio.md`; записати факт у `budget.md`.
+- Контур C: усе це — один файл у `_outbox/`, закомічений у гілку `outbox/<дата>-<петля>` і запушений; ОСТАННІЙ рядок файлу — квитанція `push: <гілка> · ok|fail · <час UTC>`. Без push робота зникає з пісочницею (третя втрата 04.09, tri-058): push неможливий → повний вміст у підсумок сесії.
 - Додати рядок у `loops-log/` (схема — state-protocol.md): дата · петля · продукт · тривалість · ітерації maker↔checker · first-pass так/ні · вердикти · ескалації · моделі maker/checker · `plan_drift:<число>` для L3-циклів із `plan` — файлів у дифі поза `plan.files`; плану не було → `plan_drift:н/д`, ніколи не нуль.
 
 Записом у git завершує **контур M** — `strw-run` після зелених гейтів або сама сесія на Mac, пошляхово, повідомленням `loop(<id>): <підсумок одним рядком>`. **`commit-on-stop.sh` коміта НЕ робить:** він лише не дає сесії завершитись мовчки з незаписаним станом і повертає роботу тобі. Причина — коміт має описувати те, що агент справді зробив і перевірив, а хук цього не читав. У контурі C ці ж дані йдуть у `_outbox/` одним файлом — межу тримає `contour-guard.sh`, тож помилитись контуром петля не може.
