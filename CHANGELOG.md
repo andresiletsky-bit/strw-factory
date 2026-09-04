@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-09-04
+
 ### Added
 - **Чотири seeded-фікстури рівня 1 з пам'яті сесій** (П2.4 плану 2026-09-04,
   dec-094 §7): `checker-verdict/proof-cannot-tell-fix-from-noop` (перевірка,
