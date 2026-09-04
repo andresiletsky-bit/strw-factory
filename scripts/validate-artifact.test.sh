@@ -179,6 +179,15 @@ else
   bad "мутація порожніх секцій не наклалась — контроль §4 нічого не доводить"
 fi
 
+# Файл, який grep не може прочитати (chmod 000), — 2 з причиною. Доки заголовки
+# читались через `done < <(grep … | cut …)`, падіння grep = «порожніх секцій
+# немає» (форма procsub-loop-input, strw-state/scripts/lib/nonportable-forms.tsv).
+printf '## Що спрацювало\nx\n' > "$TMP/unreadable.md"; chmod 000 "$TMP/unreadable.md"
+OUT_U="$(bash "$V" retro-note "$TMP/unreadable.md" 2>&1)"; RC_U=$?
+chmod 644 "$TMP/unreadable.md"
+if [ "$RC_U" = 2 ] && printf '%s' "$OUT_U" | grep -q 'не прочитав'; then ok "файл не читається → 2 з причиною (grep не прочитав), не «порожніх секцій немає»"
+else bad "файл не читається мав дати 2 з причиною (дав $RC_U)" "$OUT_U"; fi
+
 echo
 echo "Разом: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

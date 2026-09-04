@@ -41,6 +41,11 @@ mkdir "$TMP/tag"
 git -C "$REPO" archive "$TAG" | tar -x -C "$TMP/tag"
 
 FAIL=0
+# Переліки — у файл, з кодом виходу. `done < <(ls -A …)` ковтав би падіння ls:
+# кеш, якого не прочитати, читався б як «порожній» → нуль розбіжностей → зелене
+# (форма procsub-loop-input, strw-state/scripts/lib/nonportable-forms.tsv).
+ls -A "$CACHE" > "$TMP/cache.list" || { echo "verify-cache FAIL: не прочитати кеш $CACHE — це не «порожньо»."; exit 2; }
+ls -A "$TMP/tag" > "$TMP/tag.list" || { echo "verify-cache FAIL: не прочитати розпакований тег $TAG."; exit 2; }
 # Кеш → тег: усе, що лежить у кеші, мусить бути в тегу тим самим байтом.
 # Три винятки, і всі три — НЕ вміст плагіна: .DS_Store створює Finder будь-де;
 # .orphaned_at ставить менеджер плагінів у витіснених версіях кешу; .in_use —
@@ -59,11 +64,11 @@ while IFS= read -r e; do
     echo "verify-cache FAIL — «${e}» у кеші $PV ≠ тег $TAG:"
     sed 's/^/  /' "$TMP/delta"
   fi
-done < <(ls -A "$CACHE")
+done < "$TMP/cache.list"
 # Тег → кеш: файл канону, який не доїхав, — теж провал, а не дрібниця.
 while IFS= read -r e; do
   [ -e "$CACHE/$e" ] || { FAIL=1; echo "verify-cache FAIL — «${e}» є в тегу $TAG, але відсутній у кеші $PV."; }
-done < <(ls -A "$TMP/tag")
+done < "$TMP/tag.list"
 
 if [ "$FAIL" = 1 ]; then
   echo ""

@@ -100,6 +100,13 @@ done
 # Глибший заголовок (## → ###) — це вміст секції, не порожнеча: retro-note тримає
 # патерни й пропозиції саме підсекціями (латентний баг, спійманий golden'ом 15.08).
 EMPTY=()
+# Не `done < <(grep … | cut …)`: підстановка процесу ковтає код виходу producer'а
+# (форма procsub-loop-input, strw-state/scripts/lib/nonportable-forms.tsv; pact-ios #167).
+# grep=1 — «заголовків немає», це легально; >1 — файл не прочитано, і це FAIL,
+# а не «порожніх розділів немає».
+_hdr_lines="$(mktemp)"
+grep -nE '^#{2,3} ' "$FILE" > "$_hdr_lines.raw" || [[ $? -eq 1 ]] || { echo "FAIL: grep не прочитав $FILE"; exit 2; }
+cut -d: -f1 "$_hdr_lines.raw" > "$_hdr_lines"
 while IFS= read -r line_no; do
   header=$(sed -n "${line_no}p" "$FILE")
   hashes="${header%% *}"; level=${#hashes}
@@ -110,7 +117,8 @@ while IFS= read -r line_no; do
     nlevel=${#BASH_REMATCH[1]}
     (( nlevel <= level )) && EMPTY+=("${header#\#\# }")
   fi
-done < <(grep -nE '^#{2,3} ' "$FILE" | cut -d: -f1)
+done < "$_hdr_lines"
+rm -f "$_hdr_lines" "$_hdr_lines.raw"
 
 # copy-guide без машинного блоку — гайд-нездара: проза є, гейта немає.
 # Перевіряється ІМЕННО ключ rules усередині yaml-блоку, не сам блок: гайд із
