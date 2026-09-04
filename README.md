@@ -11,10 +11,10 @@ Design sources: STRW Concept v0.2 «Loop Factory» (історичний док�
 ```
 Andrii (CEO) ── triage-inbox ──┐
                                ▼
-        ┌── loops/ (L1–L6 passports) ── strw-loop-run ──┐
+        ┌── loops/ (L1–L8 passports) ── strw-loop-run ──┐
         │   maker agent → checker agent → state write    │
         ▼                                                ▼
-   agents/ (8 roles + 3 validators)          strw-state/ (git spine)
+   agents/ (8 roles + 5 validators)          strw-state/ (git spine)
         │                                                │
         └── existing Cowork plugins (grow-pm, design,    └─→ Notion (one-way
             engineering, marketing, product-tracking…)        human dashboard)
@@ -29,20 +29,23 @@ Andrii (CEO) ── triage-inbox ──┐
 | L4 | Growth | щотижня/прод | growth → brand-reviewer |
 | L5 | Portfolio | щоп'ятниці | support-analytics → data-integrity pass |
 | L6 | Retro | щоп'ятниці | strw-retro → Andrii |
+| L7 | Design | зміна макета | designer → design-critic |
+| L8 | Regression | щотижня | qa → regression-critic |
 
 ## Skills
-`strw-loop-run` (єдиний вхід петель) · `strw-triage` (розбір inbox) · `strw-gate-review` (G1–G4) · `strw-portfolio` (L5) · `strw-retro` (L6) · `strw-product-init` (intake + скаффолд) · `strw-notion-sync` (git → Notion).
+`strw-loop-run` (єдиний вхід петель) · `strw-triage` (розбір inbox) · `strw-gate-review` (G1–G4) · `strw-portfolio` (L5) · `strw-retro` (L6) · `strw-product-init` (intake + скаффолд) · `strw-notion-sync` (git → Notion) · `strw-design-sync` (звірка дизайн-одиниць, L7).
 
 ## Gates
 G1 build-or-kill · G2 scope lock · G3 ready-to-ship · G4 portfolio review. Рішення — тільки людина, з підтвердженим прочитанням артефакту, логується в decisions-log.md.
 
 ## Constitution (references/)
-loop-passport · artifact-contracts · state-protocol · budget-policy · data-policy · data-integrity-protocol · subagent-delegation · self-improvement · context-map · decision-protocol · dependency-policy · **evals/** (rubrics + golden set).
+loop-passport · artifact-contracts · state-protocol · budget-policy · data-policy · data-integrity-protocol · subagent-delegation · self-improvement · context-map · decision-protocol · dependency-policy · **review-policy** (одна шкала рев'ю на всіх чекерів) · **evals/** (rubrics + golden + seeded-фікстури).
 
 ## Verification layers
 1. **Рівень 0 (детермінований):** `scripts/validate-artifact.sh` — структура артефактів; pre-commit hook у strw-state; CI у продуктових репо (`templates/ci.yml`).
 2. **Рівень 1 (LLM-checker):** інша модель, ніж maker (hard rule) · рубрики `references/evals/rubrics.md` · output І trajectory (trace maker'а проти паспорта).
-3. **Регресія:** будь-яка зміна промпту/скіла/паспорта — прогін на golden-наборі перед bump версії.
+3. **Регресія — з виконавцем, не прозою:** `scripts/evals/run.sh --offline` ганяє golden (очікування PASS) і seeded-фікстури (очікування «дефект зловлено»). Гейт стоїть у `.githooks/pre-commit` (коли коміт чіпає `agents/ skills/ loops/ references/ scripts/validate-artifact.sh`) і в `scripts/release.sh` — червоний прогін відмовляє в релізі, включно з `--dry-run`. Рівень 1 (LLM-чекер на змістових фікстурах) — `STRW_EVALS_ONLINE=1`.
+4. **Рев'ю:** одна політика на всіх чекерів — `references/review-policy.md` (проходи, `Blocker`/`Important`/`Nit`, стеля 5 Nit, обов'язкова детермінована дія, формат вердикту `checker-verdict`).
 
 ## Setup
 1. Створи приватний GitHub-репозиторій `strw-state` із каркасу в `STRW/strw-state/` (готовий у робочій папці).

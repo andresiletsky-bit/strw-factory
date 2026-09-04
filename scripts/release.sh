@@ -135,6 +135,27 @@ if [ "$CUR_BRANCH" != "$MAIN_BRANCH" ]; then
   [ "$CONFIRM" = "true" ] && { printf 'Continue anyway? [y/N] '; read -r a; [ "$a" = "y" ] || die "Aborted."; }
 fi
 
+# ----- 0) evals: планка це eval, а не демо ------------------------------------
+# П1.2 аудиту 2026-09-03 (F7): правило «регресія на golden перед bump» жило в
+# чотирьох файлах прозою і не мало виконавця — промпти агентів випускались без
+# жодної перевірки поведінки. Тепер червоний прогін відмовляє в релізі.
+# `--dry-run` ГАНЯЄ evals теж: суха прогонка, що пропускає єдиний гейт релізу,
+# показувала б зелений шлях там, де справжній реліз упаде.
+# Онлайн-рівень (LLM-чекер) — лише за явним STRW_EVALS_ONLINE=1: платні виклики
+# не вмикаються самі.
+EVALS="$SCRIPT_DIR/evals/run.sh"
+if [ -f "$EVALS" ]; then
+  info "Evals (офлайн, рівень 0)"
+  bash "$EVALS" --offline --no-results || die "evals червоні — реліз не робиться. Прожени: bash scripts/evals/run.sh --offline"
+  if [ "${STRW_EVALS_ONLINE:-0}" = "1" ]; then
+    info "Evals (онлайн, рівень 1 — LLM-чекер)"
+    bash "$EVALS" --no-results || die "онлайн-evals червоні — реліз не робиться."
+  fi
+  ok "evals зелені"
+else
+  die "немає $EVALS — гейт evals недоступний, а реліз без нього випускає неперевірену поведінку агентів."
+fi
+
 # ----- current + next version ------------------------------------------------
 CUR_VERSION="$(grep -Eo '"version"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' "$MANIFEST" \
   | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"

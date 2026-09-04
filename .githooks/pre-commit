@@ -21,9 +21,32 @@ if [ ! -f "$GATE" ]; then
 fi
 bash "$GATE" || exit 1
 
+# Один вимір staged-переліку на всі гілки нижче. У ЗМІННУ, не в пайп: під
+# `pipefail` `grep -q` виходить на першому збігу, git отримує SIGPIPE, і статус
+# пайпа стає 141 — тобто «збіг є» читалось би як «збігів немає», і гейт тим
+# сліпіший, чим більший коміт. Клас уже куплений (gate-dead-from-plumbing).
+STAGED="$(git diff --cached --name-only --diff-filter=ACM)"
+
+# Evals-гейт (П1.2 аудиту 2026-09-03, F7). Зміна промпту агента, скіла,
+# паспорта, конституції або самого валідатора мусить прогнати набір фікстур —
+# інакше поведінка агентів змінюється й випускається без жодної перевірки.
+# Офлайн і без запису звітів: хук не має бруднити дерево, яке сам же міряє.
+if grep -qE '^(agents/|skills/|loops/|references/|scripts/validate-artifact\.sh$)' <<<"$STAGED"; then
+  EVALS="$(git rev-parse --show-toplevel)/scripts/evals/run.sh"
+  if [ ! -f "$EVALS" ]; then
+    echo "pre-commit FAIL: немає $EVALS — evals-гейт недоступний, а коміт чіпає agents/skills/loops/references."
+    exit 1
+  fi
+  if ! bash "$EVALS" --offline --no-results; then
+    echo "pre-commit FAIL: evals червоні. Прожени й подивись:"
+    echo "  bash scripts/evals/run.sh --offline"
+    exit 1
+  fi
+fi
+
 # Дрейф паспортів перевіряється лише коли коміт ЇХ чіпає — інакше кожен коміт
 # у цьому репо платив би за прогін чужого набору.
-if git diff --cached --name-only | grep -q '^loops/'; then
+if grep -q '^loops/' <<<"$STAGED"; then
   DRIFT="${STRW_ROOT:-$HOME/Developer/STRW}/tests/integration/docs-current.test.sh"
   if [ ! -f "$DRIFT" ]; then
     echo "pre-commit FAIL: немає $DRIFT — перевірка дрейфу паспортів недоступна,"
