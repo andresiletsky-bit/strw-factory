@@ -17,6 +17,10 @@
           {
             "type": "command",
             "command": "/Users/Andrew/Developer/STRW/.claude/hooks/contour-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "/Users/Andrew/Developer/STRW/.claude/hooks/destructive-git-guard.sh"
           }
         ]
       },
