@@ -124,7 +124,12 @@ level1() { # level1 <type> <файл-тіла> <модель> → друкує �
     echo; echo "=== АРТЕФАКТ ==="
     cat "$file"
   } > "$prompt"
-  claude -p --model "$model" --output-format json < "$prompt" > "$TMP/raw" 2>"$TMP/err" || return 2
+  # З НЕЙТРАЛЬНОЇ теки, не з репо: -p підхоплює .claude/settings.json тієї
+  # теки, звідки запущений, — Stop-хук commit-on-stop просив «закоміть», і
+  # ОСТАННЯ відповідь моделі (про коміт) ставала .result, перше слово
+  # PASS/FAIL губилось, golden читався як FAIL (04.09, перший онлайн-прогін).
+  # `--bare` не підходить: він скидає OAuth claude.ai («Not logged in»).
+  ( cd "$TMP" && claude -p --model "$model" --output-format json < "$prompt" > "$TMP/raw" 2>"$TMP/err" ) || return 2
   python3 - "$TMP/raw" > "$TMP/llm" <<'PY' || return 2
 import io, json, sys
 d = json.load(io.open(sys.argv[1], encoding="utf-8"))
