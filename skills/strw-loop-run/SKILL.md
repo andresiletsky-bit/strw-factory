@@ -1,6 +1,6 @@
 ---
 name: strw-loop-run
-version: 0.4.0
+version: 0.5.0
 description: Execute an STRW factory loop (L1–L8) by its passport — read state, budget check, maker phase, checker phase, write state, auto-advance to the next non-gate stage, escalate or archive. Use when the user asks to "запусти петлю", "run loop", "запусти discovery/validation/build/growth/portfolio/retro/design/регресію", "виконай L1/L2/L3/L4/L5/L6/L7/L8", "продовж петлю для продукту", or when a scheduled task fires a loop run. Also the headless entry point for all scheduled STRW loops.
 ---
 
@@ -24,6 +24,8 @@ description: Execute an STRW factory loop (L1–L8) by its passport — read sta
 Звір `budget.md`: ліміт запусків/тиждень цієї петлі; стеля зовнішніх витрат. Стеля запусків вичерпана ПЛАНОВИМ запуском (планувальник спрацював частіше за стелю) → **тихий no-op**: один рядок у loops-log, БЕЗ inbox — алерт тут був би шумом, inbox лише для judgment. Перевитрат УСЕРЕДИНІ заходу (цикли/витрати понад стелю під час роботи) → STOP + `budget-alert` у triage-inbox.
 
 ### Step 4 — Maker phase
+**План ДО коду — для L3 і елемента `size: M|L`.** Першим, що maker повертає, є поле `plan` у YAML елемента: `files` (що чіпає), `order` (у якому порядку), `risks` (або `risks_none_because:` рядком), `proof` (чим доведе). Чекер рецензує ПЛАН окремим дешевим раундом — модель чекера з `strw-state/engine/lanes.yaml`, **без коду** — і лише після його вердикту maker робить перший коміт. Схему поля тримає `scripts/engine/validate-items.sh` (покручена форма → ERROR; відсутній `plan` при `size: M|L` і `state: ready` → WARN, бо чергу це не блокує — старт без плану забороняє тут раннер і цей крок, а не валідатор). Куплено виміром аудиту 03.09 (F2): 30 із 60 PR «великі» за критерієм L3 6a, раунди чекера 2–6, до 11 — рев'ю читало диф, а не рішення.
+
 Виклич maker-агента з паспорта (Task tool, subagent із `agents/`). Передай йому: scope, релевантні файли state, контракт вихідного артефакту (references/artifact-contracts.md). Fan-out — за references/subagent-delegation.md (≤6). Вимагай разом з артефактом **trace**: файли state прочитані · перевірки виконані · тули/скіли викликані · ітерації. Без trace артефакт не приймається.
 
 ### Step 5 — Checker phase (двоетапно)
@@ -33,7 +35,7 @@ description: Execute an STRW factory loop (L1–L8) by its passport — read sta
 ### Step 6 — Write state (без цього запуск не відбувся)
 - Оновити `products/<id>/state.md` (Done/Next/Tried & failed) та/або `portfolio.md`.
 - Записати факт у `budget.md`.
-- Додати рядок у `loops-log/` (схема — state-protocol.md): дата · петля · продукт · тривалість · ітерації maker↔checker · first-pass так/ні · вердикти · ескалації · моделі maker/checker.
+- Додати рядок у `loops-log/` (схема — state-protocol.md): дата · петля · продукт · тривалість · ітерації maker↔checker · first-pass так/ні · вердикти · ескалації · моделі maker/checker · `plan_drift:<число>` для L3-циклів із `plan` — файлів у дифі поза `plan.files`; плану не було → `plan_drift:н/д`, ніколи не нуль.
 
 Записом у git завершує **контур M** — `strw-run` після зелених гейтів або сама сесія на Mac, пошляхово, повідомленням `loop(<id>): <підсумок одним рядком>`. **`commit-on-stop.sh` коміта НЕ робить:** він лише не дає сесії завершитись мовчки з незаписаним станом і повертає роботу тобі. Причина — коміт має описувати те, що агент справді зробив і перевірив, а хук цього не читав. У контурі C ці ж дані йдуть у `_outbox/` одним файлом — межу тримає `contour-guard.sh`, тож помилитись контуром петля не може.
 
