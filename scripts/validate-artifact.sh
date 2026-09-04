@@ -100,8 +100,28 @@ done
 # Глибший заголовок (## → ###) — це вміст секції, не порожнеча: retro-note тримає
 # патерни й пропозиції саме підсекціями (латентний баг, спійманий golden'ом 15.08).
 EMPTY=()
-while IFS= read -r line_no; do
-  header=$(sed -n "${line_no}p" "$FILE")
+# Не `done < <(grep … | cut …)`: підстановка процесу ковтає код виходу producer'а
+# (форма procsub-loop-input, strw-state/scripts/lib/nonportable-forms.tsv; pact-ios #167).
+# grep=1 — «заголовків немає», це легально; >1 — файл не прочитано, і це FAIL,
+# а не «порожніх розділів немає».
+# Один файл із mktemp (повний шаблон — і BSD, і GNU; код виходу перевірено).
+# Єдиний EXIT-trap у файлі (виміряно: grep -n trap → 1 збіг), блок виконується
+# рівно раз за процес (скрипт валідує один артефакт) — тому trap нічого не
+# затирає і нічого не витікає. Гучним провал ВІДКРИТТЯ робить перевірка
+# `: > "$_hdr"` одразу перед grep: на самому редиректі bash дав би 1 ≡
+# «заголовків немає» (grep не запускається), і `|| _grc=$?` цього б не
+# відрізнив — тому перевірку не можна відсувати від grep. Діагностика — у
+# stdout, як решта FAIL-рядків цього скрипта (гейт збирає звіт зі stdout).
+# Без другого ступеня (cut): номер рядка ріжеться в bash із того ж запису.
+_hdr="$(mktemp "${TMPDIR:-/tmp}/validate-artifact-hdr.XXXXXX")" || { echo "FAIL: mktemp не дав файлу"; exit 2; }
+trap 'rm -f "$_hdr"' EXIT
+if ! : > "$_hdr"; then echo "FAIL: не відкрити $_hdr для запису"; exit 2; fi
+# `|| _grc=$?`, а не `; _grc=$?`: під set -e простий grep із кодом 2 вбив би скрипт ДО
+# присвоєння — проба «файл не читається» зловила саме це (код 2 без причини).
+_grc=0; grep -nE '^#{2,3} ' "$FILE" > "$_hdr" || _grc=$?
+[[ $_grc -le 1 ]] || { echo "FAIL: grep не прочитав $FILE (код $_grc)"; exit 2; }
+while IFS= read -r _rec; do
+  line_no="${_rec%%:*}"; header="${_rec#*:}"
   hashes="${header%% *}"; level=${#hashes}
   next=$(awk -v n="$line_no" 'NR>n && NF {print; exit}' "$FILE")
   if [[ -z "$next" ]]; then
@@ -110,7 +130,7 @@ while IFS= read -r line_no; do
     nlevel=${#BASH_REMATCH[1]}
     (( nlevel <= level )) && EMPTY+=("${header#\#\# }")
   fi
-done < <(grep -nE '^#{2,3} ' "$FILE" | cut -d: -f1)
+done < "$_hdr"
 
 # copy-guide без машинного блоку — гайд-нездара: проза є, гейта немає.
 # Перевіряється ІМЕННО ключ rules усередині yaml-блоку, не сам блок: гайд із
