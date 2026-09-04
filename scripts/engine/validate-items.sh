@@ -106,6 +106,20 @@ else:
     if str(doc.get("schema_version")) != "1":
         err(f"lanes.yaml: schema_version = {doc.get('schema_version')!r}, очікується 1")
     shared_globs = doc.get("shared") or []
+    # `tools:` — словник інструментів для Step 3a і поля `requires:` елемента
+    # (dec-095 §2). Необов'язковий доти, доки жоден елемент не має `requires:`
+    # і жодна смуга — `resources:` (тоді міряти нема чого); з ними — обов'язковий,
+    # бо ресурс/інструмент без probe фільтр не може виміряти, лише «припустити».
+    tools = doc.get("tools")
+    tools_declared = tools is not None
+    if tools is None:
+        tools = {}
+    elif not isinstance(tools, dict):
+        err(f"lanes.yaml: `tools` має бути мапою ім'я → {{probe: <команда>}}"); tools = {}
+    else:
+        for tname, spec in tools.items():
+            if not isinstance(spec, dict) or not isinstance(spec.get("probe"), str) or not spec.get("probe").strip():
+                err(f"lanes.yaml: tools.{tname} — потрібне поле `probe` (рядок-команда, код 0 = інструмент є)")
     for lane in (doc.get("lanes") or []):
         lid = lane.get("id")
         if not lid: err("lanes.yaml: смуга без `id`"); continue
@@ -126,6 +140,10 @@ else:
                 f"(порожній список валідний, відсутність — ні)")
         elif not isinstance(lane.get("resources"), list):
             err(f"смуга '{lid}': `resources` має бути списком, а не {type(lane.get('resources')).__name__}")
+        elif tools_declared:   # без `tools:` ресурси лишаються іменами, як до 04.09
+            for rname in lane.get("resources"):
+                if rname not in tools:
+                    err(f"смуга '{lid}': ресурс '{rname}' не має probe у lanes.yaml `tools:` — фільтр Step 3a не зможе його виміряти")
         lanes[lid] = lane
 
 # ---------- 2. кожен глоб `owns` матчить ≥1 шлях на HEAD свого репо ----------
@@ -322,6 +340,20 @@ for path in item_files:
     for extra in (it.get("also_touches") or []):
         if extra not in lanes:
             err(f"{name}: also_touches '{extra}' не оголошена в lanes.yaml")
+
+    # `requires:` — інструменти понад ресурси смуги (dec-095 §2, tri-053). Форма:
+    # список рядків, кожен — ключ `tools:`; покручена форма — ERROR, не WARN, бо
+    # Step 3a читає це поле машинно і «список із мапою» мовчки став би «нічого».
+    req = it.get("requires")
+    if req is not None and not tools_declared:
+        err(f"{name}: є `requires`, а в lanes.yaml немає словника `tools:` — інструменти нічим виміряти")
+    elif req is not None:
+        if not isinstance(req, list) or not all(isinstance(x, str) and x.strip() for x in req):
+            err(f"{name}: `requires` має бути списком непорожніх рядків (імена з lanes.yaml `tools:`), а не {req!r}")
+        else:
+            for tname in req:
+                if tname not in tools:
+                    err(f"{name}: requires '{tname}' — інструмента немає в lanes.yaml `tools:` (є: {', '.join(sorted(tools)) or 'нічого'})")
 
     ab = it.get("acceptance_basis")
     if not isinstance(ab, dict):

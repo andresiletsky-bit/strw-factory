@@ -2,6 +2,7 @@
 
 
 ## [Unreleased]
+- **`strw-loop-run` 0.6.2 → 0.6.3 — Step 3a: детермінований тулчейн-фільтр + поле `requires:`** (dec-095 §2, tri-053; елемент `factory.item-requires-field`). `scripts/engine/toolchain-filter.sh` міряє інструменти probe'ами з `lanes.yaml tools:` і бере елемент лише коли доступні всі `resources:` смуги І кожен `requires:` елемента; коди 0 взято · 3 немає інструмента · 4 немає роботи · 2 не поміряти. `validate-items.sh`: схема `requires:` (список імен зі словника `tools:`; покручена форма — ERROR), ресурси смуги мусять мати probe, коли словник оголошено; без `tools:` — як досі.
 
 ## [0.10.5] — 2026-09-04
 
