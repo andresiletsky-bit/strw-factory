@@ -1,6 +1,6 @@
 ---
 name: strw-loop-run
-version: 0.5.0
+version: 0.6.0
 description: Execute an STRW factory loop (L1–L8) by its passport — read state, budget check, maker phase, checker phase, write state, auto-advance to the next non-gate stage, escalate or archive. Use when the user asks to "запусти петлю", "run loop", "запусти discovery/validation/build/growth/portfolio/retro/design/регресію", "виконай L1/L2/L3/L4/L5/L6/L7/L8", "продовж петлю для продукту", or when a scheduled task fires a loop run. Also the headless entry point for all scheduled STRW loops.
 ---
 
@@ -22,6 +22,17 @@ description: Execute an STRW factory loop (L1–L8) by its passport — read sta
 
 ### Step 3 — Budget check
 Звір `budget.md`: ліміт запусків/тиждень цієї петлі; стеля зовнішніх витрат. Стеля запусків вичерпана ПЛАНОВИМ запуском (планувальник спрацював частіше за стелю) → **тихий no-op**: один рядок у loops-log, БЕЗ inbox — алерт тут був би шумом, inbox лише для judgment. Перевитрат УСЕРЕДИНІ заходу (цикли/витрати понад стелю під час роботи) → STOP + `budget-alert` у triage-inbox.
+
+### Step 3a — Тулчейн-фільтр черги (П2.1, аудит F1; версія 0.6.0, 2026-09-04)
+Перед вибором елемента петля дивиться, **що вміє цей контур**, і бере лише те, що тут здійсненне:
+1. Виміряти інструменти прямо, не з памʼяті: `command -v xcodebuild swift xcrun gradle deno gh` (кожен окремо, результат — у trace).
+2. Прочитати `strw-state/engine/lanes.yaml`: у кожної смуги є `resources:`; елемент здійсненний у контурі, якщо КОЖЕН ресурс його смуги доступний (`xcodebuild`/`simulator`/`derived-data` → лише Mac з Xcode; `gradle-cache` → є `gradle` або `./gradlew` + JDK; `supabase-db` → є `supabase` або живий стек; `[]` → будь-де).
+3. Черга `ready` (`engine/items/*.yaml`, без `blocked_by`) фільтрується за п.2. **Спочатку** — елементи смуг, здійсненних тут; `ios-ui` у контурі без Xcode не береться і не рахується «немає роботи».
+4. Результат у рядку журналу — трьома різними словами, які не склеюються:
+   - «**немає роботи**» — черга `ready` порожня взагалі;
+   - «**немає інструмента**» — `ready` є, але жоден елемент не здійсненний тут; рядок називає, ЯКОГО ресурсу бракує і скільки елементів чекають на нього (напр. «14 ios-ui чекають xcodebuild»);
+   - «**взято**» — обраний елемент, його смуга, і що саме з ресурсів підтверджено.
+5. Дев'ять headless-заходів поспіль (29.07 → 04.09) писали «тихий no-op», бо контур C брав `ios-ui`, якого не міг зібрати — при тому, що `backend`, `kmp-common`, `ios-tooling`, `factory-tooling` не потребують симулятора. Цей крок робить різницю між «нічого робити» і «не тут» видимою і дає хмарним слотам роботу, яку вони справді можуть виконати.
 
 ### Step 4 — Maker phase
 **План ДО коду — для L3 і елемента `size: M|L`.** Першим, що maker повертає, є поле `plan` у YAML елемента: `files` (що чіпає), `order` (у якому порядку), `risks` (або `risks_none_because:` рядком), `proof` (чим доведе). Чекер рецензує ПЛАН окремим дешевим раундом — модель чекера з `strw-state/engine/lanes.yaml`, **без коду** — і лише після його вердикту maker робить перший коміт. Схему поля тримає `scripts/engine/validate-items.sh` (покручена форма → ERROR; відсутній `plan` при `size: M|L` і `state: ready` → WARN, бо чергу це не блокує — старт без плану забороняє тут раннер і цей крок, а не валідатор). Куплено виміром аудиту 03.09 (F2): 30 із 60 PR «великі» за критерієм L3 6a, раунди чекера 2–6, до 11 — рев'ю читало диф, а не рішення.
