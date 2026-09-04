@@ -111,7 +111,9 @@ EMPTY=()
 _hdr="$(mktemp "${TMPDIR:-/tmp}/validate-artifact-hdr.XXXXXX")" || { echo "FAIL: mktemp не дав файлу"; exit 2; }
 trap 'rm -f "$_hdr"' EXIT
 if ! : > "$_hdr"; then echo "FAIL: не відкрити $_hdr для запису"; exit 2; fi
-grep -nE '^#{2,3} ' "$FILE" > "$_hdr"; _grc=$?
+# `|| _grc=$?`, а не `; _grc=$?`: під set -e простий grep із кодом 2 вбив би скрипт ДО
+# присвоєння — проба «файл не читається» зловила саме це (код 2 без причини).
+_grc=0; grep -nE '^#{2,3} ' "$FILE" > "$_hdr" || _grc=$?
 [[ $_grc -le 1 ]] || { echo "FAIL: grep не прочитав $FILE (код $_grc)"; exit 2; }
 while IFS= read -r _rec; do
   line_no="${_rec%%:*}"; header="${_rec#*:}"
