@@ -17,7 +17,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 V="${STRW_VALIDATE_ARTIFACT:-$HERE/validate-artifact.sh}"
 GOLDEN="$HERE/../references/evals/golden"
-PASS=0; FAIL=0
+PASS=0; FAIL=0; SKIP=0
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 ok()  { PASS=$((PASS+1)); printf 'PASS · %s\n' "$1"; }
@@ -184,13 +184,19 @@ fi
 # немає» (форма procsub-loop-input, strw-state/scripts/lib/nonportable-forms.tsv).
 printf '## Що спрацювало\nx\n' > "$TMP/unreadable.md"; cp "$TMP/unreadable.md" "$TMP/readable.md"; chmod 000 "$TMP/unreadable.md"
 if cat "$TMP/unreadable.md" >/dev/null 2>&1; then
-  printf 'SKIP · (видимий) chmod 000 не блокує читання (uid=%s) — проба «файл не читається» тут не вимірюється\n' "$(id -u)"
+  SKIP=$((SKIP+1)); printf 'SKIP · (видимий, у підсумку) chmod 000 не блокує читання (uid=%s) — проба «файл не читається» тут не вимірюється\n' "$(id -u)"
 else
   OUT_U="$(bash "$V" retro-note "$TMP/unreadable.md" 2>&1)"; RC_U=$?
   if [ "$RC_U" = 2 ] && printf '%s' "$OUT_U" | grep -q 'не прочитав'; then ok "файл не читається → 2 з причиною (grep не прочитав), не «порожніх секцій немає»"
   else bad "файл не читається мав дати 2 з причиною (дав $RC_U)" "$OUT_U"; fi
 fi
 chmod 644 "$TMP/unreadable.md"
+# Нуль заголовків — легально: це grep=1, не збій. Регресія «_grc -eq 0» зробила б
+# кожен файл без ##/### FAIL 2, і близнюк із заголовком цього б не зловив.
+printf 'просто текст без жодного заголовка\n' > "$TMP/noheaders.md"
+OUT_N="$(bash "$V" retro-note "$TMP/noheaders.md" 2>&1)"; RC_N=$?
+if [ "$RC_N" != 2 ] && ! printf '%s' "$OUT_N" | grep -q 'не прочитав'; then ok "нуль заголовків → не 2 і без «не прочитав» (grep=1 легально, rc=$RC_N)"
+else bad "нуль заголовків мав бути легальним (дав $RC_N)" "$OUT_N"; fi
 # Контроль-близнюк: той самий вміст читабельним — НЕ 2 і без «не прочитав»
 # (інакше регресія «завжди exit 2 з цим текстом» пройшла б проба вище).
 OUT_R="$(bash "$V" retro-note "$TMP/readable.md" 2>&1)"; RC_R=$?
@@ -198,5 +204,5 @@ if [ "$RC_R" != 2 ] && ! printf '%s' "$OUT_R" | grep -q 'не прочитав';
 else bad "контроль: читабельна копія дала 2 або «не прочитав»" "$OUT_R"; fi
 
 echo
-echo "Разом: PASS=$PASS FAIL=$FAIL"
+echo "Разом: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
 [ "$FAIL" -eq 0 ]

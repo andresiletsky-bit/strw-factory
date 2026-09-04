@@ -38,7 +38,12 @@ git -C "$REPO" rev-parse -q --verify "refs/tags/$TAG" >/dev/null || {
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 mkdir "$TMP/tag"
-git -C "$REPO" archive "$TAG" | tar -x -C "$TMP/tag"
+# Не `git archive | tar -x`: код git у конвеєрі губився (pipefail без перевірки
+# статусу = мовчання), а BSD tar на порожньому вході виходить 0 — виміряно
+# 04.09 на macOS: `tar -x < /dev/null` → 0. Тоді порожній тег + порожній кеш
+# дали б FAIL=0 = зелене. Той самий клас, що й ls нижче (чекер PR #14, р.2).
+git -C "$REPO" archive "$TAG" > "$TMP/tag.tar" || { echo "verify-cache FAIL: не дістати тег $TAG (git archive впав)."; exit 2; }
+tar -x -f "$TMP/tag.tar" -C "$TMP/tag" || { echo "verify-cache FAIL: не розпакувати тег $TAG."; exit 2; }
 
 FAIL=0
 # Переліки — у файл, з кодом виходу. `done < <(ls -A …)` ковтав би падіння ls:
