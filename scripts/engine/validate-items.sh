@@ -25,6 +25,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # того, ЗВІДКИ його покликали, — рівно клас `measure-of-the-wrong-subject`.
 STRW_ROOT="${STRW_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 ENGINE_DIR="${1:-$STRW_ROOT/strw-state/engine}"
+# `repo:` → тека: з ОДНОГО словника (repo-dir.sh), спільного з bin/strw-worktree.sh.
+# strw-ops — це сам корінь парасольки, не $STRW_ROOT/strw-ops (tri-070, PR #70).
+# shellcheck source=repo-dir.sh
+. "${STRW_REPO_DIR_SH:-$SCRIPT_DIR/repo-dir.sh}"
+STRW_REPO_DIRS="$(strw_repo_dirs "$STRW_ROOT")"
 # Журнал рішень береться ПОРУЧ із реєстром, а не з $STRW_ROOT. Інакше аргумент
 # `engine-dir` бреше: елементи читаються з worktree, а журнал — зі спільної
 # копії, і 18.08 це дало точно хибний діагноз (обидві копії мали по 76
@@ -39,10 +44,13 @@ command -v python3 >/dev/null || { echo "ERROR: потрібен python3" >&2; e
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-python3 - "$ENGINE_DIR" "$DECISIONS_LOG" "$STRW_ROOT" "$WORK" <<'PY'
+python3 - "$ENGINE_DIR" "$DECISIONS_LOG" "$STRW_ROOT" "$WORK" "$STRW_REPO_DIRS" <<'PY'
 import os, re, sys, subprocess, glob as globmod
 
-engine_dir, decisions_log, strw_root, work = sys.argv[1:5]
+engine_dir, decisions_log, strw_root, work, repo_dirs_arg = sys.argv[1:6]
+# repo → тека, зі словника repo-dir.sh (bash), не з os.path.join(strw_root, repo):
+# strw-ops резолвиться в корінь, невідоме репо — помилка конфігурації з назвою словника.
+repo_dirs = dict(kv.split("=", 1) for kv in repo_dirs_arg.split(":") if kv)
 try:
     import yaml
 except ImportError:
@@ -79,8 +87,13 @@ _tree_cache = {}
 def repo_tree(repo):
     """Список шляхів на HEAD репо. Порожній список = репо недоступне (це помилка)."""
     if repo in _tree_cache: return _tree_cache[repo]
-    path = os.path.join(strw_root, repo)
-    if not os.path.isdir(os.path.join(path, ".git")):
+    path = repo_dirs.get(repo)
+    if path is None:
+        err(f"репо '{repo}' невідоме словнику strw-factory/scripts/engine/repo-dir.sh "
+            f"(відомі: {', '.join(sorted(repo_dirs))})")
+        _tree_cache[repo] = []
+        return []
+    if not os.path.exists(os.path.join(path, ".git")):
         err(f"репо '{repo}' не знайдено як git-клон у {path}")
         _tree_cache[repo] = []
         return []
