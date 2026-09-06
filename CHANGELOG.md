@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [0.10.7] — 2026-09-06
+
 ### Changed
 - **`scripts/engine/repo-dir.sh` — єдиний словник `repo:` → тека; strw-ops = корінь
   парасольки** (tri-070, strw-state #70, PR #16): `validate-items.sh` бере мапу з нього
