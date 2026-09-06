@@ -35,10 +35,12 @@ bad() { FAIL=$((FAIL+1)); printf 'FAIL · %s\n%s\n' "$1" "${2:-}"; }
 LIVE="$STRW_ROOT/strw-state"
 # Клони мусять бути ВСІ, кого знає словник: фікстура — копія живого lanes.yaml, і
 # відсутній pact-backend червонив би «не знайдено як git-клон» з чужої причини.
-. "$HERE/repo-dir.sh"
-for r in $STRW_REPOS; do
-    d="$(strw_repo_dir "$STRW_ROOT" "$r")"
-    [ -d "$d/.git" ] || { echo "SKIP · немає клону $r ($d) — проба потребує парасольки STRW з усіма клонами"; exit 0; }
+# Перелік тут ЛІТЕРАЛЬНИЙ, не через strw_repo_dir: сторож, що резолвить теки словником,
+# який сам і перевіряє, читав би зламаний словник як «немає клону» → SKIP → rc 0
+# (чекер PR #16, р.2, N1). Це другий, незалежний примірник оракула — навмисно.
+for d in "$STRW_ROOT" "$STRW_ROOT/strw-state" "$STRW_ROOT/strw-factory" \
+         "$STRW_ROOT/pact-ios" "$STRW_ROOT/pact-backend"; do
+    [ -d "$d/.git" ] || { echo "SKIP · немає клону $d — проба потребує парасольки STRW з усіма клонами"; exit 0; }
 done
 [ -f "$LIVE/engine/lanes.yaml" ] || { echo "SKIP · немає $LIVE/engine/lanes.yaml"; exit 0; }
 
@@ -83,7 +85,7 @@ else bad "старе правило мало б червоніти саме на
 
 # 2. новий словник: та сама смуга → валідно, глоби bin/** tests/** матчать корінь
 out="$(run_v)"; rc=$?
-if [ "$rc" -eq 0 ] && ! printf '%s' "$out" | grep -q "ops-tooling"; then
+if [ "$rc" -eq 0 ] && ! printf '%s' "$out" | grep -q "ERROR.*ops-tooling"; then
     ok "repo: strw-ops → корінь парасольки; owns bin/** tests/** рахуються на HEAD кореня"
 else bad "смуга ops-tooling з repo strw-ops мала б пройти" "$out"; fi
 
@@ -105,6 +107,20 @@ out="$(bash -c '. "$1"; strw_repo_dirs /r' _ "$HERE/repo-dir.sh" 2>&1)"; rc=$?
 if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -c '=')" -eq 5 ] && printf '%s' "$out" | grep -q '^strw-ops=/r$'; then
     ok "strw_repo_dirs → 5 пар, strw-ops=/r (корінь)"
 else bad "мапа словника" "rc=$rc $out"; fi
+
+# 5. перелік і case розійшлися → strw_repo_dirs падає rc 64, без порожньої теки (шапка
+# словника це обіцяє; без свідка обіцянка — проза)
+out="$(bash -c '. "$1"; STRW_REPOS="strw-ops pact-web"; strw_repo_dirs /r' _ "$HERE/repo-dir.sh" 2>&1)"; rc=$?
+if [ "$rc" -eq 64 ] && ! printf '%s' "$out" | grep -q '^pact-web='; then
+    ok "перелік ≠ case (pact-web) → strw_repo_dirs rc 64, пари pact-web= немає"
+else bad "розходження переліку і case мало б дати rc 64" "rc=$rc $out"; fi
+# 6. …і валідатор на такому словнику зупиняється ERROR-ом, не міряє далі
+BAD="$TMP/bad"; mkdir -p "$BAD"; cp "$V" "$BAD/validate-items.sh"
+sed 's/^STRW_REPOS=.*/STRW_REPOS="strw-ops strw-state strw-factory pact-ios pact-backend pact-web"/' "$HERE/repo-dir.sh" > "$BAD/repo-dir.sh"
+out="$(STRW_ROOT="$STRW_ROOT" bash "$BAD/validate-items.sh" "$FX/engine" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q "словник репо розійшовся сам із собою"; then
+    ok "валідатор зі словником, що розійшовся сам із собою → ERROR і стоп"
+else bad "валідатор мав би зупинитись на зламаному словнику" "rc=$rc $out"; fi
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

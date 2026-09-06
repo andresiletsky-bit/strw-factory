@@ -165,7 +165,8 @@ Deno.test("реальні елементи реєстру розбираютьс
   // Число елементів росте з кожним циклом; пін «рівно 14» червонів на main з
   // моменту, коли їх стало 15, і робив набір червоним назавжди (чекер PR #16).
   // Нижня межа тримає сенс проби — «предмет є», не «предмет не змінився».
-  const dir = "/Users/Andrew/Developer/STRW/strw-state/engine/items";
+  const root = Deno.env.get("STRW_ROOT") ?? "/Users/Andrew/Developer/STRW";
+  const dir = `${root}/strw-state/engine/items`;
   const files = [...Deno.readDirSync(dir)].filter((e) => e.name.endsWith(".yaml"));
   assert(files.length >= 14, `елементів ${files.length} < 14 — реєстр порожній або шлях не той`);
   for (const f of files) {
