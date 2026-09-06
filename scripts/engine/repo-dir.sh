@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+# shellcheck shell=bash
 # repo-dir.sh — ЄДИНЕ місце, де `repo:` з реєстру стає текою на диску.
 #
 # Джерело правди для всіх, хто резолвить репо: validate-items.sh (глоби `owns`
@@ -11,9 +11,12 @@
 # Використання (source, не exec):
 #   . "$STRW_ROOT/strw-factory/scripts/engine/repo-dir.sh"
 #   strw_repo_dir  <root> <repo>   → тека; невідоме репо → rc 64 і рядок у stderr
-#   strw_repo_dirs <root>          → "repo=тека:repo=тека…" для python (validate-items)
+#   strw_repo_dirs <root>          → рядки "repo=тека" (по одному на рядок) для python
+#                                     (validate-items); межа: шлях без переносу рядка
 #
-# bash 3.2: без declare -A; перелік і case — паралельні, і саме тут, ніде більше.
+# Лише bash (source з zsh не ділить $STRW_REPOS на слова). bash 3.2: без declare -A;
+# перелік і case — паралельні, і саме тут, ніде більше; strw_repo_dirs падає, якщо вони
+# розійшлися (repo з переліку, якого case не знає → rc 64, не порожня тека).
 STRW_REPOS="strw-ops strw-state strw-factory pact-ios pact-backend"
 
 strw_repo_dir() {
@@ -25,9 +28,9 @@ strw_repo_dir() {
 }
 
 strw_repo_dirs() {
-    local r out=""
+    local r d
     for r in $STRW_REPOS; do
-        out="${out}${out:+:}${r}=$(strw_repo_dir "$1" "$r")"
+        d="$(strw_repo_dir "$1" "$r")" || return 64
+        printf '%s=%s\n' "$r" "$d"
     done
-    printf '%s' "$out"
 }

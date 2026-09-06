@@ -33,9 +33,14 @@ ok()  { PASS=$((PASS+1)); printf 'PASS · %s\n' "$1"; }
 bad() { FAIL=$((FAIL+1)); printf 'FAIL · %s\n%s\n' "$1" "${2:-}"; }
 
 LIVE="$STRW_ROOT/strw-state"
-for need in "$LIVE/engine/lanes.yaml" "$STRW_ROOT/.git" "$STRW_ROOT/pact-ios/.git"; do
-    [ -e "$need" ] || { echo "SKIP · немає $need — проба потребує парасольки STRW з клонами"; exit 0; }
+# Клони мусять бути ВСІ, кого знає словник: фікстура — копія живого lanes.yaml, і
+# відсутній pact-backend червонив би «не знайдено як git-клон» з чужої причини.
+. "$HERE/repo-dir.sh"
+for r in $STRW_REPOS; do
+    d="$(strw_repo_dir "$STRW_ROOT" "$r")"
+    [ -d "$d/.git" ] || { echo "SKIP · немає клону $r ($d) — проба потребує парасольки STRW з усіма клонами"; exit 0; }
 done
+[ -f "$LIVE/engine/lanes.yaml" ] || { echo "SKIP · немає $LIVE/engine/lanes.yaml"; exit 0; }
 
 # Фікстурний strw-state: engine/ і decisions/ поруч, як у живому.
 FX="$TMP/strw-state"; mkdir -p "$FX"
@@ -61,18 +66,20 @@ run_v() { STRW_ROOT="$STRW_ROOT" bash "$V" "$FX/engine" 2>&1; }
 out="$(run_v)"; rc=$?
 if [ "$rc" -eq 0 ]; then ok "фікстура = живий реєстр: валідна (контроль)"; else bad "фікстура без змін мала б бути валідною" "$out"; fi
 
-# 1. негативний контроль — СТАРЕ правило ($root/strw-ops) на тій самій смузі → ERROR
+# 1. негативний контроль — СТАРЕ правило ($root/strw-ops) на тій самій смузі → ERROR.
+# Без env-шва: копія валідатора поруч зі СТАРИМ словником (валідатор бере repo-dir.sh
+# зі своєї теки) — так само, як він побачив би зламаний словник у релізі.
 add_lane strw-ops
-OLD="$TMP/old-repo-dir.sh"
-cat > "$OLD" <<'SH'
+OLDDIR="$TMP/old"; mkdir -p "$OLDDIR"; cp "$V" "$OLDDIR/validate-items.sh"
+cat > "$OLDDIR/repo-dir.sh" <<'SH'
 STRW_REPOS="strw-ops strw-state strw-factory pact-ios pact-backend"
 strw_repo_dir() { printf '%s/%s' "$1" "$2"; }
-strw_repo_dirs() { local r out=""; for r in $STRW_REPOS; do out="${out}${out:+:}${r}=$(strw_repo_dir "$1" "$r")"; done; printf '%s' "$out"; }
+strw_repo_dirs() { local r; for r in $STRW_REPOS; do printf '%s=%s\n' "$r" "$(strw_repo_dir "$1" "$r")"; done; }
 SH
-out="$(STRW_REPO_DIR_SH="$OLD" run_v)"; rc=$?
-if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q "не знайдено як git-клон"; then
-    ok "негативний контроль: старе правило \$root/strw-ops → ERROR «не знайдено як git-клон»"
-else bad "старе правило мало б червоніти на strw-ops" "$out"; fi
+out="$(STRW_ROOT="$STRW_ROOT" bash "$OLDDIR/validate-items.sh" "$FX/engine" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q "репо 'strw-ops' не знайдено як git-клон у .*/strw-ops$"; then
+    ok "негативний контроль: старе правило \$root/strw-ops → ERROR саме на strw-ops"
+else bad "старе правило мало б червоніти саме на strw-ops" "$out"; fi
 
 # 2. новий словник: та сама смуга → валідно, глоби bin/** tests/** матчать корінь
 out="$(run_v)"; rc=$?
@@ -87,6 +94,17 @@ out="$(run_v)"; rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q "невідоме словнику strw-factory/scripts/engine/repo-dir.sh"; then
     ok "repo: nope → ERROR із назвою словника"
 else bad "вигадане репо мало б бути ERROR із назвою словника" "$out"; fi
+
+# 4. сам словник: невідоме репо → rc 64 і назва словника (єдина проба цієї гілки —
+# validate-items її не досягає, а strw-worktree.sh споживає саме її)
+out="$(bash -c '. "$1"; strw_repo_dir /r nope' _ "$HERE/repo-dir.sh" 2>&1)"; rc=$?
+if [ "$rc" -eq 64 ] && printf '%s' "$out" | grep -q "repo-dir.sh"; then
+    ok "strw_repo_dir /r nope → rc 64 з назвою словника"
+else bad "невідоме репо у словнику мало б дати rc 64" "rc=$rc $out"; fi
+out="$(bash -c '. "$1"; strw_repo_dirs /r' _ "$HERE/repo-dir.sh" 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -c '=')" -eq 5 ] && printf '%s' "$out" | grep -q '^strw-ops=/r$'; then
+    ok "strw_repo_dirs → 5 пар, strw-ops=/r (корінь)"
+else bad "мапа словника" "rc=$rc $out"; fi
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

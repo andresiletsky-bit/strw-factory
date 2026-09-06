@@ -28,8 +28,8 @@ ENGINE_DIR="${1:-$STRW_ROOT/strw-state/engine}"
 # `repo:` → тека: з ОДНОГО словника (repo-dir.sh), спільного з bin/strw-worktree.sh.
 # strw-ops — це сам корінь парасольки, не $STRW_ROOT/strw-ops (tri-070, PR #70).
 # shellcheck source=repo-dir.sh
-. "${STRW_REPO_DIR_SH:-$SCRIPT_DIR/repo-dir.sh}"
-STRW_REPO_DIRS="$(strw_repo_dirs "$STRW_ROOT")"
+. "$SCRIPT_DIR/repo-dir.sh"
+STRW_REPO_DIRS="$(strw_repo_dirs "$STRW_ROOT")" || { echo "ERROR: словник репо розійшовся сам із собою (repo-dir.sh)" >&2; exit 2; }
 # Журнал рішень береться ПОРУЧ із реєстром, а не з $STRW_ROOT. Інакше аргумент
 # `engine-dir` бреше: елементи читаються з worktree, а журнал — зі спільної
 # копії, і 18.08 це дало точно хибний діагноз (обидві копії мали по 76
@@ -50,7 +50,8 @@ import os, re, sys, subprocess, glob as globmod
 engine_dir, decisions_log, strw_root, work, repo_dirs_arg = sys.argv[1:6]
 # repo → тека, зі словника repo-dir.sh (bash), не з os.path.join(strw_root, repo):
 # strw-ops резолвиться в корінь, невідоме репо — помилка конфігурації з назвою словника.
-repo_dirs = dict(kv.split("=", 1) for kv in repo_dirs_arg.split(":") if kv)
+# Пари «repo=тека» по одному на рядок: `:` і `=` у шляху дозволені, перенос рядка — ні.
+repo_dirs = dict(kv.split("=", 1) for kv in repo_dirs_arg.split("\n") if kv)
 try:
     import yaml
 except ImportError:
@@ -93,7 +94,7 @@ def repo_tree(repo):
             f"(відомі: {', '.join(sorted(repo_dirs))})")
         _tree_cache[repo] = []
         return []
-    if not os.path.exists(os.path.join(path, ".git")):
+    if not os.path.isdir(os.path.join(path, ".git")):
         err(f"репо '{repo}' не знайдено як git-клон у {path}")
         _tree_cache[repo] = []
         return []

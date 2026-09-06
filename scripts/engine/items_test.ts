@@ -3,7 +3,7 @@
 // Головна вимога до ЗАПИСУ: item-файли містять коментарі, які W0a лишила навмисно
 // («НОТАТКА W0a → W0b (не видаляти без рішення)») і багаторядкові acceptance.
 // Повний YAML round-trip їх знищив би. Тому запис — хірургічний, порядковий.
-import { assertEquals, assertStringIncludes, assertThrows } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertStringIncludes, assertThrows } from "jsr:@std/assert@1";
 import { parseItem, setFields } from "./lib/items.ts";
 
 const SAMPLE = `schema_version: 1
@@ -161,10 +161,13 @@ Deno.test("файл лишається валідним для повторно�
   assertStringIncludes(s, "# НОТАТКА W0a → W0b (не видаляти без рішення).");
 });
 
-Deno.test("реальні 14 елементів реєстру розбираються без винятків", () => {
+Deno.test("реальні елементи реєстру розбираються без винятків", () => {
+  // Число елементів росте з кожним циклом; пін «рівно 14» червонів на main з
+  // моменту, коли їх стало 15, і робив набір червоним назавжди (чекер PR #16).
+  // Нижня межа тримає сенс проби — «предмет є», не «предмет не змінився».
   const dir = "/Users/Andrew/Developer/STRW/strw-state/engine/items";
   const files = [...Deno.readDirSync(dir)].filter((e) => e.name.endsWith(".yaml"));
-  assertEquals(files.length, 14);
+  assert(files.length >= 14, `елементів ${files.length} < 14 — реєстр порожній або шлях не той`);
   for (const f of files) {
     const it = parseItem(Deno.readTextFileSync(`${dir}/${f.name}`));
     assertEquals(typeof it.id, "string", `${f.name}: немає id`);
