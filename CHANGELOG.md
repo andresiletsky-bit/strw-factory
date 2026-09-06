@@ -3,6 +3,15 @@
 
 ## [Unreleased]
 
+### Changed
+- **`scripts/engine/repo-dir.sh` — єдиний словник `repo:` → тека; strw-ops = корінь
+  парасольки** (tri-070, strw-state #70, PR #16): `validate-items.sh` бере мапу з нього
+  (репо поза словником — ERROR із назвою словника; мапа по рядках, `:` у шляху безпечний),
+  `bin/strw-worktree.sh` у strw-ops читає той самий файл (strw-ops #11). Проби
+  `scripts/engine/validate-items.test.sh` (8, з негативним контролем на старе правило і
+  свідками для обох сторожів розходження переліку й case); deno-пін «рівно 14 елементів»
+  → «≥ 14» (був червоний на main від 15-го елемента).
+
 ## [0.10.6] — 2026-09-05
 - **`strw-loop-run` 0.6.2 → 0.6.3 — Step 3a: детермінований тулчейн-фільтр + поле `requires:`** (dec-095 §2, tri-053; елемент `factory.item-requires-field`). `scripts/engine/toolchain-filter.sh` міряє інструменти probe'ами з `lanes.yaml tools:` (probe ВИКОНУЄ інструмент — `swiftc -version`, не `command -v`: шим xcode-select на Mac без Xcode дає хибне «є»; `kind: tool|resource`; таймаут; stdout — один рядок вердикту, діагностика в stderr) і бере елемент лише коли доступні всі `resources:` смуги І кожен `requires:` елемента; коди 0 взято · 3 немає інструмента · 4 немає роботи · 2 не поміряти (неоголошена смуга, інструмент поза словником, завислий probe — fail-closed). `validate-items.sh`: схема `requires:` (список імен зі словника `tools:`; покручена форма — ERROR), ресурси смуги мусять мати probe, коли словник оголошено; без `tools:` — як досі.
 
