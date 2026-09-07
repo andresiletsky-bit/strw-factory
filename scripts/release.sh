@@ -198,7 +198,11 @@ elif [ -f "$CHANGELOG" ] && grep -q '## \[Unreleased\]' "$CHANGELOG"; then
   command -v perl >/dev/null 2>&1 || die "немає perl у PATH — нотатки з CHANGELOG не очистити від коментарів (на macOS /usr/bin/perl — частина ОС)"
   SECTION="$(awk '/## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' "$CHANGELOG")"
   # Незакритий `<!--` — секція зламана, а не «нотатки з маркером»: відмова.
-  if [ "$(printf '%s' "$SECTION" | grep -o '<!--' | wc -l | tr -d ' ')" != "$(printf '%s' "$SECTION" | grep -o -- '-->' | wc -l | tr -d ' ')" ]; then
+  # Рахуємо парність ПОЗА бектиками: `<!--` у коді-спані — це текст про маркер,
+  # не маркер (перший запуск гарда спіткнувся об власний запис у CHANGELOG, який
+  # описує саме цю відмову).
+  NOCODE="$(printf '%s' "$SECTION" | perl -0pe 's/`[^`]*`//g')"
+  if [ "$(printf '%s' "$NOCODE" | grep -o '<!--' | wc -l | tr -d ' ')" != "$(printf '%s' "$NOCODE" | grep -o -- '-->' | wc -l | tr -d ' ')" ]; then
     die "у секції [Unreleased] непарний HTML-коментар (<!-- без --> або навпаки) — виправ секцію перед релізом"
   fi
   printf '%s\n' "$SECTION" \

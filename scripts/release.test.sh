@@ -54,6 +54,8 @@ if printf '%s' "$out" | grep -q "підказка"; then printf 'FAIL %s\n' "т�
 want nonzero "-m з самих пробілів → відмова"                       "$TMP/empty" "реліз без нотаток не робиться" -m "   "
 mkfixture "$TMP/unclosed" $'\n<!--\nсюди додай запис\n- ніби запис\n'
 want nonzero "незакритий <!-- → відмова (секція зламана, не «нотатки з маркером»)" "$TMP/unclosed" "непарний HTML-коментар"
+mkfixture "$TMP/backtick" $'\n- незакритий `<!--` у секції → відмова (це текст ПРО маркер, у бектиках)\n'
+want 0       "маркер <!-- у бектиках — текст, не коментар → ок (гард не спотикається об власний запис)" "$TMP/backtick" "текст ПРО маркер"
 mkfixture "$TMP/nosection" ""
 ( cd "$TMP/nosection" && printf '# Changelog\n\n## [0.1.0] — 2026-01-01\n\n- перший\n' > CHANGELOG.md && git add -A && git -c user.email=t@t -c user.name=t commit -qm nosec ) >/dev/null 2>&1
 want nonzero "CHANGELOG без секції [Unreleased] → відмова (не плейсхолдер)" "$TMP/nosection" "реліз без нотаток не робиться"
