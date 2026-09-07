@@ -1,0 +1,5 @@
+# Рядки-фікстури для hooks/contour-guard.test.sh — ДАНІ, не код: тут живуть команди,
+# які самі є забороненими формами (sed-inplace-detached у strw-state/scripts/lib/
+# nonportable-forms.tsv), щоб тест-файл (*.sh — предмет сторожа переносності) їх не
+# містив літералом і не потребував списку винятків. Один рядок = одна команда.
+sed -i .bak s/a/b/ portfolio.md

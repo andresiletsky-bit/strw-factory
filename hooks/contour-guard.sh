@@ -119,7 +119,7 @@ $OUTBOX_HINT"
 $OUTBOX_HINT"
     fi
     if printf '%s' "$CMD" | grep -Eq "(^|[;&|(])[[:space:]]*sed[[:space:]]+[^|;&]*-i[^|;&]*${CANONRE}"; then
-      block "контур C не пише в канонічні файли стану (sed -i у команді).
+      block "контур C не пише в канонічні файли стану (форма sed -i<суфікс> — запис у файл).
 $OUTBOX_HINT"
     fi
     ;;
