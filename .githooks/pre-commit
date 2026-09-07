@@ -21,6 +21,22 @@ if [ ! -f "$GATE" ]; then
 fi
 bash "$GATE" || exit 1
 
+# --- Переносність оболонки в обидва контури (factory.portability-gate-all-repos) --
+# Один перелік форм для всіх репо живе в strw-state; копій тут немає. Ганяється, коли
+# в коміті є файл поверхні (`*.sh`, `.githooks/*`; hooks/*.sh — теж *.sh). Без
+# strw-state поруч — FAIL із причиною, не пропуск (контур M завжди має сусідів).
+if git diff --cached --name-only | grep -qE '\.sh$|^\.githooks/'; then
+  PGATE="${STRW_ROOT:-$HOME/Developer/STRW}/strw-state/scripts/shell-portability-check.sh"
+  PFORMS="${STRW_ROOT:-$HOME/Developer/STRW}/strw-state/scripts/lib/nonportable-forms.tsv"
+  if [ ! -f "$PGATE" ] || [ ! -f "$PFORMS" ]; then
+    echo "pre-commit FAIL: немає strw-state поруч ($PGATE) — переносність оболонки не перевірити."
+    echo "  Понови сусідів (~/Developer/STRW) або постав STRW_ROOT."
+    exit 1
+  fi
+  ROOT_DIR="$(git rev-parse --show-toplevel)" FORMS_FILE="$PFORMS" bash "$PGATE" || {
+    echo "pre-commit FAIL: оболонка не переносна між контурами (форми — strw-state/scripts/lib/nonportable-forms.tsv)."; exit 1; }
+fi
+
 # Один вимір staged-переліку на всі гілки нижче. У ЗМІННУ, не в пайп: під
 # `pipefail` `grep -q` виходить на першому збігу, git отримує SIGPIPE, і статус
 # пайпа стає 141 — тобто «збіг є» читалось би як «збігів немає», і гейт тим

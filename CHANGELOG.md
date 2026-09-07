@@ -3,6 +3,15 @@
 
 ## [Unreleased]
 
+### Changed
+- **Переносність оболонки на коміті** (елемент `factory.portability-gate-all-repos`, крок 2;
+  tri-060): `.githooks/pre-commit` ганяє сторож strw-state `shell-portability-check.sh` по
+  поверхні репо з переліком форм зі strw-state (копій немає; без сусіда — FAIL із причиною);
+  два порушення переписано: текст блокування в `hooks/contour-guard.sh` без форми `sed -i `
+  з пробілом, рядок-фікстура `hooks/contour-guard.test.sh` винесено в дані
+  `hooks/contour-guard.fixtures.txt`. Проба `scripts/pre-commit-portability.test.sh` (5).
+  Хук — не частина доставленої копії плагіна, реліз не потрібен.
+
 ## [0.10.11] — 2026-09-07
 
 ### Changed

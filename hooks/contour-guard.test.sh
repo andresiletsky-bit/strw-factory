@@ -37,7 +37,10 @@ probe "Write у _outbox/ → дозвіл"             0 C "$(wjson "$TMP/strw-s
 probe "Write у звичайний файл → дозвіл"       0 C "$(wjson "$TMP/notes.md")"
 probe "Bash: echo >> budget.md → блок"        2 C "$(bjson 'echo x >> budget.md')"
 probe "Bash: tee -a decisions-log.md → блок"  2 C "$(bjson 'printf x | tee -a decisions-log.md')"
-probe "Bash: sed -i portfolio.md → блок"      2 C "$(bjson 'sed -i .bak s/a/b/ portfolio.md')"
+# Команда з `sed -i` — у файлі даних (hooks/contour-guard.fixtures.txt): літерал у
+# цьому *.sh збуджував би сторож переносності; форма в даних законна.
+SEDI_FIXTURE="$(grep -v '^#' "$(dirname "$0")/contour-guard.fixtures.txt" | sed -n 1p)"
+probe "Bash: sed-inplace по portfolio.md → блок" 2 C "$(bjson "$SEDI_FIXTURE")"
 probe "Bash: читання канонічного з редиректом убік → дозвіл" 0 C "$(bjson 'grep -c x triage-inbox.md > /tmp/out.txt')"
 probe "Bash: git commit → блок"               2 C "$(bjson 'git commit -m x')"
 probe "Bash: git push → блок"                 2 C "$(bjson 'git push origin main')"
