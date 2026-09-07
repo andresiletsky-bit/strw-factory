@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [0.10.11] — 2026-09-07
+
 ### Changed
 - **`validate-items.sh` секція 6a — реєстр не каже «заблоковано» про роботу, чиї блокери
   вже done** (елемент `factory.registry-knows-satisfied-blockers`, tri-078): `state: blocked`,
