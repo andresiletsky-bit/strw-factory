@@ -93,7 +93,9 @@ if chmod +a "$(id -un) deny delete_child,delete" "$TMP/acl/work" 2>/dev/null; th
         chmod -a "$(id -un) deny delete_child,delete" "$ACL_DIR" 2>/dev/null
         /bin/rm -f "$ACL_DIR"/.canary "$ACL_DIR"/.strw-mount-probe.* 2>/dev/null
         want 0 "(c') та сама тека після зняття ACL → 0 (червоніло саме через ACL)" "$ACL_DIR" "дозволено"
-        ACL_DIR=""
+        # trap роззброюємо за СТАНОМ (ACL справді знято), не за кодом chmod — теза
+        # цього ж файла, застосована до власного прибирання.
+        ls -le "$ACL_DIR" 2>/dev/null | grep -q 'deny' || ACL_DIR=""
     else
         printf 'FAIL %s\n' "(c) ACL встановлено, але rm усе одно видаляє — фікстура не моделює tri-073"; fail=$((fail+1))
     fi
@@ -161,6 +163,15 @@ PATH="$TMP/repo/logbin:$PATH" PROBE_LOG="$PROBE_LOG" bash "$TOOL" "$TMP/repo" >/
 if grep -q "^$TMP/repo/\.git/\.strw-mount-probe\." "$PROBE_LOG"; then
     printf 'ok   %s\n' "(j) у репо проба створюється в .git/ (поверхня відмови, поза робочим деревом)"; pass=$((pass+1))
 else printf 'FAIL %s\n' "(j) у репо проба створюється в .git/"; sed 's/^/       /' "$PROBE_LOG"; fail=$((fail+1)); fi
+
+# ── (j') worktree: `.git` — ФАЙЛ з gitdir: → проба лягає в ту теку, не в робоче дерево ──
+mkdir -p "$TMP/wt/gitdir" "$TMP/wt/tree"
+printf 'gitdir: %s\n' "$TMP/wt/gitdir" > "$TMP/wt/tree/.git"
+: > "$PROBE_LOG"
+PATH="$TMP/repo/logbin:$PATH" PROBE_LOG="$PROBE_LOG" bash "$TOOL" "$TMP/wt/tree" >/dev/null 2>&1
+if grep -q "^$TMP/wt/gitdir/\.strw-mount-probe\." "$PROBE_LOG" && ! grep -q "^$TMP/wt/tree/\.strw-mount-probe\." "$PROBE_LOG"; then
+    printf 'ok   %s\n' "(j') worktree (.git — файл): проба в теці з gitdir:, не в робочому дереві"; pass=$((pass+1))
+else printf 'FAIL %s\n' "(j') worktree: проба в теці з gitdir:"; sed 's/^/       /' "$PROBE_LOG"; fail=$((fail+1)); fi
 
 # ── (i) ШЛЯХ ПРОБИ УНІКАЛЬНИЙ НА ПРОЦЕС ────────────────────────────────────
 # Куплено знахідкою чекера PR #18 (Important): мутація `.strw-mount-probe.$$`

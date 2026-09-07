@@ -15,7 +15,7 @@ description: Execute an STRW factory loop (L1–L8) by its passport — read sta
 ## Workflow
 
 ### Step 0 — Чи вміє цей контур ПРИБИРАТИ за собою (tri-073; 0.6.4)
-`bash "${CLAUDE_PLUGIN_ROOT}/scripts/mount-can-unlink.sh" <тека репо>` — для `strw-state` одразу, для інших репо — щойно шлях відомий (Step 2) і ДО першої git-команди в них; один рядок вердикту в trace дослівно. Коди: **0** git дозволено · **1** git ЗАБОРОНЕНО · **2** не поміряти = читати як 1. Код 1 → у цьому репо лише читання з `--no-optional-locks` (те, що пропускає `contour-guard.sh`: `status --short`, `log`, `show`, `diff`), решта — файлами і через `_outbox/`, самообмеження названо у звіті. Проба лягає в `.git/`; предмет — існування файла після спроби, не код `rm` (шапка скрипта, `scripts/mount-can-unlink.test.sh`).
+`bash "${CLAUDE_PLUGIN_ROOT}/scripts/mount-can-unlink.sh" <тека репо>` — для `strw-state` одразу, для інших репо — щойно шлях відомий (Step 2) і ДО першої git-команди в них; один рядок вердикту в trace дослівно. Коди: **0** git дозволено (у контурі C — у межах `contour-guard.sh`) · **1** git ЗАБОРОНЕНО · **2** не поміряти = читати як 1. Код 1 → у цьому репо лише читання з `--no-optional-locks` (те, що пропускає `contour-guard.sh`: `status --short`, `log`, `show`, `diff`), решта — файлами і через `_outbox/`, самообмеження названо у звіті. Проба лягає в `.git/` (у worktree — у теку з `gitdir:`); предмет — існування файла після спроби, не код `rm` (шапка скрипта, `scripts/mount-can-unlink.test.sh`).
 
 ### Step 1 — Resolve loop
 Визнач петлю з запиту (L1-discovery … L8-regression). Неоднозначно → запитай. Прочитай паспорт повністю.
