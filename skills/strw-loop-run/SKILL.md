@@ -1,6 +1,6 @@
 ---
 name: strw-loop-run
-version: 0.6.3
+version: 0.6.4
 description: Execute an STRW factory loop (L1–L8) by its passport — read state, budget check, maker phase, checker phase, write state, auto-advance to the next non-gate stage, escalate or archive. Use when the user asks to "запусти петлю", "run loop", "запусти discovery/validation/build/growth/portfolio/retro/design/регресію", "виконай L1/L2/L3/L4/L5/L6/L7/L8", "продовж петлю для продукту", or when a scheduled task fires a loop run. Also the headless entry point for all scheduled STRW loops.
 ---
 
@@ -13,6 +13,16 @@ description: Execute an STRW factory loop (L1–L8) by its passport — read sta
 - Паспорт петлі: `${CLAUDE_PLUGIN_ROOT}/loops/<loop-id>.md`. Немає паспорта → петля не запускається.
 
 ## Workflow
+
+### Step 0 — Чи вміє цей контур ПРИБИРАТИ за собою (tri-073; 0.6.4)
+
+`bash "${CLAUDE_PLUGIN_ROOT}/scripts/mount-can-unlink.sh" <тека репо>` для КОЖНОГО репо, з яким захід збирається працювати. Один рядок вердикту в trace дослівно; коди: **0** — git дозволено, як досі · **1** — git ЗАБОРОНЕНО · **2** — поміряти не вдалось, читати як 1 (невідомість тут коштує дорожче за обережність).
+
+**Що робить код 1.** Захід не виконує **жодної** git-команди в цьому репо — і `git status` теж, бо індекс освіжає майже все й лок бере навіть читання (`state-protocol.md`). Працює виключно файлами (`find -newer`, читання й запис файлів) і віддає результат через `_outbox/`. **Самообмеження називається у звіті** окремим рядком, а не мовчазно: захід без git бачить менше, і читач мусить знати, що саме не перевірялось.
+
+Куплено виміром 2026-09-07 (tri-073): монтування робочої копії Mac дозволяло СТВОРЮВАТИ файли й не дозволяло СТИРАТИ. Один звичайний `git status` лишив незнищенний порожній `.git/index.lock`, і git у `strw-state` не працював ні в кого, доки рука на Mac не зробила `rm -f`. Клас ширший за git: будь-який інструмент, що кладе тимчасовий файл і розраховує його прибрати, у такому монтуванні лишає сміття назавжди.
+
+**Проба міряє існування файла після спроби, а не код `rm`** — обгортка, яка приймає запит, повертає 0 і лишає файл, інакше читалась би як здоровий контур. Свідки в обидва боки: `scripts/mount-can-unlink.test.sh`.
 
 ### Step 1 — Resolve loop
 Визнач петлю з запиту (L1-discovery … L8-regression). Неоднозначно → запитай. Прочитай паспорт повністю.
