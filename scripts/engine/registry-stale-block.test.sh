@@ -168,7 +168,7 @@ $out"; fi
 # 6. ПОРОЖНІЙ `blocked_by` при state=blocked — ЧУЖИЙ предмет: це вже ERROR
 #    («state=blocked, але немає `blocked_by`»), і нова перевірка не має додавати
 #    сюди свій STALE. Проба заведена не для симетрії: без неї мутація «зняти гард
-#    непорожніх deps» ВИЖИВАЛА (виміряно 07.09, четверта мутація з чотирьох) —
+#    непорожніх deps» ВИЖИВАЛА (виміряно 07.09, четверта мутація з п'яти) —
 #    порожній перелік читався як «усі блокери задоволені».
 fixture_reset
 mk probe.dependent blocked '[]'
@@ -195,6 +195,21 @@ if [ "$rc" -ne 0 ] \
    && ! printf '%s' "$out" | grep -q "STALE"; then
     ok "нерозв'язний блокер поруч із done → ERROR, і STALE НЕ твердиться"
 else bad "нерозв'язне посилання не мало б читатись як «усі блокери done»" "rc=$rc
+$out"; fi
+
+# 8. ПЕРЕВІРКА ПРИПИСАНА ДО СТАНУ `blocked`: done-елемент зі старим непорожнім
+#    `blocked_by` (усі блокери done) — чужий ERROR рядка «є blocked_by, але state ≠
+#    blocked», і STALE 6a тут НЕ твердиться. Без цієї проби мутація «зняти гард
+#    state == blocked» виживала (6a р.2 #21): рядок 351 і так дає rc≠0, тож жодна
+#    проба не бачила, що 6a стала б звинувачувати done-елемент.
+fixture_reset
+mk probe.blocker   done '[]'
+mk probe.dependent done '[item:probe.blocker]'
+out="$(run_v)"; rc=$?
+if [ "$rc" -ne 0 ] \
+   && ! printf '%s' "$out" | grep -q "STALE"; then
+    ok "done-елемент зі старим blocked_by → чужий ERROR, STALE 6a не твердиться (гард state=blocked)"
+else bad "6a не сміє звинувачувати done-елемент" "rc=$rc
 $out"; fi
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
