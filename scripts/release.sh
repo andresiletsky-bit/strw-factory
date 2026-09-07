@@ -195,7 +195,13 @@ if [ -n "$(printf '%s' "$MESSAGE" | tr -d '[:space:]')" ]; then
 elif [ -f "$CHANGELOG" ] && grep -q '## \[Unreleased\]' "$CHANGELOG"; then
   # HTML-коментарі знімаються ЦІЛКОМ, і багаторядкові теж: старий фільтр прибирав
   # лише рядки-дужки, і текст усередині `<!-- … -->` ставав нотатками релізу.
-  awk '/## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' "$CHANGELOG" \
+  command -v perl >/dev/null 2>&1 || die "немає perl у PATH — нотатки з CHANGELOG не очистити від коментарів (на macOS /usr/bin/perl — частина ОС)"
+  SECTION="$(awk '/## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' "$CHANGELOG")"
+  # Незакритий `<!--` — секція зламана, а не «нотатки з маркером»: відмова.
+  if [ "$(printf '%s' "$SECTION" | grep -o '<!--' | wc -l | tr -d ' ')" != "$(printf '%s' "$SECTION" | grep -o -- '-->' | wc -l | tr -d ' ')" ]; then
+    die "у секції [Unreleased] непарний HTML-коментар (<!-- без --> або навпаки) — виправ секцію перед релізом"
+  fi
+  printf '%s\n' "$SECTION" \
     | perl -0pe 's/<!--.*?-->//gs' \
     | sed '/^[[:space:]]*$/d' > "$NOTES_FILE"
 fi
