@@ -593,7 +593,7 @@ for path in item_files:
 # ---------- 6. blocked_by: посилання і цикли ----------
 graph = {}
 for iid, it in items.items():
-    deps = []
+    deps, has_ceo = [], False
     for ref in (it.get("blocked_by") or []):
         ref = str(ref)
         if ref.startswith("item:"):
@@ -603,10 +603,30 @@ for iid, it in items.items():
             else:
                 deps.append(dep)
         elif ref.startswith("ceo:"):
-            pass          # зовнішній блокер — дія CEO, не елемент реєстру
+            has_ceo = True    # зовнішній блокер — дія CEO, не елемент реєстру
         else:
             err(f"{iid}: blocked_by '{ref}' — очікується префікс 'item:' або 'ceo:'")
     graph[iid] = deps
+
+    # ---------- 6a. задоволений blocked_by: реєстр каже «зайнято» про вільне ----------
+    # Дзеркало `registry.knows-open-prs` (той каже «вільно» про зроблене). STALE, а не
+    # WARN, і саме тому: `toolchain-filter.sh` пропускає елемент за НЕПОРОЖНІМ
+    # `blocked_by`, не дивлячись на стан блокерів, — тож такий елемент зникає з черги
+    # мовчки, і петля звітує «немає роботи» правдиво про свій вимір і хибно про реєстр.
+    # WARN тут не спрацював би: він друкується і не зупиняє нікого.
+    # Виміряно 2026-09-07 (headless L3, слот PM): ЧОТИРИ такі елементи одночасно —
+    # factory.portability-gate-all-repos (блокер змержено 04.09, `1f64fa8`),
+    # m3.locales-five (`3bae692`), m3.purchase-flow і m3.subscription-screen
+    # (ADR-022 Accepted ще 18.08). Найстарішому боргу було шість днів.
+    # `ceo:` поруч мовчить свідомо: стану дії CEO звідси не видно, і вгадувати його
+    # означало б червоніти на здоровому реєстрі.
+    if it.get("state") == "blocked" and deps and not has_ceo:
+        pending = [d for d in deps if items[d].get("state") != "done"]
+        if not pending:
+            stale(f"{iid}.yaml: state=blocked, але ВСІ блокери вже done "
+                  f"({', '.join(sorted(deps))}) → елемент невидимий для черги "
+                  f"(toolchain-filter пропускає за непорожнім `blocked_by`); "
+                  f"мав бути 'ready' з порожнім `blocked_by`")
 
 WHITE, GREY, BLACK = 0, 1, 2
 color = {k: WHITE for k in graph}
