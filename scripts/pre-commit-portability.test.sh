@@ -17,7 +17,8 @@ cp "$REAL/shell-portability-check.sh" "$ROOT/strw-state/scripts/"; cp "$REAL/lib
 printf '#!/bin/sh\nexit 0\n' > "$ROOT/bin/constitution-size-gate.sh"
 FIXTURE="$(awk -F'\t' '$1=="sed-inplace-detached"{print $3}' "$ROOT/strw-state/scripts/lib/nonportable-forms.tsv")"
 mkrepo() { rm -rf "$1"; mkdir -p "$1/.githooks"; cp "$HERE/.githooks/pre-commit" "$1/.githooks/pre-commit"; chmod +x "$1/.githooks/pre-commit"
-  ( cd "$1" && git init -q && git config user.email t@t && git config user.name t && git config core.hooksPath .githooks && git add .githooks && git commit -q -m init ) >/dev/null 2>&1; }
+  ( cd "$1" && git init -q && git config user.email t@t && git config user.name t && git config core.hooksPath .githooks && git add .githooks && STRW_ROOT="$ROOT" git commit -q -m init ) >/dev/null 2>&1
+  [ "$(cd "$1" && git rev-list --count HEAD 2>/dev/null)" = 1 ] || { echo "FAIL фікстура: init-коміт не пройшов у $1"; fail=$((fail+1)); }; }
 try() { # try <назва> <очікуваний rc> <репо> <STRW_ROOT> <файл> <вміст> [нагет]
   local name=$1 want=$2 r=$3 root=$4 f=$5 body=$6 nug=${7:-}; local out rc ok=1
   out=$(cd "$r" && printf '%s\n' "$body" > "$f" && git add -- "$f" && STRW_ROOT="$root" git commit -q -m "probe" 2>&1); rc=$?
@@ -32,10 +33,17 @@ mkdir -p "$TMP/lonely/bin"; cp "$ROOT/bin/constitution-size-gate.sh" "$TMP/lonel
 try "(c) без strw-state поруч → відмова з причиною" 1 "$R" "$TMP/lonely" ok2.sh "$(printf '#!/bin/sh\necho ok')" "немає strw-state поруч"
 try "(d) без файлів поверхні — крок не ганяється (навіть без сусіда)" 0 "$R" "$TMP/lonely" notes.md "текст"
 RB="$ROOT/big"; mkrepo "$RB"
-( cd "$RB" && mkdir -p many && i=0; while [ $i -lt 800 ]; do printf 'x\n' > "many/file-with-a-rather-long-name-$i.txt"; i=$((i+1)); done && printf '#!/bin/sh\n%s\n' "$FIXTURE" > aaa-bad.sh && git add -A ) >/dev/null 2>&1
+( cd "$RB" && mkdir -p many && i=0; while [ $i -lt 3000 ]; do printf 'x\n' > "many/file-with-a-rather-long-name-$i.txt"; i=$((i+1)); done && printf '#!/bin/sh\n%s\n' "$FIXTURE" > aaa-bad.sh && git add -A ) >/dev/null 2>&1
 out="$(cd "$RB" && STRW_ROOT="$ROOT" git commit -q -m big 2>&1)"; rc=$?
-if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'sed-inplace-detached'; then echo "ok   (d') великий коміт (800 staged) не відкриває гейт"; pass=$((pass+1)); else echo "FAIL (d') великий коміт відкрив гейт (rc=$rc)"; fail=$((fail+1)); fi
-R2="$ROOT/repo2"; mkrepo "$R2"; sed 's#bash "\$PGATE" || {#true || {#' "$R2/.githooks/pre-commit" > "$R2/.githooks/x" && mv "$R2/.githooks/x" "$R2/.githooks/pre-commit" && chmod +x "$R2/.githooks/pre-commit"
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'sed-inplace-detached'; then echo "ok   (d') великий коміт (3000 staged, >64 КБ) не відкриває гейт"; pass=$((pass+1)); else echo "FAIL (d') великий коміт (3000) відкрив гейт (rc=$rc)"; fail=$((fail+1)); fi
+n_bytes=$(cd "$RB" && git diff --cached --name-only | wc -c | tr -d ' '); [ "$n_bytes" -gt 65536 ] && { echo "ok   (d'') staged-перелік > 65536 байт ($n_bytes)"; pass=$((pass+1)); } || { echo "FAIL (d'') перелік замалий ($n_bytes)"; fail=$((fail+1)); }
+RS="$ROOT/staged"; mkrepo "$RS"
+out=$(cd "$RS" && printf '#!/bin/sh\n%s\n' "$FIXTURE" > drift.sh && git add drift.sh && printf '#!/bin/sh\necho clean\n' > drift.sh && STRW_ROOT="$ROOT" git commit -q -m drift 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'sed-inplace-detached'; then echo "ok   (f) staged брудне, дерево чисте → відмова (їде staged)"; pass=$((pass+1)); else echo "FAIL (f) staged-дрейф пройшов (rc=$rc)"; fail=$((fail+1)); fi
+( cd "$RS" && git reset -q HEAD -- drift.sh && rm -f drift.sh )
+out=$(cd "$RS" && printf '#!/bin/sh\necho clean\n' > other.sh && git add other.sh && printf '#!/bin/sh\n%s\n' "$FIXTURE" > other.sh && STRW_ROOT="$ROOT" git commit -q -m tree 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'sed-inplace-detached'; then echo "ok   (f') staged чисте, дерево брудне → відмова (жива поверхня)"; pass=$((pass+1)); else echo "FAIL (f') дерево брудне пройшло (rc=$rc)"; fail=$((fail+1)); fi
+R2="$ROOT/repo2"; mkrepo "$R2"; sed 's#bash "\$PGATE" || {#true || {#; s#bash "\$PGATE" "\$@" ); then#true ); then#' "$R2/.githooks/pre-commit" > "$R2/.githooks/x" && mv "$R2/.githooks/x" "$R2/.githooks/pre-commit" && chmod +x "$R2/.githooks/pre-commit"
 grep -q 'bash "\$PGATE"' "$R2/.githooks/pre-commit" && { echo "FAIL мутація не накладена"; fail=$((fail+1)); }
 try "(e) НЕГАТИВНИЙ КОНТРОЛЬ: хук без сторожа пропускає (a)" 0 "$R2" "$ROOT" bad.sh "$(printf '#!/bin/sh\n%s' "$FIXTURE")"
 printf '\n%d passed, %d failed\n' "$pass" "$fail"; [ "$fail" -eq 0 ]

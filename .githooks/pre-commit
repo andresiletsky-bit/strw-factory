@@ -23,18 +23,32 @@ bash "$GATE" || exit 1
 
 # --- Переносність оболонки в обидва контури (factory.portability-gate-all-repos) --
 # Один перелік форм для всіх репо живе в strw-state; копій тут немає. Ганяється, коли
-# в коміті є файл поверхні (`*.sh`, `.githooks/*`; hooks/*.sh — теж *.sh). Без
-# strw-state поруч — FAIL із причиною, не пропуск (контур M завжди має сусідів).
-# Staged-перелік — у змінну, не в пайп (`git diff … | grep -q` під pipefail на великому
-# коміті дає 141 і читається як «нема поверхні» — гейт відкривався б на відмову).
-PSTAGED="$(git diff --cached --name-only)" || { echo "pre-commit FAIL: git diff --cached впав."; exit 1; }
-if printf '%s\n' "$PSTAGED" | grep -qE '\.sh$|^\.githooks/'; then
+# в коміті є файл поверхні (`*.sh`, `.githooks/*`; hooks/*.sh — теж *.sh). ДВА проходи:
+# staged-версії (`git show :f` — те, що їде в історію; сканер дерева пропустив би
+# «застейджив брудне, полагодив дерево») і вся жива поверхня. Перелік — у змінну і
+# here-string, не в пайп (`… | grep -q` понад буфер труби дає 141 → fail-open).
+# Без strw-state поруч — FAIL із причиною, не пропуск (контур M завжди має сусідів).
+PSTAGED="$(git diff --cached --name-only --diff-filter=ACMR)" || { echo "pre-commit FAIL: git diff --cached впав."; exit 1; }
+if grep -qE '\.sh$|^\.githooks/' <<<"$PSTAGED"; then
   PGATE="${STRW_ROOT:-$HOME/Developer/STRW}/strw-state/scripts/shell-portability-check.sh"
   PFORMS="${STRW_ROOT:-$HOME/Developer/STRW}/strw-state/scripts/lib/nonportable-forms.tsv"
   if [ ! -f "$PGATE" ] || [ ! -f "$PFORMS" ]; then
     echo "pre-commit FAIL: немає strw-state поруч ($PGATE) — переносність оболонки не перевірити."
     echo "  Понови сусідів (~/Developer/STRW) або постав STRW_ROOT."
     exit 1
+  fi
+  PTMP="$(mktemp -d)"; trap 'rm -rf "$PTMP"' EXIT
+  set --
+  while IFS= read -r f; do
+    case "$f" in
+      *.sh|.githooks/*)
+        mkdir -p "$PTMP/$(dirname "$f")"
+        git show ":$f" > "$PTMP/$f" || { echo "pre-commit FAIL: git show :$f впав — staged-вміст не прочитано."; exit 1; }
+        set -- "$@" "$f" ;;
+    esac
+  done <<<"$PSTAGED"
+  if [ "$#" -gt 0 ] && ! ( cd "$PTMP" && ROOT_DIR="$PTMP" FORMS_FILE="$PFORMS" bash "$PGATE" "$@" ); then
+    echo "pre-commit FAIL: staged-версія не переносна між контурами (форми — strw-state/scripts/lib/nonportable-forms.tsv)."; exit 1
   fi
   ROOT_DIR="$(git rev-parse --show-toplevel)" FORMS_FILE="$PFORMS" bash "$PGATE" || {
     echo "pre-commit FAIL: оболонка не переносна між контурами (форми — strw-state/scripts/lib/nonportable-forms.tsv)."; exit 1; }
