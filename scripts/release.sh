@@ -189,14 +189,27 @@ info "${BOLD}Release $CUR_VERSION → $NEW_VERSION${RST}  (tag $TAG, $DATE)"
 # ----- release notes ---------------------------------------------------------
 # Priority: -m message > CHANGELOG [Unreleased] body > placeholder
 NOTES_FILE="$(mktemp)"; trap 'rm -f "$NOTES_FILE"' EXIT
-if [ -n "$MESSAGE" ]; then
+# -m лише з пробілів — це не нотатка (`[ -s ]` її пропустив би).
+if [ -n "$(printf '%s' "$MESSAGE" | tr -d '[:space:]')" ]; then
   printf '%s\n' "$MESSAGE" > "$NOTES_FILE"
 elif [ -f "$CHANGELOG" ] && grep -q '## \[Unreleased\]' "$CHANGELOG"; then
-  awk '/## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' "$CHANGELOG" \
-    | grep -vE '^[[:space:]]*(<!--|-->)' \
+  # HTML-коментарі знімаються ЦІЛКОМ, і багаторядкові теж: старий фільтр прибирав
+  # лише рядки-дужки, і текст усередині `<!-- … -->` ставав нотатками релізу.
+  command -v perl >/dev/null 2>&1 || die "немає perl у PATH — нотатки з CHANGELOG не очистити від коментарів (на macOS /usr/bin/perl — частина ОС)"
+  SECTION="$(awk '/## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' "$CHANGELOG")"
+  # Незакритий `<!--` — секція зламана, а не «нотатки з маркером»: відмова.
+  if [ "$(printf '%s' "$SECTION" | grep -o '<!--' | wc -l | tr -d ' ')" != "$(printf '%s' "$SECTION" | grep -o -- '-->' | wc -l | tr -d ' ')" ]; then
+    die "у секції [Unreleased] непарний HTML-коментар (<!-- без --> або навпаки) — виправ секцію перед релізом"
+  fi
+  printf '%s\n' "$SECTION" \
+    | perl -0pe 's/<!--.*?-->//gs' \
     | sed '/^[[:space:]]*$/d' > "$NOTES_FILE"
 fi
-[ -s "$NOTES_FILE" ] || printf '%s\n' "- Release $NEW_VERSION" > "$NOTES_FILE"
+# Порожні нотатки — не реліз, а плейсхолдер. 07.09.2026 v0.10.8 вийшов саме так:
+# мерж PR не пройшов, секція [Unreleased] була порожня, і цей рядок мовчки
+# підставив «- Release 0.10.8» — тег і Release опубліковано без жодної зміни.
+# Гейт, який не бачить предмета (нотаток), не має проходити зеленим.
+[ -s "$NOTES_FILE" ] || die "CHANGELOG [Unreleased] порожній і -m не задано — реліз без нотаток не робиться (так вийшов порожній v0.10.8). Заповни секцію або дай -m «…» явно."
 
 # ----- confirm ---------------------------------------------------------------
 echo; echo "${BOLD}Release notes:${RST}"; sed 's/^/    /' "$NOTES_FILE"; echo
