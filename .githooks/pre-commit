@@ -25,7 +25,10 @@ bash "$GATE" || exit 1
 # Один перелік форм для всіх репо живе в strw-state; копій тут немає. Ганяється, коли
 # в коміті є файл поверхні (`*.sh`, `.githooks/*`; hooks/*.sh — теж *.sh). Без
 # strw-state поруч — FAIL із причиною, не пропуск (контур M завжди має сусідів).
-if git diff --cached --name-only | grep -qE '\.sh$|^\.githooks/'; then
+# Staged-перелік — у змінну, не в пайп (`git diff … | grep -q` під pipefail на великому
+# коміті дає 141 і читається як «нема поверхні» — гейт відкривався б на відмову).
+PSTAGED="$(git diff --cached --name-only)" || { echo "pre-commit FAIL: git diff --cached впав."; exit 1; }
+if printf '%s\n' "$PSTAGED" | grep -qE '\.sh$|^\.githooks/'; then
   PGATE="${STRW_ROOT:-$HOME/Developer/STRW}/strw-state/scripts/shell-portability-check.sh"
   PFORMS="${STRW_ROOT:-$HOME/Developer/STRW}/strw-state/scripts/lib/nonportable-forms.tsv"
   if [ ! -f "$PGATE" ] || [ ! -f "$PFORMS" ]; then

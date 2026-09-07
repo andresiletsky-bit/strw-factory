@@ -31,6 +31,10 @@ try "(b) чистий *.sh → ок"                        0 "$R" "$ROOT" ok.sh
 mkdir -p "$TMP/lonely/bin"; cp "$ROOT/bin/constitution-size-gate.sh" "$TMP/lonely/bin/"
 try "(c) без strw-state поруч → відмова з причиною" 1 "$R" "$TMP/lonely" ok2.sh "$(printf '#!/bin/sh\necho ok')" "немає strw-state поруч"
 try "(d) без файлів поверхні — крок не ганяється (навіть без сусіда)" 0 "$R" "$TMP/lonely" notes.md "текст"
+RB="$ROOT/big"; mkrepo "$RB"
+( cd "$RB" && mkdir -p many && i=0; while [ $i -lt 800 ]; do printf 'x\n' > "many/file-with-a-rather-long-name-$i.txt"; i=$((i+1)); done && printf '#!/bin/sh\n%s\n' "$FIXTURE" > aaa-bad.sh && git add -A ) >/dev/null 2>&1
+out="$(cd "$RB" && STRW_ROOT="$ROOT" git commit -q -m big 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'sed-inplace-detached'; then echo "ok   (d') великий коміт (800 staged) не відкриває гейт"; pass=$((pass+1)); else echo "FAIL (d') великий коміт відкрив гейт (rc=$rc)"; fail=$((fail+1)); fi
 R2="$ROOT/repo2"; mkrepo "$R2"; sed 's#bash "\$PGATE" || {#true || {#' "$R2/.githooks/pre-commit" > "$R2/.githooks/x" && mv "$R2/.githooks/x" "$R2/.githooks/pre-commit" && chmod +x "$R2/.githooks/pre-commit"
 grep -q 'bash "\$PGATE"' "$R2/.githooks/pre-commit" && { echo "FAIL мутація не накладена"; fail=$((fail+1)); }
 try "(e) НЕГАТИВНИЙ КОНТРОЛЬ: хук без сторожа пропускає (a)" 0 "$R2" "$ROOT" bad.sh "$(printf '#!/bin/sh\n%s' "$FIXTURE")"
