@@ -8,8 +8,8 @@
   `factory.l3-passport-names-6a-source`, за Nit-3 чекера плану `factory.model-resolved-per-loop`):
   команда, модель і ознака «окремий процес» — похідні від `strw-state/engine/lanes.yaml`
   (`loops: L3-build.external_reviewer`), як моделі — від поля `budget`; сторож
-  `lanes-model-check.sh` №5 (strw-state #77) звіряє їх у обидва боки. Один рядок тексту,
-  без зміни поведінки.
+  `lanes-model-check.sh` №5 (strw-state #77) звіряє в обидва боки наявність ролі, не значення.
+  Один рядок тексту, без зміни поведінки; мерж — після strw-state #77, реліз 0.10.8 після мержу.
 
 ## [0.10.7] — 2026-09-06
 
