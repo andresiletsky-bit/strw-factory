@@ -4,12 +4,15 @@
 ## [Unreleased]
 
 ### Changed
-- **Step 3a `strw-loop-run` кличе сторож відкритих PR** (tri-075, друге — клас mechanism-not-wired;
-  елемент strw-state `factory.open-prs-guard-orphan-is-2`): на контурі M (є `gh`) перед
-  toolchain-filter — `strw-state/scripts/registry-open-prs-check.sh`; код 1 (ready дублює PR) чи 2
-  (незіставлений PR — зіставлення не зроблено) → рядок журналу зі stdout дослівно, елемент не
-  береться; контур C без `gh` — крок пропущено з названою причиною. Досі сторож (щабель 3 tri-033)
-  ніхто не кликав — навіть полагоджений він не захистив би вибір елемента.
+- **Step 3a `strw-loop-run` (0.6.5) кличе сторож відкритих PR** (tri-075, друге — клас
+  mechanism-not-wired; елемент strw-state `factory.open-prs-guard-orphan-is-2`): перед
+  toolchain-filter — `strw-state/scripts/registry-open-prs-check.sh`, потрібен `gh` або `PRS_JSON`
+  (не «контур»: контур визначається не наявністю gh). Код 1 (ready дублює PR або гілка-близнюк) →
+  названі елементи виключаються з черги, захід іде далі; код 2 (незіставлений PR) → рядок журналу
+  дослівно + `finding` в inbox, елемент цього заходу не береться (конвенція: парний PR у другому
+  репо = та сама гілка, що `branch` елемента; `outbox/*` — «доставка не влита», не orphan); без
+  `gh` і без `PRS_JSON` — «перевірку НЕ зроблено»: гучно + `finding`, далі без гарантії (fail-open
+  названо). Досі сторож (щабель 3 tri-033) ніхто не кликав.
 
 ## [0.10.12] — 2026-09-07
 

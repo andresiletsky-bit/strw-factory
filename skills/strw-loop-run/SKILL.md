@@ -1,6 +1,6 @@
 ---
 name: strw-loop-run
-version: 0.6.4
+version: 0.6.5
 description: Execute an STRW factory loop (L1–L8) by its passport — read state, budget check, maker phase, checker phase, write state, auto-advance to the next non-gate stage, escalate or archive. Use when the user asks to "запусти петлю", "run loop", "запусти discovery/validation/build/growth/portfolio/retro/design/регресію", "виконай L1/L2/L3/L4/L5/L6/L7/L8", "продовж петлю для продукту", or when a scheduled task fires a loop run. Also the headless entry point for all scheduled STRW loops.
 ---
 
@@ -28,7 +28,8 @@ description: Execute an STRW factory loop (L1–L8) by its passport — read sta
 
 ### Step 3a — Тулчейн-фільтр черги (П2.1; 0.6.0)
 Перед вибором елемента петля дивиться, **що вміє цей контур**, і бере лише те, що тут здійсненне:
-0. **Контур M (є `gh`):** спершу `bash strw-state/scripts/registry-open-prs-check.sh` — реєстр проти відкритих PR (tri-033/tri-075): 1 «ready дублює PR» або 2 «незіставлений PR — зіставлення не зроблено» → рядок журналу зі stdout дослівно, елемент НЕ береться, далі — Step 8; контур C без `gh` — крок пропущено з названою причиною в рядку журналу. 1. Запустити `bash "${CLAUDE_PLUGIN_ROOT}/scripts/engine/toolchain-filter.sh" strw-state/engine` (0.6.3): кожен інструмент — probe із `lanes.yaml tools:`, який ВИКОНУЄ інструмент (`swiftc -version`, не `command -v`: на Mac без Xcode шим є, компілятора немає); елемент здійсненний, коли доступні ВСІ `resources:` смуги І кожен `requires:` елемента (dec-095 §2). stderr скрипта — у trace дослівно; stdout — один рядок вердикту.
+0. **Сторож відкритих PR** (tri-033/tri-075; 0.6.5): `bash "${STRW_STATE_DIR:-strw-state}/scripts/registry-open-prs-check.sh"` — потрібен `gh` або `PRS_JSON` (файл із `gh pr list --json number,headRefName,isDraft` по репо реєстру, напр. з GitHub-конектора). 1 (ready-елемент дублює відкритий PR, або гілка вказує на два елементи) → названі елементи ВИКЛЮЧИТИ з черги, далі п.1; 2 (незіставлений PR — зіставлення не зроблено) → рядок журналу зі stdout дослівно + `finding` в inbox, елемент цього заходу НЕ береться (ціна названа в tri-075; парний PR у другому репо носить ту саму гілку, що `branch` елемента, — тоді він зіставлений; `outbox/*` — не orphan, а «доставка не влита»); нема ні `gh`, ні `PRS_JSON` → «перевірку НЕ зроблено»: гучний рядок журналу + `finding`, захід іде далі БЕЗ цієї гарантії (fail-open названо, не тихий пропуск).
+1. Запустити `bash "${CLAUDE_PLUGIN_ROOT}/scripts/engine/toolchain-filter.sh" strw-state/engine` (0.6.3): кожен інструмент — probe із `lanes.yaml tools:`, який ВИКОНУЄ інструмент (`swiftc -version`, не `command -v`: на Mac без Xcode шим є, компілятора немає); елемент здійсненний, коли доступні ВСІ `resources:` смуги І кожен `requires:` елемента (dec-095 §2). stderr скрипта — у trace дослівно; stdout — один рядок вердикту.
 2. Коди і дія петлі: 0 «взято» → Step 4; 3 «немає інструмента» → рядок журналу з переліком, без inbox; 4 «немає роботи» → тихий no-op; 2 «не поміряти» (немає `tools:`, інструмент поза словником — один такий зупиняє всю чергу навмисно, смуга не оголошена, probe завис) → STOP + `finding` в inbox, ніколи не читати як 4.
 3. Серед здійсненних петля обирає за чергою `products/<id>/mvp-remaining-backlog.md` §10 (ios-tooling першою, якщо здійсненна); «взято» скрипта — перший за id, це замовчування, не пріоритет.
 4. У рядок журналу — stdout скрипта дослівно (не переказ): «немає роботи» · «немає інструмента: N елемент(ів) чекають: xcodebuild×14» · «взято: <id> · смуга … · підтверджено: …» · для коду 2 — його stderr-причина.
@@ -61,5 +62,4 @@ description: Execute an STRW factory loop (L1–L8) by its passport — read sta
 - Строго за паспортом: scope, stop-умова, бюджет. Робота поза scope = порушення.
 - Незворотні дії всередині петлі заборонені — лише запит у inbox.
 - Headless-режим: жодних питань користувачу; неоднозначність → ескалація `question` в inbox і graceful stop.
-- References: `${CLAUDE_PLUGIN_ROOT}/references/loop-passport.md`, `state-protocol.md`, `budget-policy.md`, `data-policy.md`.
-- Наприкінці, якщо були корекції користувача — `references/self-improvement.md`.
+- References: `${CLAUDE_PLUGIN_ROOT}/references/loop-passport.md`, `state-protocol.md`, `budget-policy.md`, `data-policy.md`; наприкінці, якщо були корекції користувача — `references/self-improvement.md`.
