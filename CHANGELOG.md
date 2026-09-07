@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [0.10.13] — 2026-09-07
+
 ### Changed
 - **Step 3a `strw-loop-run` (0.6.5) кличе сторож відкритих PR** (tri-075, друге — клас
   mechanism-not-wired; елемент strw-state `factory.open-prs-guard-orphan-is-2`): п.1 (пункти
