@@ -645,8 +645,8 @@ for iid, it in items.items():
         pending = [d for d in deps if items[d].get("state") != "done"]
         if not pending:
             stale(f"{iid}.yaml: state=blocked, але ВСІ блокери вже done "
-                  f"({', '.join(sorted(deps))}) → елемент невидимий для черги "
-                  f"(toolchain-filter пропускає за непорожнім `blocked_by`); "
+                  f"({', '.join(sorted(set(deps)))}) → елемент невидимий для черги "
+                  f"(toolchain-filter відсікає за state != ready — стан протух, не поле); "
                   f"мав бути 'ready' з порожнім `blocked_by`")
 
 WHITE, GREY, BLACK = 0, 1, 2
