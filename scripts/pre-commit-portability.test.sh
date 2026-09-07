@@ -51,12 +51,23 @@ if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'sed-inplace-detached'; then 
 out=$(cd "$RN" && printf '#!/bin/sh\necho ok\n' > "my script.sh" && git add "my script.sh" && STRW_ROOT="$ROOT" git commit -q -m sp 2>&1); rc=$?
 if [ "$rc" -eq 0 ]; then echo "ok   (g') ім'я з пробілом, чистий → проходить"; pass=$((pass+1)); else echo "FAIL (g') пробіл (rc=$rc): $out"; fail=$((fail+1)); fi
 # (g″) два `trap … EXIT` в одному процесі — другий заміщає перший: коміт із *.sh і loops/*.md
-# лишав би теку staged-копій у $TMPDIR. Блок — підоболонка з власним trap; міряємо приватним TMPDIR.
-mkdir -p "$ROOT/tmpd"
+# лишав би теку staged-копій у TMPDIR. Блок — підоболонка з власним trap. Міряємо ЗНІМКОМ
+# справжнього TMPDIR до/після (BSD mktemp -d ігнорує TMPDIR без явного шаблону — приватний
+# TMPDIR був би порожній незалежно від хука; 6a р.3).
 # evals-гейт хука шукає scripts/evals/run.sh у самому репо — заглушка, щоб дійти до другого trap.
-out=$(cd "$RN" && mkdir -p loops scripts/evals && printf '#!/bin/sh\nexit 0\n' > scripts/evals/run.sh && printf '#!/bin/sh\necho ok\n' > ok.sh && printf '# rule\n' > loops/x.md && git add ok.sh loops/x.md scripts/evals/run.sh && TMPDIR="$ROOT/tmpd" STRW_ROOT="$ROOT" git commit -q -m both 2>&1); rc=$?
-leftover=$(ls -A "$ROOT/tmpd" | wc -l | tr -d ' ')
-if [ "$rc" -eq 0 ] && [ -d "$ROOT/tmpd" ] && [ "$leftover" -eq 0 ]; then echo "ok   (g″) коміт із *.sh і loops/*.md: обидва trap відпрацювали, у TMPDIR нічого не лишилось"; pass=$((pass+1)); else echo "FAIL (g″) rc=$rc, лишилось у TMPDIR: $leftover"; fail=$((fail+1)); fi
+TD="${TMPDIR:-/tmp}"; before=$(ls -d "$TD"/tmp.* 2>/dev/null | sort)
+out=$(cd "$RN" && mkdir -p loops scripts/evals && printf '#!/bin/sh\nexit 0\n' > scripts/evals/run.sh && printf '#!/bin/sh\necho ok\n' > ok.sh && printf '# rule\n' > loops/x.md && git add ok.sh loops/x.md scripts/evals/run.sh && STRW_ROOT="$ROOT" git commit -q -m both 2>&1); rc=$?
+after=$(ls -d "$TD"/tmp.* 2>/dev/null | sort)
+leftover=$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | grep -c . || true)
+if [ "$rc" -eq 0 ] && [ "$leftover" -eq 0 ]; then echo "ok   (g″) коміт із *.sh і loops/*.md: обидва trap відпрацювали, у TMPDIR нових тек не лишилось"; pass=$((pass+1)); else echo "FAIL (g″) rc=$rc, нових тек у TMPDIR: $leftover"; fail=$((fail+1)); comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | sed 's/^/       /'; fi
+# (g‴) `exit 0` «нема поверхні» живе в підоболонці: під `{ }` він завершував би ВЕСЬ хук і наступні
+# кроки (дрейф паспортів, evals) не доїжджали б. Staged лише loops/*.md + заглушка дрейфу exit 1 → rc=1.
+RD="$ROOT/drift"; mkrepo "$RD"
+RD_ROOT="$ROOT/drift-root"; mkdir -p "$RD_ROOT/strw-state/scripts/lib" "$RD_ROOT/bin" "$RD_ROOT/tests/integration"
+cp "$ROOT/strw-state/scripts/shell-portability-check.sh" "$RD_ROOT/strw-state/scripts/"; cp "$ROOT/strw-state/scripts/lib/nonportable-forms.tsv" "$RD_ROOT/strw-state/scripts/lib/"
+printf '#!/bin/sh\nexit 0\n' > "$RD_ROOT/bin/constitution-size-gate.sh"; printf '#!/bin/sh\necho DRIFT-RED; exit 1\n' > "$RD_ROOT/tests/integration/docs-current.test.sh"
+out=$(cd "$RD" && mkdir -p loops scripts/evals && printf '#!/bin/sh\nexit 0\n' > scripts/evals/run.sh && git add scripts/evals/run.sh && STRW_ROOT="$ROOT" git commit -q -m evals-stub 2>&1 && printf '# rule\n' > loops/x.md && git add loops/x.md && STRW_ROOT="$RD_ROOT" git commit -q -m only-loops 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'дрейфу'; then echo "ok   (g‴) staged лише loops/*.md, дрейф червоний → rc≠0: кроки ПІСЛЯ блоку доїжджають"; pass=$((pass+1)); else echo "FAIL (g‴) rc=$rc: $out"; fail=$((fail+1)); fi
 R2="$ROOT/repo2"; mkrepo "$R2"; sed 's#bash "\$PGATE" || {#true || {#; s#bash "\$PGATE" "\$@" ) || {#true ) || {#' "$R2/.githooks/pre-commit" > "$R2/.githooks/x" && mv "$R2/.githooks/x" "$R2/.githooks/pre-commit" && chmod +x "$R2/.githooks/pre-commit"
 grep -q 'bash "\$PGATE"' "$R2/.githooks/pre-commit" && { echo "FAIL мутація не накладена"; fail=$((fail+1)); }
 try "(e) НЕГАТИВНИЙ КОНТРОЛЬ: хук без сторожа пропускає (a)" 0 "$R2" "$ROOT" bad.sh "$(printf '#!/bin/sh\n%s' "$FIXTURE")"
