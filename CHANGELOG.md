@@ -3,6 +3,14 @@
 
 ## [Unreleased]
 
+### Changed
+- **Step 3a `strw-loop-run` кличе сторож відкритих PR** (tri-075, друге — клас mechanism-not-wired;
+  елемент strw-state `factory.open-prs-guard-orphan-is-2`): на контурі M (є `gh`) перед
+  toolchain-filter — `strw-state/scripts/registry-open-prs-check.sh`; код 1 (ready дублює PR) чи 2
+  (незіставлений PR — зіставлення не зроблено) → рядок журналу зі stdout дослівно, елемент не
+  береться; контур C без `gh` — крок пропущено з названою причиною. Досі сторож (щабель 3 tri-033)
+  ніхто не кликав — навіть полагоджений він не захистив би вибір елемента.
+
 ## [0.10.12] — 2026-09-07
 
 ### Changed
