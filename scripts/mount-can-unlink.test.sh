@@ -16,11 +16,14 @@
 # якій НЕ ВДАЛОСЬ навіть створити файл, нічого не каже про unlink — і назвати це
 # «git дозволено» означало б повторити клас `absence-told-as-answer`.
 #
-# ФІКСТУРА СПРАВЖНЬОЇ НЕВИДАЛИМОСТІ — не підмінений `rm`, а реально незнищенний
-# файл: `chattr +i` (Linux) або `chflags uchg` (macOS). Підміна `rm` у PATH
-# лишається ЗАПАСНИМ варіантом і доводить менше (вона перевіряє проводку проби,
-# а не властивість ФС). Якщо жоден спосіб недоступний — набір каже про це вголос
-# і ВАЛИТЬ прогін: мовчазний пропуск головного випадку — це `green-because-subject-missing`.
+# ФІКСТУРА СПРАВЖНЬОЇ НЕВИДАЛИМОСТІ — тека, в якій СТВОРИТИ можна, а ВИДАЛИТИ ні,
+# як у tri-073: на macOS без root це ACL `chmod +a "<user> deny delete_child"`
+# на теці (`rm` → Permission denied, файл лишається) — проба (c) запускає
+# предмет проти неї. На Linux без root такої фікстури немає (`chattr +i` на
+# теці забороняє і створення, тобто дає 2, а не 1; +i на файлі потребує
+# CAP_LINUX_IMMUTABLE) — тоді (c) каже про це ВГОЛОС рядком SKIP, а клас
+# «створити можна, видалити ні» тримає підміна `rm` (b). Мовчазного пропуску
+# немає: SKIP названий, не зелений.
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOOL="$PWD/scripts/mount-can-unlink.sh"
@@ -30,8 +33,8 @@ TMP="$(mktemp -d)"
 # Знімаємо незнищенність ДО rm -rf, інакше тека лишиться після набору —
 # тобто набір сам відтворить дефект, про який він.
 cleanup() {
-    if [ -n "${LOCKED_FILE:-}" ] && [ -e "$LOCKED_FILE" ]; then
-        chattr -i "$LOCKED_FILE" 2>/dev/null || chflags nouchg "$LOCKED_FILE" 2>/dev/null || true
+    if [ -n "${ACL_DIR:-}" ] && [ -d "$ACL_DIR" ]; then
+        chmod -a "$(id -un) deny delete_child,delete" "$ACL_DIR" 2>/dev/null || true
     fi
     rm -rf "$TMP" 2>/dev/null || true
 }
@@ -75,31 +78,27 @@ if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "монтування не в
     printf 'ok   %s\n' "(b) rm брехливо каже 0, файл лишився → 1 (предмет — існування, не код)"; pass=$((pass+1))
 else printf 'FAIL %s (код %d/1)\n' "(b) rm брехливо каже 0, файл лишився → 1" "$rc"
      printf '%s\n' "$out" | sed 's/^/       /'; fail=$((fail+1)); fi
-PATH="$PATH" find "$TMP/liar/work" -type f -exec /bin/rm -f {} + 2>/dev/null || true
+find "$TMP/liar/work" -type f -exec /bin/rm -f {} + 2>/dev/null || true
 
-# ── (c) СПРАВЖНЯ невидалимість (chattr/chflags) → 1 ─────────────────────────
-mkdir -p "$TMP/immut"
-LOCKED_FILE=""
-probe_dir_is_immutable=0
-: > "$TMP/immut/.canary"
-if chattr +i "$TMP/immut/.canary" 2>/dev/null || chflags uchg "$TMP/immut/.canary" 2>/dev/null; then
-    LOCKED_FILE="$TMP/immut/.canary"
-    probe_dir_is_immutable=1
-fi
-if [ "$probe_dir_is_immutable" -eq 1 ]; then
-    # Сам файл проби створюється скриптом; незнищенним робимо не його, а
-    # доводимо, що механізм узагалі доступний. Далі — незнищенна ТЕКА:
-    # у Linux `chattr +i` на теці забороняє створення й видалення в ній, тож
-    # для випадку «створити можна, видалити не можна» використовуємо обгортку rm,
-    # а ЦЕЙ випадок фіксує, що механізм справжньої невидалимості на цій машині Є
-    # і проба (b) моделює реальний, а не уявний клас.
-    printf 'ok   %s\n' "(c) механізм справжньої невидалимості доступний (chattr/chflags) — (b) моделює реальний клас"
-    pass=$((pass+1))
-    chattr -i "$LOCKED_FILE" 2>/dev/null || chflags nouchg "$LOCKED_FILE" 2>/dev/null || true
-    LOCKED_FILE=""
+# ── (c) СПРАВЖНЯ невидалимість: створити можна, видалити ні → 1 ─────────────
+# macOS: ACL deny delete_child на теці — рівно поведінка tri-073 без root.
+mkdir -p "$TMP/acl/work"
+ACL_DIR=""
+if chmod +a "$(id -un) deny delete_child,delete" "$TMP/acl/work" 2>/dev/null; then
+    ACL_DIR="$TMP/acl/work"
+    : > "$ACL_DIR/.canary"
+    if /bin/rm -f "$ACL_DIR/.canary" 2>/dev/null; [ -e "$ACL_DIR/.canary" ]; then
+        want 1 "(c) справжня невидалимість (ACL deny delete_child): створити можна, rm не працює → 1" "$ACL_DIR" "монтування не видаляє файли"
+        # негативний контроль: та сама тека без ACL → 0 (інакше (c) зелена з іншої причини)
+        chmod -a "$(id -un) deny delete_child,delete" "$ACL_DIR" 2>/dev/null
+        /bin/rm -f "$ACL_DIR"/.canary "$ACL_DIR"/.strw-mount-probe.* 2>/dev/null
+        want 0 "(c') та сама тека після зняття ACL → 0 (червоніло саме через ACL)" "$ACL_DIR" "дозволено"
+        ACL_DIR=""
+    else
+        printf 'FAIL %s\n' "(c) ACL встановлено, але rm усе одно видаляє — фікстура не моделює tri-073"; fail=$((fail+1))
+    fi
 else
-    printf 'FAIL %s\n' "(c) ні chattr +i, ні chflags uchg недоступні — головний випадок НЕ ПЕРЕВІРЕНО (не мовчазний пропуск)"
-    fail=$((fail+1))
+    printf 'SKIP %s\n' "(c) справжньої невидалимості без root тут немає (Linux: chattr +i на теці дає 2, не 1) — клас тримає (b)"
 fi
 
 # ── (d) теки немає → 2 «не поміряти», не 0 і не 1 ───────────────────────────
@@ -140,6 +139,28 @@ if [ "$lines" = "1" ] && printf '%s' "$out" | grep -qE "дозволено|ЗА�
     printf 'ok   %s\n' "(g) stdout — рівно один рядок, і він є вердиктом"; pass=$((pass+1))
 else printf 'FAIL %s (рядків %s)\n' "(g) stdout — рівно один рядок, і він є вердиктом" "$lines"
      printf '%s\n' "$out" | sed 's/^/       /'; fail=$((fail+1)); fi
+
+# ── (g') один рядок stdout і для кодів 1 та 2 (Step 0 читає вердикт на всіх трьох) ──
+out1=$(PATH="$TMP/liar/bin:$PATH" bash "$TOOL" "$TMP/liar/work" 2>/dev/null); l1=$(printf '%s\n' "$out1" | wc -l | tr -d ' ')
+out2=$(bash "$TOOL" "$TMP/nema" 2>/dev/null); l2=$(printf '%s\n' "$out2" | wc -l | tr -d ' ')
+if [ "$l1" = 1 ] && printf '%s' "$out1" | grep -q "ЗАБОРОНЕНО" && [ "$l2" = 1 ] && printf '%s' "$out2" | grep -q "не поміряти"; then
+    printf 'ok   %s\n' "(g') коди 1 і 2 — теж рівно один рядок вердикту в stdout"; pass=$((pass+1))
+else printf 'FAIL %s (рядків %s/%s)\n' "(g') коди 1 і 2 — один рядок вердикту" "$l1" "$l2"; fail=$((fail+1)); fi
+find "$TMP/liar/work" -type f -exec /bin/rm -f {} + 2>/dev/null || true
+
+# ── (j) у git-репо проба лягає в .git/, не в робоче дерево ────────────────
+mkdir -p "$TMP/repo/.git" "$TMP/repo/logbin"
+cat > "$TMP/repo/logbin/touch" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$1" >> "$PROBE_LOG"
+: > "$1"
+STUB
+chmod +x "$TMP/repo/logbin/touch"
+PROBE_LOG="$TMP/repo/log"; : > "$PROBE_LOG"
+PATH="$TMP/repo/logbin:$PATH" PROBE_LOG="$PROBE_LOG" bash "$TOOL" "$TMP/repo" >/dev/null 2>&1
+if grep -q "^$TMP/repo/\.git/\.strw-mount-probe\." "$PROBE_LOG"; then
+    printf 'ok   %s\n' "(j) у репо проба створюється в .git/ (поверхня відмови, поза робочим деревом)"; pass=$((pass+1))
+else printf 'FAIL %s\n' "(j) у репо проба створюється в .git/"; sed 's/^/       /' "$PROBE_LOG"; fail=$((fail+1)); fi
 
 # ── (i) ШЛЯХ ПРОБИ УНІКАЛЬНИЙ НА ПРОЦЕС ────────────────────────────────────
 # Куплено знахідкою чекера PR #18 (Important): мутація `.strw-mount-probe.$$`
