@@ -45,6 +45,16 @@ want 0       "[Unreleased] із записом → dry-run зелений"      
 
 mkfixture "$TMP/comment" $'\n<!-- лише коментар -->\n'
 want nonzero "[Unreleased] лише з коментарем → відмова"            "$TMP/comment" "реліз без нотаток не робиться"
+mkfixture "$TMP/mlcomment" $'\n<!--\nсюди додай запис перед релізом\n-->\n'
+want nonzero "[Unreleased] лише з БАГАТОРЯДКОВИМ коментарем → відмова (текст усередині — не нотатка)" "$TMP/mlcomment" "реліз без нотаток не робиться"
+mkfixture "$TMP/mixed" $'\n<!--\nпідказка\n-->\n- справжній запис\n'
+want 0       "коментар + справжній запис → ок, нотатки = запис без підказки" "$TMP/mixed" "справжній запис"
+out=$(cd "$TMP/mixed" && bash scripts/release.sh patch --dry-run --no-gh -y 2>&1)
+if printf '%s' "$out" | grep -q "підказка"; then printf 'FAIL %s\n' "текст коментаря не потрапляє в нотатки"; fail=$((fail+1)); else printf 'ok   %s\n' "текст коментаря не потрапляє в нотатки"; pass=$((pass+1)); fi
+want nonzero "-m з самих пробілів → відмова"                       "$TMP/empty" "реліз без нотаток не робиться" -m "   "
+mkfixture "$TMP/nosection" ""
+( cd "$TMP/nosection" && printf '# Changelog\n\n## [0.1.0] — 2026-01-01\n\n- перший\n' > CHANGELOG.md && git add -A && git -c user.email=t@t -c user.name=t commit -qm nosec ) >/dev/null 2>&1
+want nonzero "CHANGELOG без секції [Unreleased] → відмова (не плейсхолдер)" "$TMP/nosection" "реліз без нотаток не робиться"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ $fail -eq 0 ]

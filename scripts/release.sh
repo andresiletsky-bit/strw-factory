@@ -189,11 +189,14 @@ info "${BOLD}Release $CUR_VERSION → $NEW_VERSION${RST}  (tag $TAG, $DATE)"
 # ----- release notes ---------------------------------------------------------
 # Priority: -m message > CHANGELOG [Unreleased] body > placeholder
 NOTES_FILE="$(mktemp)"; trap 'rm -f "$NOTES_FILE"' EXIT
-if [ -n "$MESSAGE" ]; then
+# -m лише з пробілів — це не нотатка (`[ -s ]` її пропустив би).
+if [ -n "$(printf '%s' "$MESSAGE" | tr -d '[:space:]')" ]; then
   printf '%s\n' "$MESSAGE" > "$NOTES_FILE"
 elif [ -f "$CHANGELOG" ] && grep -q '## \[Unreleased\]' "$CHANGELOG"; then
+  # HTML-коментарі знімаються ЦІЛКОМ, і багаторядкові теж: старий фільтр прибирав
+  # лише рядки-дужки, і текст усередині `<!-- … -->` ставав нотатками релізу.
   awk '/## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' "$CHANGELOG" \
-    | grep -vE '^[[:space:]]*(<!--|-->)' \
+    | perl -0pe 's/<!--.*?-->//gs' \
     | sed '/^[[:space:]]*$/d' > "$NOTES_FILE"
 fi
 # Порожні нотатки — не реліз, а плейсхолдер. 07.09.2026 v0.10.8 вийшов саме так:
