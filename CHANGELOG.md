@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [0.10.12] — 2026-09-07
+
 ### Changed
 - **Переносність оболонки на коміті** (елемент `factory.portability-gate-all-repos`, крок 2;
   tri-060): `.githooks/pre-commit` ганяє сторож strw-state `shell-portability-check.sh` по
