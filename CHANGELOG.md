@@ -3,8 +3,6 @@
 
 ## [Unreleased]
 
-## [Unreleased]
-
 ### Changed
 - **Паспорт L3 §6a називає джерело складу ролей зовнішнього рев'ю** (dec-095 §3; елемент
   `factory.l3-passport-names-6a-source`, за Nit-3 чекера плану `factory.model-resolved-per-loop`):
