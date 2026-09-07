@@ -56,6 +56,16 @@ mkfixture "$TMP/unclosed" $'\n<!--\nсюди додай запис\n- ніби �
 want nonzero "незакритий <!-- → відмова (секція зламана, не «нотатки з маркером»)" "$TMP/unclosed" "непарний HTML-коментар"
 mkfixture "$TMP/backtick" $'\n- незакритий `<!--` у секції → відмова (це текст ПРО маркер, у бектиках)\n'
 want 0       "маркер <!-- у бектиках — текст, не коментар → ок (гард не спотикається об власний запис)" "$TMP/backtick" "текст ПРО маркер"
+mkfixture "$TMP/span-plus-comment" $'\n- запис Alpha про маркер `<!--` у бектиках\n<!-- підказка: сюди додай запис -->\n- запис Bravo справжній\n'
+want 0       "спан + справжній закритий коментар → ок, коментар знято, спан цілий" "$TMP/span-plus-comment" "у бектиках"
+out=$(cd "$TMP/span-plus-comment" && bash scripts/release.sh patch --dry-run --no-gh -y 2>&1)
+if printf '%s' "$out" | grep -q 'підказка' || ! printf '%s' "$out" | grep -q 'маркер `<!--` у бектиках'; then printf 'FAIL %s\n' "…нотатки: без підказки, зі спаном дослівно"; fail=$((fail+1)); else printf 'ok   %s\n' "…нотатки: без підказки, зі спаном дослівно"; pass=$((pass+1)); fi
+mkfixture "$TMP/span-plus-unclosed" $'\n- запис про `<!--` у бектиках\n<!-- справжній незакритий\n- ніби запис\n'
+want nonzero "спан + справжній незакритий <!-- → відмова (спан не ховає маркер)" "$TMP/span-plus-unclosed" "непарний HTML-коментар"
+mkfixture "$TMP/odd-backtick" $'\n- запис з одним ` бектиком\n<!-- справжній незакритий коментар\n- ніби запис\n- і `код` наприкінці\n'
+want nonzero "непарний бектик не розтягує спан через рядки: справжній незакритий <!-- → відмова" "$TMP/odd-backtick" "непарний HTML-коментар"
+mkfixture "$TMP/full-in-span" $'\n- присутність 6b позначена якорем `<!-- rule:6b -->` у файлі петлі\n'
+want 0       "повний <!-- … --> у бектиках лишається в нотатках дослівно" "$TMP/full-in-span" '`<!-- rule:6b -->`'
 mkfixture "$TMP/nosection" ""
 ( cd "$TMP/nosection" && printf '# Changelog\n\n## [0.1.0] — 2026-01-01\n\n- перший\n' > CHANGELOG.md && git add -A && git -c user.email=t@t -c user.name=t commit -qm nosec ) >/dev/null 2>&1
 want nonzero "CHANGELOG без секції [Unreleased] → відмова (не плейсхолдер)" "$TMP/nosection" "реліз без нотаток не робиться"
