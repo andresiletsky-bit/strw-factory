@@ -15,6 +15,7 @@ pass=0; fail=0; TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 ROOT="$TMP/root"; mkdir -p "$ROOT/strw-state/scripts/lib" "$ROOT/bin"
 cp "$REAL/shell-portability-check.sh" "$ROOT/strw-state/scripts/"; cp "$REAL/lib/nonportable-forms.tsv" "$ROOT/strw-state/scripts/lib/"
 printf '#!/bin/sh\nexit 0\n' > "$ROOT/bin/constitution-size-gate.sh"
+mkdir -p "$ROOT/tests/integration"; printf '#!/bin/sh\nexit 0\n' > "$ROOT/tests/integration/docs-current.test.sh"   # заглушка дрейфу паспортів — щоб коміт із loops/*.md дійшов до другого trap
 FIXTURE="$(awk -F'\t' '$1=="sed-inplace-detached"{print $3}' "$ROOT/strw-state/scripts/lib/nonportable-forms.tsv")"
 mkrepo() { rm -rf "$1"; mkdir -p "$1/.githooks"; cp "$HERE/.githooks/pre-commit" "$1/.githooks/pre-commit"; chmod +x "$1/.githooks/pre-commit"
   ( cd "$1" && git init -q && git config user.email t@t && git config user.name t && git config core.hooksPath .githooks && git add .githooks && STRW_ROOT="$ROOT" git commit -q -m init ) >/dev/null 2>&1
@@ -34,16 +35,29 @@ try "(c) без strw-state поруч → відмова з причиною" 1 
 try "(d) без файлів поверхні — крок не ганяється (навіть без сусіда)" 0 "$R" "$TMP/lonely" notes.md "текст"
 RB="$ROOT/big"; mkrepo "$RB"
 ( cd "$RB" && mkdir -p many && i=0; while [ $i -lt 3000 ]; do printf 'x\n' > "many/file-with-a-rather-long-name-$i.txt"; i=$((i+1)); done && printf '#!/bin/sh\n%s\n' "$FIXTURE" > aaa-bad.sh && git add -A ) >/dev/null 2>&1
+n_bytes=$(cd "$RB" && git diff --cached --name-only | wc -c | tr -d ' '); [ "$n_bytes" -gt 65536 ] && { echo "ok   (d'') staged-перелік > 65536 байт ($n_bytes)"; pass=$((pass+1)); } || { echo "FAIL (d'') перелік замалий ($n_bytes)"; fail=$((fail+1)); }
 out="$(cd "$RB" && STRW_ROOT="$ROOT" git commit -q -m big 2>&1)"; rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'sed-inplace-detached'; then echo "ok   (d') великий коміт (3000 staged, >64 КБ) не відкриває гейт"; pass=$((pass+1)); else echo "FAIL (d') великий коміт (3000) відкрив гейт (rc=$rc)"; fail=$((fail+1)); fi
-n_bytes=$(cd "$RB" && git diff --cached --name-only | wc -c | tr -d ' '); [ "$n_bytes" -gt 65536 ] && { echo "ok   (d'') staged-перелік > 65536 байт ($n_bytes)"; pass=$((pass+1)); } || { echo "FAIL (d'') перелік замалий ($n_bytes)"; fail=$((fail+1)); }
 RS="$ROOT/staged"; mkrepo "$RS"
 out=$(cd "$RS" && printf '#!/bin/sh\n%s\n' "$FIXTURE" > drift.sh && git add drift.sh && printf '#!/bin/sh\necho clean\n' > drift.sh && STRW_ROOT="$ROOT" git commit -q -m drift 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'sed-inplace-detached'; then echo "ok   (f) staged брудне, дерево чисте → відмова (їде staged)"; pass=$((pass+1)); else echo "FAIL (f) staged-дрейф пройшов (rc=$rc)"; fail=$((fail+1)); fi
 ( cd "$RS" && git reset -q HEAD -- drift.sh && rm -f drift.sh )
 out=$(cd "$RS" && printf '#!/bin/sh\necho clean\n' > other.sh && git add other.sh && printf '#!/bin/sh\n%s\n' "$FIXTURE" > other.sh && STRW_ROOT="$ROOT" git commit -q -m tree 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'sed-inplace-detached'; then echo "ok   (f') staged чисте, дерево брудне → відмова (жива поверхня)"; pass=$((pass+1)); else echo "FAIL (f') дерево брудне пройшло (rc=$rc)"; fail=$((fail+1)); fi
-R2="$ROOT/repo2"; mkrepo "$R2"; sed 's#bash "\$PGATE" || {#true || {#; s#bash "\$PGATE" "\$@" ); then#true ); then#' "$R2/.githooks/pre-commit" > "$R2/.githooks/x" && mv "$R2/.githooks/x" "$R2/.githooks/pre-commit" && chmod +x "$R2/.githooks/pre-commit"
+RN="$ROOT/names"; mkrepo "$RN"
+out=$(cd "$RN" && printf '#!/bin/sh\n%s\n' "$FIXTURE" > перевірка.sh && git add перевірка.sh && printf '#!/bin/sh\necho clean\n' > перевірка.sh && STRW_ROOT="$ROOT" git commit -q -m cyr 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'sed-inplace-detached'; then echo "ok   (g) кириличне ім'я (git цитує без -z): staged-дрейф відмовлено"; pass=$((pass+1)); else echo "FAIL (g) кирилиця пройшла (rc=$rc)"; fail=$((fail+1)); fi
+( cd "$RN" && git reset -q HEAD -- перевірка.sh && rm -f перевірка.sh )
+out=$(cd "$RN" && printf '#!/bin/sh\necho ok\n' > "my script.sh" && git add "my script.sh" && STRW_ROOT="$ROOT" git commit -q -m sp 2>&1); rc=$?
+if [ "$rc" -eq 0 ]; then echo "ok   (g') ім'я з пробілом, чистий → проходить"; pass=$((pass+1)); else echo "FAIL (g') пробіл (rc=$rc): $out"; fail=$((fail+1)); fi
+# (g″) два `trap … EXIT` в одному процесі — другий заміщає перший: коміт із *.sh і loops/*.md
+# лишав би теку staged-копій у $TMPDIR. Блок — підоболонка з власним trap; міряємо приватним TMPDIR.
+mkdir -p "$ROOT/tmpd"
+# evals-гейт хука шукає scripts/evals/run.sh у самому репо — заглушка, щоб дійти до другого trap.
+out=$(cd "$RN" && mkdir -p loops scripts/evals && printf '#!/bin/sh\nexit 0\n' > scripts/evals/run.sh && printf '#!/bin/sh\necho ok\n' > ok.sh && printf '# rule\n' > loops/x.md && git add ok.sh loops/x.md scripts/evals/run.sh && TMPDIR="$ROOT/tmpd" STRW_ROOT="$ROOT" git commit -q -m both 2>&1); rc=$?
+leftover=$(ls -A "$ROOT/tmpd" | wc -l | tr -d ' ')
+if [ "$rc" -eq 0 ] && [ -d "$ROOT/tmpd" ] && [ "$leftover" -eq 0 ]; then echo "ok   (g″) коміт із *.sh і loops/*.md: обидва trap відпрацювали, у TMPDIR нічого не лишилось"; pass=$((pass+1)); else echo "FAIL (g″) rc=$rc, лишилось у TMPDIR: $leftover"; fail=$((fail+1)); fi
+R2="$ROOT/repo2"; mkrepo "$R2"; sed 's#bash "\$PGATE" || {#true || {#; s#bash "\$PGATE" "\$@" ) || {#true ) || {#' "$R2/.githooks/pre-commit" > "$R2/.githooks/x" && mv "$R2/.githooks/x" "$R2/.githooks/pre-commit" && chmod +x "$R2/.githooks/pre-commit"
 grep -q 'bash "\$PGATE"' "$R2/.githooks/pre-commit" && { echo "FAIL мутація не накладена"; fail=$((fail+1)); }
 try "(e) НЕГАТИВНИЙ КОНТРОЛЬ: хук без сторожа пропускає (a)" 0 "$R2" "$ROOT" bad.sh "$(printf '#!/bin/sh\n%s' "$FIXTURE")"
 printf '\n%d passed, %d failed\n' "$pass" "$fail"; [ "$fail" -eq 0 ]
