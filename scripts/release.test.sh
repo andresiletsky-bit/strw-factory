@@ -21,6 +21,7 @@ mkfixture() { # mkfixture <тека> <тіло [Unreleased]>
     local d=$1; rm -rf "$d"; mkdir -p "$d/.claude-plugin" "$d/scripts/evals"
     cp "$HERE/release.sh" "$d/scripts/release.sh"
     printf '#!/bin/sh\nexit 0\n' > "$d/scripts/evals/run.sh"
+    printf '#!/bin/sh\nexit ${HOST_SMOKE_STUB_RC:-0}\n' > "$d/scripts/host-smoke.sh"
     printf '{ "name": "fx", "version": "0.1.0" }\n' > "$d/.claude-plugin/plugin.json"
     printf '# Changelog\n\n## [Unreleased]\n%s\n## [0.1.0] — 2026-01-01\n\n- перший\n' "$2" > "$d/CHANGELOG.md"
     ( cd "$d" && git init -q -b main && git config user.email t@t && git config user.name t \
@@ -69,6 +70,18 @@ want 0       "повний <!-- … --> у бектиках лишається �
 mkfixture "$TMP/nosection" ""
 ( cd "$TMP/nosection" && printf '# Changelog\n\n## [0.1.0] — 2026-01-01\n\n- перший\n' > CHANGELOG.md && git add -A && git -c user.email=t@t -c user.name=t commit -qm nosec ) >/dev/null 2>&1
 want nonzero "CHANGELOG без секції [Unreleased] → відмова (не плейсхолдер)" "$TMP/nosection" "реліз без нотаток не робиться"
+
+# host-smoke — гейт ДОСЯЖНИЙ з release.sh (09.09.2026): 1 — відмова, 2 — WARN і реліз іде,
+# відсутній скрипт — відмова. Проба на досяжність окремо від логіки самого гейта
+# (його логіка — у host-smoke.test.sh).
+mkfixture "$TMP/smoke" $'\n- запис для smoke\n'
+want 0       "host-smoke rc=0 → dry-run зелений"                     "$TMP/smoke" "host-smoke зелений"
+out=$(cd "$TMP/smoke" && HOST_SMOKE_STUB_RC=1 bash scripts/release.sh patch --dry-run --no-gh -y 2>&1); rc=$?
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "host-smoke червоний"; then printf 'ok   %s\n' "host-smoke rc=1 → реліз не робиться"; pass=$((pass+1)); else printf 'FAIL %s (rc=%d)\n' "host-smoke rc=1 → реліз не робиться" "$rc"; fail=$((fail+1)); fi
+out=$(cd "$TMP/smoke" && HOST_SMOKE_STUB_RC=2 bash scripts/release.sh patch --dry-run --no-gh -y 2>&1); rc=$?
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "не поміряно повністю"; then printf 'ok   %s\n' "host-smoke rc=2 → WARN, реліз іде"; pass=$((pass+1)); else printf 'FAIL %s (rc=%d)\n' "host-smoke rc=2 → WARN, реліз іде" "$rc"; fail=$((fail+1)); fi
+rm -f "$TMP/smoke/scripts/host-smoke.sh"
+want nonzero "без scripts/host-smoke.sh → відмова (гейт не пропускається мовчки)" "$TMP/smoke" "немає"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ $fail -eq 0 ]

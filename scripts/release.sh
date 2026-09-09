@@ -156,6 +156,27 @@ else
   die "немає $EVALS — гейт evals недоступний, а реліз без нього випускає неперевірену поведінку агентів."
 fi
 
+# ----- 0b) host-smoke: плагін вантажиться в ОБОХ хостах ------------------------
+# 09.09.2026: strw-factory вантажиться в Codex CLI без правок (8/8 скілів), але це
+# факт, не властивість — об'єктна форма `source` у marketplace.json дає в Codex
+# 0 плагінів мовчки (виміряно на Grow PM). Гейт без моделі й без авторизації:
+# `claude plugin validate` + ізольований CODEX_HOME + `codex debug prompt-input`.
+# Код 2 (хоста немає в PATH) — гучне WARN, не відмова: Codex як хост ще не
+# рішення CEO (tri-096); код 1 (хост є і НЕ вантажить) — реліз не робиться.
+SMOKE="$SCRIPT_DIR/host-smoke.sh"
+if [ -f "$SMOKE" ]; then
+  info "Host-smoke (Claude Code + Codex CLI, без моделі)"
+  # не `bash …; SMOKE_RC=$?`: під `set -e` ненульовий код вийшов би з релізу мовчки, без причини
+  if bash "$SMOKE"; then SMOKE_RC=0; else SMOKE_RC=$?; fi
+  case "$SMOKE_RC" in
+    0) ok "host-smoke зелений" ;;
+    2) warn "host-smoke не поміряно повністю (хоста немає в PATH) — реліз іде, але межа названа вище" ;;
+    *) die "host-smoke червоний — реліз не робиться. Прожени: bash scripts/host-smoke.sh" ;;
+  esac
+else
+  die "немає $SMOKE — гейт host-smoke недоступний, а реліз без нього може випустити плагін, якого хост не бачить."
+fi
+
 # ----- current + next version ------------------------------------------------
 CUR_VERSION="$(grep -Eo '"version"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' "$MANIFEST" \
   | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"

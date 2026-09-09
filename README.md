@@ -71,7 +71,7 @@ git push -u origin main
 ./scripts/release.sh 0.4.2        # явна версія
 ./scripts/release.sh patch --dry-run   # прогнати без змін
 ```
-Скрипт: bump `plugin.json` → промоує розділ `## [Unreleased]` у CHANGELOG у датовану версію → commit → tag `vX.Y.Z` → push → GitHub Release. Нотатки релізу бере з `[Unreleased]` (або з `-m "..."`). Прапорці: `--dry-run`, `--no-push`, `--no-gh`, `-y`. Перед релізом наповнюй `[Unreleased]` у `CHANGELOG.md`.
+Скрипт: evals (офлайн) → `scripts/host-smoke.sh` (плагін вантажиться в Claude Code і Codex CLI; без моделі) → bump `plugin.json` → промоує розділ `## [Unreleased]` у CHANGELOG у датовану версію → commit → tag `vX.Y.Z` → push → GitHub Release. Нотатки релізу бере з `[Unreleased]` (або з `-m "..."`). Прапорці: `--dry-run`, `--no-push`, `--no-gh`, `-y`. Перед релізом наповнюй `[Unreleased]` у `CHANGELOG.md`.
 
 ## Hard rules
 Maker ≠ Checker (інша модель для критичних артефактів) · Планка = eval, не демо · State або не сталося · Один inbox (тільки judgment) · Бюджет = обмеження (стоп, не «доробити») · Незворотнє — тільки людина · Людина читає gate-артефакти · Tests-first у Build · Prototype ≠ production.
