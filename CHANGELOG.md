@@ -3,6 +3,19 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Frontmatter 13 агентів — валідний YAML** (tri-098): `description:` кожного агента містив
+  `: ` (двокрапку з пробілом у тексті й у `<example>Context: …`), і строгий парсер віддавав
+  «mapping values are not allowed here». `claude plugin validate .claude-plugin/plugin.json`
+  був червоний на всіх 13 (Claude Code попереджає: «at runtime this agent loads with empty
+  metadata» — рантайм цієї сесії описи читав, тобто його парсер поблажливіший за валідатор;
+  доведене — «валідатор червоний», не «падало в рантаймі»). Ніхто не бачив, бо валідатор
+  НЕ викликається ніде — ні в `release.sh`, ні в pre-commit (6a по #26); а ручний
+  `claude plugin validate .` (тека з двома маніфестами) валідує маркетплейс і плагін пропускає.
+  Сторож — `scripts/host-smoke.sh` (#25): два явні виклики validate у `release.sh`. Опис тепер у
+  подвійних лапках (JSON-рядок, один рядок, зміст ідентичний символ у символ — звірено
+  скриптом); `name`/`model` не змінені.
+
 ## [0.10.13] — 2026-09-07
 
 ### Changed

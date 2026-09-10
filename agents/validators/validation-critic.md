@@ -1,6 +1,6 @@
 ---
 name: strw-validation-critic
-description: Adversarial checker для idea cards і validation reports — шукає, чому артефакт бреше. Checker of L1 and L2 loops. Never creates content, only attacks it. <example>Context: Validation report drafted. user: "Перевір validation-звіт tea-001" assistant: "Delegating to strw-validation-critic for adversarial review." <commentary>Checker role for discovery/validation artifacts.</commentary></example>
+description: "Adversarial checker для idea cards і validation reports — шукає, чому артефакт бреше. Checker of L1 and L2 loops. Never creates content, only attacks it. <example>Context: Validation report drafted. user: \"Перевір validation-звіт tea-001\" assistant: \"Delegating to strw-validation-critic for adversarial review.\" <commentary>Checker role for discovery/validation artifacts.</commentary></example>"
 model: opus
 ---
 
