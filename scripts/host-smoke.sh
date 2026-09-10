@@ -51,11 +51,13 @@ PLUGIN_DIR="$(cd "$ARG_DIR" 2>/dev/null && pwd)" || { echo "FAIL: теки пл�
 TIMEOUT="${HOST_SMOKE_TIMEOUT:-120}"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 CODEX_BIN="${CODEX_BIN:-codex}"
-RC=0; UNMEASURED=0
+RC=0; UNMEASURED=0; SKIPPED=""
 fail() { echo "FAIL: $*"; RC=1; }
 ok()   { echo "ok:   $*"; }
 note() { echo "note: $*"; }
-skip() { echo "SKIP: $*"; UNMEASURED=1; }
+# Причина SKIP запам'ятовується і йде в підсумковий рядок: release.sh друкує ЇЇ,
+# а не власну здогадку «хоста немає в PATH» (6a р.1, Minor).
+skip() { echo "SKIP: $*"; UNMEASURED=1; SKIPPED="${SKIPPED:+$SKIPPED; }$*"; }
 
 # Виклик під будильником; вивід — у файл (підстановка $(…) чекала б EOF пайпа
 # осиротілого нащадка — урок bin/codex-probe.sh 14.08). Повертає rc команди.
@@ -99,17 +101,18 @@ name = m.get("name", "")
 mkt = k.get("name", "")
 plugs = k.get("plugins", [])
 src = next((p.get("source") for p in plugs if p.get("name") == name), None)
-# порожнє поле — «-», не порожній рядок: bash розбиває META по пробілах і порожнє поле зсунуло б сусідів
-print("OK", name or "-", m.get("version") or "-", mkt or "-", json.dumps(src))
+# по одному полю на рядок — не через `set -- $META`: ім'я з пробілом («bad name!»)
+# зсувало сусідні поля і Codex отримував `plugin add bad@name!` (6a р.1, Minor)
+print("OK"); print(name); print(m.get("version") or ""); print(mkt); print(json.dumps(src))
 PY
-META="$(cat "$TMP/meta")"
-case "$META" in
-  OK\ *) ;;
-  *) fail "маніфест не читається: ${META#ERR }"; echo "host-smoke: ❌"; exit 1 ;;
+case "$(sed -n 1p "$TMP/meta")" in
+  OK) ;;
+  *) fail "маніфест не читається: $(sed -n 1p "$TMP/meta" | sed 's/^ERR //')"; echo "host-smoke: ❌"; exit 1 ;;
 esac
-set -- $META; NAME="$2"; VER="$3"; MKT="$4"; shift 4; SRC="$*"
-[ "$NAME" != - ] || { fail "plugin.json без name"; echo "host-smoke: ❌"; exit 1; }
-[ "$MKT" != - ]  || { fail "marketplace.json без name"; echo "host-smoke: ❌"; exit 1; }
+NAME="$(sed -n 2p "$TMP/meta")"; VER="$(sed -n 3p "$TMP/meta")"; MKT="$(sed -n 4p "$TMP/meta")"; SRC="$(sed -n 5p "$TMP/meta")"
+[ -n "$NAME" ] || { fail "plugin.json без name"; echo "host-smoke: ❌"; exit 1; }
+[ -n "$MKT" ]  || { fail "marketplace.json без name"; echo "host-smoke: ❌"; exit 1; }
+[ -n "$VER" ]  || VER="?"
 
 N_SKILLS=0
 for d in "$PLUGIN_DIR"/skills/*/; do [ -f "${d}SKILL.md" ] && N_SKILLS=$((N_SKILLS + 1)); done
@@ -145,6 +148,22 @@ else
       fail "Claude — plugin validate $tname НЕ пройшов (rc=$crc):"; grep -E '❯|✘|Validating' "$TMP/claude.out" | tail -8 | sed 's/^/      /'
     fi
   done
+  # Що хост РЕАЛЬНО інвентаризує — без моделі: `plugin details` перелічує скіли
+  # й агентів так, як їх бачить завантажувач (6a р.1, Minor). Скілів — рівно
+  # стільки, скільки на диску; агентів details бачить лише верхній рівень
+  # (validators/ не перелічує, хоч рантайм їх завантажує) — тому note, не FAIL.
+  alarm_run "$TMP/details.out" "$CLAUDE_BIN" --plugin-dir "$PLUGIN_DIR" plugin details "$NAME"; drc=$?
+  D_SK="$(sed -n 's/^[[:space:]]*Skills (\([0-9][0-9]*\)).*/\1/p' "$TMP/details.out" | head -1)"
+  D_AG="$(sed -n 's/^[[:space:]]*Agents (\([0-9][0-9]*\)).*/\1/p' "$TMP/details.out" | head -1)"
+  if [ "$drc" -ge 128 ]; then
+    fail "Claude — plugin details завис (> ${TIMEOUT}s)"
+  elif [ -z "$D_SK" ]; then
+    fail "Claude — plugin details не віддав інвентар (rc=$drc):"; tail -3 "$TMP/details.out" | sed 's/^/      /'
+  elif [ "$D_SK" = "$N_SKILLS" ]; then
+    ok "Claude — plugin details: скілів $D_SK/$N_SKILLS; агентів у details: ${D_AG:-0} з $N_AGENTS на диску (details бачить лише верхній рівень agents/)"
+  else
+    fail "Claude — plugin details бачить $D_SK скілів, на диску $N_SKILLS"
+  fi
 fi
 
 # ----- 2) Codex CLI ---------------------------------------------------------
@@ -180,20 +199,25 @@ home = os.path.realpath(sys.argv[3])  # mktemp дає /var/…, Codex пише /
 t = "".join(c.get("text", "") for m in d for c in (m.get("content") or []) if isinstance(c, dict))
 bt = chr(96)  # бектик — не літералом: bash 3.2 губиться на ньому всередині heredoc
 roots = {m.group(1): m.group(2) for m in re.finditer(r"- " + bt + r"(r\d+)" + bt + r" = " + bt + r"([^" + bt + r"]+)" + bt, t)}
-skills = 0
+# РІЗНІ ідентифікатори, не кількість рядків: два скіли з однаковим name: дають два
+# рядки з тим самим id — і лічба «9 == 9» була зеленою (6a р.1, Major)
+ids, dups = [], []
 for l in t.splitlines():
     m = re.match(r"- " + re.escape(name) + r":([A-Za-z0-9_-]+): .*\(file: (r\d+)/", l.strip())
     if m and os.path.realpath(roots.get(m.group(2), "/nonexistent")).startswith(home):
-        skills += 1
+        (dups if m.group(1) in ids else ids).append(m.group(1))
+skills = len(ids)
 names = [n for n in sys.argv[4].split() if n]
 agents = sum(1 for n in names if re.search(r"(^|[^A-Za-z0-9_-])" + re.escape(n) + r"([^A-Za-z0-9_-]|$)", t))
-print("OK", skills, agents, "shortened" if "shortened to fit" in t else "full")
+print("OK", skills, agents, "shortened" if "shortened to fit" in t else "full", ",".join(sorted(set(dups))) or "-")
 PY
       COUNTS="$(cat "$TMP/counts")"
       case "$COUNTS" in
         OK\ *)
-          set -- $COUNTS; C_SK="$2"; C_AG="$3"; C_DESC="$4"
-          if [ "$C_SK" = "$N_SKILLS" ]; then
+          set -- $COUNTS; C_SK="$2"; C_AG="$3"; C_DESC="$4"; C_DUP="$5"
+          if [ "$C_DUP" != - ]; then
+            fail "Codex — дублікат ідентифікатора скіла у промті: $C_DUP (два SKILL.md з однаковим name: — модель отримує неоднозначний $NAME:$C_DUP)"
+          elif [ "$C_SK" = "$N_SKILLS" ]; then
             ok "Codex — у промті $C_SK/$N_SKILLS скілів $NAME:* (ізольований CODEX_HOME, без моделі)"
           else
             fail "Codex — у промті $C_SK скілів, на диску $N_SKILLS (${NAME}:* мусять збігатися один в один)"
@@ -209,6 +233,6 @@ fi
 
 echo
 if [ "$RC" -ne 0 ]; then echo "host-smoke: ❌ ($NAME $VER)"; exit 1; fi
-if [ "$UNMEASURED" -ne 0 ]; then echo "host-smoke: ⚠ не поміряно повністю ($NAME $VER) — див. SKIP вище"; exit 2; fi
+if [ "$UNMEASURED" -ne 0 ]; then echo "host-smoke: ⚠ не поміряно повністю ($NAME $VER): $SKIPPED"; exit 2; fi
 echo "host-smoke: ✅ $NAME $VER вантажиться в Claude Code і Codex CLI"
 exit 0

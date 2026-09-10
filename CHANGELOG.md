@@ -3,8 +3,6 @@
 
 ## [Unreleased]
 
-## [Unreleased]
-
 ### Added
 - **`scripts/host-smoke.sh` — гейт «плагін вантажиться в обох хостах»** (Claude Code і
   Codex CLI) у `scripts/release.sh` між evals і bump. Без моделі й без авторизації:

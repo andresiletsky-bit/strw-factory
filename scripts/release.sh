@@ -170,7 +170,7 @@ if [ -f "$SMOKE" ]; then
   if bash "$SMOKE"; then SMOKE_RC=0; else SMOKE_RC=$?; fi
   case "$SMOKE_RC" in
     0) ok "host-smoke зелений" ;;
-    2) warn "host-smoke не поміряно повністю (хоста немає в PATH) — реліз іде, але межа названа вище" ;;
+    2) warn "host-smoke не поміряно повністю — причина в рядку «host-smoke: ⚠ …» вище (SKIP); реліз іде з названою межею" ;;
     *) die "host-smoke червоний — реліз не робиться. Прожени: bash scripts/host-smoke.sh" ;;
   esac
 else

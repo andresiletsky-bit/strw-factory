@@ -32,7 +32,7 @@ want() { # want <rc-код: 0|nonzero> <назва> <тека> <шматок|-> 
     local out rc ok=1
     out=$(cd "$d" && bash scripts/release.sh patch --dry-run --no-gh -y "$@" 2>&1); rc=$?
     if [ "$code" = 0 ]; then [ $rc -eq 0 ] || ok=0; else [ $rc -ne 0 ] || ok=0; fi
-    [ "$nugget" = "-" ] || printf '%s' "$out" | grep -q -- "$nugget" || ok=0
+    case "$nugget" in -) ;; *) case "$out" in *"$nugget"*) ;; *) ok=0 ;; esac ;; esac
     if [ $ok -eq 1 ]; then printf 'ok   %s\n' "$name"; pass=$((pass+1))
     else printf 'FAIL %s (rc=%d, очікував %s)\n' "$name" "$rc" "$code"; printf '%s\n' "$out" | tail -5 | sed 's/^/       /'; fail=$((fail+1)); fi
 }

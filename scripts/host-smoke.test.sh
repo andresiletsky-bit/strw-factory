@@ -25,7 +25,11 @@ mkfixture() { # mkfixture <тека>
     local d=$1; rm -rf "$d"; mkdir -p "$d/.claude-plugin"
     cp "$PLUGIN/.claude-plugin/plugin.json" "$PLUGIN/.claude-plugin/marketplace.json" "$d/.claude-plugin/"
     cp -R "$PLUGIN/skills" "$d/skills"
-    cp -R "$PLUGIN/agents" "$d/agents"
+    # один свідомо валідний агент, не cp -R живої agents/: проби (g)/(h) не мають
+    # залежати від стану агентів на гілці (6a р.1, Minor — на гілці до #26 вони
+    # були зелені вакуумно)
+    mkdir -p "$d/agents"
+    printf -- '---\nname: zz-ok\ndescription: "валідний агент фікстури"\nmodel: sonnet\n---\nтіло\n' > "$d/agents/zz-ok.md"
 }
 set_source() { # set_source <тека> <python-вираз для source>
     python3 - "$1/.claude-plugin/marketplace.json" "$2" <<'PY'
@@ -40,7 +44,8 @@ want() { # want <код> <назва> <шматок|-> <args...>
     local out rc ok=1
     out=$(bash "$TOOL" "$@" 2>&1); rc=$?
     [ "$rc" = "$code" ] || ok=0
-    [ "$nugget" = "-" ] || printf '%s' "$out" | grep -q -- "$nugget" || ok=0
+    # без пайпа: `printf | grep -q` під pipefail на великому виводі дає 141 (6a р.1, Minor)
+    case "$nugget" in -) ;; *) case "$out" in *"$nugget"*) ;; *) ok=0 ;; esac ;; esac
     if [ $ok -eq 1 ]; then printf 'ok   %s\n' "$name"; pass=$((pass+1))
     else printf 'FAIL %s (rc=%d, очікував %s)\n' "$name" "$rc" "$code"; printf '%s\n' "$out" | tail -6 | sed 's/^/       /'; fail=$((fail+1)); fi
 }
@@ -62,6 +67,10 @@ if [ $HAVE_CODEX -eq 1 ]; then
     mkfixture "$TMP/nodir"; mkdir -p "$TMP/nodir/skills/zz-empty"
     HOST_SMOKE_SKIP_CLAUDE=1 want 2 "порожня тека не змінює лічбу" "скілів" --tree "$TMP/nodir"
 
+    echo "  (d2) два SKILL.md з однаковим name: → у промті дублікат id → 1 (6a р.1, Major: лічба рядків була зелена 9==9)"
+    mkfixture "$TMP/dup"; mkdir -p "$TMP/dup/skills/zz-dup"; printf -- '---\nname: strw-retro\ndescription: дублікат\n---\nтіло\n' > "$TMP/dup/skills/zz-dup/SKILL.md"
+    HOST_SMOKE_SKIP_CLAUDE=1 want 1 "дублікат name: strw-retro → 1" "дублікат ідентифікатора" --tree "$TMP/dup"
+
     echo "  (d) скіл без frontmatter name/description — Codex не перелічує, на диску є → 1"
     mkfixture "$TMP/badskill"; mkdir -p "$TMP/badskill/skills/zz-broken"; printf '# без frontmatter\n' > "$TMP/badskill/skills/zz-broken/SKILL.md"
     HOST_SMOKE_SKIP_CLAUDE=1 want 1 "скіл без frontmatter → у промті менше, ніж на диску → 1" "мусять збігатися" --tree "$TMP/badskill"
@@ -80,6 +89,7 @@ want 1 "без marketplace.json → 1" "marketplace.json" --tree "$TMP/nomkt"
 echo "  (f) хоста немає → 2 (не поміряно), не 0"
 mkfixture "$TMP/nohost"
 CODEX_BIN=/nonexistent/codex CLAUDE_BIN=/nonexistent/claude want 2 "обох хостів немає → 2 з двома SKIP" "SKIP: Codex" --tree "$TMP/nohost"
+HOST_SMOKE_SKIP_CODEX=1 HOST_SMOKE_SKIP_CLAUDE=1 want 2 "обидва SKIP свідомо → 2, і підсумок називає ПРИЧИНУ (SKIP=1), не «немає в PATH»" "HOST_SMOKE_SKIP_CODEX=1" --tree "$TMP/nohost"
 CODEX_BIN=/nonexistent/codex HOST_SMOKE_SKIP_CLAUDE=1 want 2 "codex немає, claude пропущено свідомо → 2" "передумова: codex" --tree "$TMP/nohost"
 
 if [ $HAVE_CLAUDE -eq 1 ]; then
