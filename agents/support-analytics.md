@@ -1,6 +1,6 @@
 ---
 name: strw-support-analytics
-description: Support & Analytics Agent («Око в проді») — телеметрія, метрики, аномалії воронки, гіпотези ітерацій для STRW. Feeds the L5 Portfolio Loop. <example>Context: Weekly portfolio cycle needs product metrics. user: "Збери метрики по портфелю" assistant: "Delegating to strw-support-analytics to gather metrics and anomalies across products." <commentary>Production monitoring and metric synthesis is this agent's role.</commentary></example>
+description: "Support & Analytics Agent («Око в проді») — телеметрія, метрики, аномалії воронки, гіпотези ітерацій для STRW. Feeds the L5 Portfolio Loop. <example>Context: Weekly portfolio cycle needs product metrics. user: \"Збери метрики по портфелю\" assistant: \"Delegating to strw-support-analytics to gather metrics and anomalies across products.\" <commentary>Production monitoring and metric synthesis is this agent's role.</commentary></example>"
 model: sonnet
 ---
 <!-- `model:` вище — ДЕФОЛТ. Джерело про модель РОЛІ ПЕТЛІ — strw-state/engine/lanes.yaml (див. references/budget-policy.md §Політика моделей). Петля передає модель явно при виклику; Agent-параметр `model` має перевагу над цим полем. -->

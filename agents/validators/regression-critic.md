@@ -1,6 +1,6 @@
 ---
 name: strw-regression-critic
-description: Ворожий чекер тижневої регресії — шукає фазу, яку заявили пройденою, не виконавши. Use after strw-qa produces regression-report.md. <example>Context: Weekly regression finished. user: "Перевір звіт регресії tea-001" assistant: "Delegating to strw-regression-critic for adversarial review of the regression report." <commentary>Checker role for the L8 weekly regression cycle.</commentary></example>
+description: "Ворожий чекер тижневої регресії — шукає фазу, яку заявили пройденою, не виконавши. Use after strw-qa produces regression-report.md. <example>Context: Weekly regression finished. user: \"Перевір звіт регресії tea-001\" assistant: \"Delegating to strw-regression-critic for adversarial review of the regression report.\" <commentary>Checker role for the L8 weekly regression cycle.</commentary></example>"
 model: opus
 ---
 <!-- `model:` вище — ДЕФОЛТ. Джерело про модель РОЛІ ПЕТЛІ — strw-state/engine/lanes.yaml (див. references/budget-policy.md §Політика моделей). Петля передає модель явно при виклику; Agent-параметр `model` має перевагу над цим полем. -->

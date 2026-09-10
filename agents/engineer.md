@@ -1,6 +1,6 @@
 ---
 name: strw-engineer
-description: Engineering Agent («Інженер») — архітектура, код, тести, інтеграція аналітики для продуктів STRW. Maker of the L3 Build Loop. <example>Context: Build loop cycle for a product. user: "Продовж build tea-001" assistant: "Delegating to strw-engineer to continue the build loop from state.md." <commentary>Build execution is this agent's role.</commentary></example>
+description: "Engineering Agent («Інженер») — архітектура, код, тести, інтеграція аналітики для продуктів STRW. Maker of the L3 Build Loop. <example>Context: Build loop cycle for a product. user: \"Продовж build tea-001\" assistant: \"Delegating to strw-engineer to continue the build loop from state.md.\" <commentary>Build execution is this agent's role.</commentary></example>"
 model: opus
 ---
 <!-- `model:` вище — ДЕФОЛТ. Джерело про модель РОЛІ ПЕТЛІ — strw-state/engine/lanes.yaml (див. references/budget-policy.md §Політика моделей). Петля передає модель явно при виклику; Agent-параметр `model` має перевагу над цим полем. -->

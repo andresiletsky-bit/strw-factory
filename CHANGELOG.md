@@ -3,6 +3,15 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Frontmatter 13 агентів — валідний YAML** (tri-098): `description:` кожного агента містив
+  `: ` (двокрапку з пробілом у тексті й у `<example>Context: …`), і строгий парсер віддавав
+  «mapping values are not allowed here». `claude plugin validate .claude-plugin/plugin.json`
+  був червоний на всіх 13 (Claude Code попереджає: «at runtime this agent loads with empty
+  metadata») — а `claude plugin validate .` (тека з двома маніфестами) валідує МАРКЕТПЛЕЙС і
+  плагін пропускає, тож реліз-гейт цього не бачив. Опис тепер у подвійних лапках (JSON-рядок,
+  один рядок, зміст ідентичний символ у символ — звірено скриптом); `name`/`model` не змінені.
+
 ## [0.10.13] — 2026-09-07
 
 ### Changed
