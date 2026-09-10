@@ -92,9 +92,12 @@ for p in sys.argv[1:]:
     else: d["name"] = "bad name!"
     json.dump(d, open(p, "w"), indent=2, ensure_ascii=False)
 PY
-    HOST_SMOKE_SKIP_CODEX=1 want 1 "name «bad name!» → Claude validate failed → 1" "plugin validate НЕ пройшов" --tree "$TMP/badname"
+    HOST_SMOKE_SKIP_CODEX=1 want 1 "name «bad name!» → Claude validate failed → 1" "plugin.json НЕ пройшов" --tree "$TMP/badname"
+    echo "  (h) зламано ЛИШЕ вміст плагіна (frontmatter агента), маркетплейс цілий → 1 (P1: тека валідує маркетплейс, не плагін)"
+    mkfixture "$TMP/badagent"; printf -- '---\nname: zz\ndescription: a: b: c\n---\nтіло\n' > "$TMP/badagent/agents/zz-broken.md"
+    HOST_SMOKE_SKIP_CODEX=1 want 1 "агент із нечитним frontmatter → plugin.json НЕ пройшов → 1" "plugin.json НЕ пройшов" --tree "$TMP/badagent"
 else
-    skip "(g)" "claude немає в PATH"
+    skip "(g)–(h)" "claude немає в PATH"
 fi
 
 printf '\n%d passed, %d failed, %d skipped\n' "$pass" "$fail" "$skipped"

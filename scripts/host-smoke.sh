@@ -66,6 +66,23 @@ alarm_run() { # alarm_run <out-file> <cmd...>
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
+# ----- знімок: ОДИН предмет для всіх перевірок ------------------------------
+# HEAD-режим міряє git archive HEAD (те, що їде в реліз), --tree — робоче дерево;
+# і маніфести, і лічба скілів, і обидва хости читають той самий знімок STAGE —
+# інакше незакомічений скіл у дереві червонив би здоровий HEAD, а видалений
+# локально зламаний скіл ховав би свою відсутність у промті Codex (codex review
+# 10.09, P2). Знімок робиться ДО будь-якого виміру.
+SRC_DIR="$PLUGIN_DIR"; STAGE="$TMP/stage"; mkdir -p "$STAGE"
+if [ "$MODE" = head ] && git -C "$SRC_DIR" rev-parse --verify HEAD >/dev/null 2>&1; then
+  git -C "$SRC_DIR" archive HEAD | tar -x -C "$STAGE" || { echo "FAIL: git archive HEAD не розпакувався"; echo "host-smoke: ❌"; exit 1; }
+  SNAPSHOT="git archive HEAD (те, що їде в реліз; --tree міряє робоче дерево)"
+else
+  (cd "$SRC_DIR" && tar -cf - --exclude .git .) | tar -xf - -C "$STAGE" || { echo "FAIL: копія дерева не вдалась"; echo "host-smoke: ❌"; exit 1; }
+  SNAPSHOT="робоче дерево"
+fi
+PLUGIN_DIR="$STAGE"
+echo "note: предмет — $SNAPSHOT ($SRC_DIR)"
+
 # ----- 0) сам плагін: маніфести читаються, скіли на диску полічені -----------
 MANIFEST="$PLUGIN_DIR/.claude-plugin/plugin.json"
 MARKET="$PLUGIN_DIR/.claude-plugin/marketplace.json"
@@ -114,14 +131,20 @@ if [ "${HOST_SMOKE_SKIP_CLAUDE:-0}" = 1 ]; then
 elif ! command -v "$CLAUDE_BIN" >/dev/null 2>&1; then
   skip "Claude — немає $CLAUDE_BIN у PATH (передумова: claude встановлено)"
 else
-  alarm_run "$TMP/claude.out" "$CLAUDE_BIN" plugin validate "$PLUGIN_DIR"; crc=$?
-  if [ "$crc" -ge 128 ]; then
-    fail "Claude — plugin validate завис (> ${TIMEOUT}s)"
-  elif grep -q 'Validation passed' "$TMP/claude.out"; then
-    ok "Claude — plugin validate: passed"
-  else
-    fail "Claude — plugin validate НЕ пройшов (rc=$crc):"; tail -5 "$TMP/claude.out" | sed 's/^/      /'
-  fi
+  # Два виклики, обидва явні: `claude plugin validate <тека>` з двома маніфестами
+  # валідує МАРКЕТПЛЕЙС і мовчки пропускає плагін — на цьому ж дереві тека
+  # проходила, а plugin.json падав на frontmatter агентів (codex review 10.09, P1).
+  for target in "$MANIFEST" "$MARKET"; do
+    alarm_run "$TMP/claude.out" "$CLAUDE_BIN" plugin validate "$target"; crc=$?
+    tname="${target##*/}"
+    if [ "$crc" -ge 128 ]; then
+      fail "Claude — plugin validate $tname завис (> ${TIMEOUT}s)"
+    elif grep -q 'Validation passed' "$TMP/claude.out"; then
+      ok "Claude — plugin validate $tname: passed"
+    else
+      fail "Claude — plugin validate $tname НЕ пройшов (rc=$crc):"; grep -E '❯|✘|Validating' "$TMP/claude.out" | tail -8 | sed 's/^/      /'
+    fi
+  done
 fi
 
 # ----- 2) Codex CLI ---------------------------------------------------------
@@ -130,14 +153,7 @@ if [ "${HOST_SMOKE_SKIP_CODEX:-0}" = 1 ]; then
 elif ! command -v "$CODEX_BIN" >/dev/null 2>&1; then
   skip "Codex — немає $CODEX_BIN у PATH (передумова: codex встановлено; симлінк ChatGPT.app)"
 else
-  STAGE="$TMP/stage"; HOME_C="$TMP/codex-home"; mkdir -p "$STAGE" "$HOME_C"
-  if [ "$MODE" = head ] && git -C "$PLUGIN_DIR" rev-parse --verify HEAD >/dev/null 2>&1; then
-    git -C "$PLUGIN_DIR" archive HEAD | tar -x -C "$STAGE" || fail "Codex — git archive HEAD не розпакувався"
-    note "Codex — предмет: git archive HEAD (те, що їде в реліз); --tree міряє робоче дерево"
-  else
-    # robоче дерево / фікстура без git: копія без .git
-    (cd "$PLUGIN_DIR" && tar -cf - --exclude .git .) | tar -xf - -C "$STAGE" || fail "Codex — копія дерева не вдалась"
-  fi
+  HOME_C="$TMP/codex-home"; mkdir -p "$HOME_C"
   printf 'model = "gpt-6-astra"\n' > "$HOME_C/config.toml"
 
   run_codex() { # run_codex <out> <args...>  — ізольований CODEX_HOME
