@@ -3,6 +3,22 @@
 
 ## [Unreleased]
 
+### Added
+- **`scripts/host-smoke.sh` — гейт «плагін вантажиться в обох хостах»** (Claude Code і
+  Codex CLI) у `scripts/release.sh` між evals і bump. Без моделі й без авторизації:
+  `claude plugin validate` + ізольований `CODEX_HOME` у tmp (конфіг користувача не
+  чіпається) → `codex plugin marketplace add/add` → `codex debug prompt-input`, де скілів
+  `strw-factory:*` мусить бути рівно стільки, скільки `skills/*/SKILL.md` на диску. Предмет —
+  `git archive HEAD` (те, що їде в реліз); `--tree` — робоче дерево. Коди: 0 зелено ·
+  1 хост є і не вантажить (реліз не робиться) · 2 не поміряно — хоста немає в PATH або свідомо
+  пропущено `HOST_SMOKE_SKIP_*` (причина в підсумковому рядку; гучне WARN, реліз іде — Codex як
+  хост ще не рішення CEO, tri-096). Нуль скілів на диску — червоно, не «0/0 зелено». Виміряно 09.09.2026: strw-factory 8/8 скілів у
+  Codex без правок; `agents/*.md` (13) і `hooks/hooks.json` Codex з плагіна не вантажить —
+  гейт це називає рядком `note:`, не червонить. `scripts/host-smoke.test.sh` — проби з
+  негативними контролями (об'єктна форма `source` → Codex 0 плагінів → 1; скіл без SKILL.md;
+  зламаний plugin.json; хоста немає → 2, не 0); `scripts/release.test.sh` — три проби на
+  ДОСЯЖНІСТЬ гейта з release.sh (rc=1 відмова, rc=2 WARN, скрипт відсутній — відмова).
+
 ### Fixed
 - **Frontmatter 13 агентів — валідний YAML** (tri-098): `description:` кожного агента містив
   `: ` (двокрапку з пробілом у тексті й у `<example>Context: …`), і строгий парсер віддавав

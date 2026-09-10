@@ -21,6 +21,7 @@ mkfixture() { # mkfixture <тека> <тіло [Unreleased]>
     local d=$1; rm -rf "$d"; mkdir -p "$d/.claude-plugin" "$d/scripts/evals"
     cp "$HERE/release.sh" "$d/scripts/release.sh"
     printf '#!/bin/sh\nexit 0\n' > "$d/scripts/evals/run.sh"
+    printf '#!/bin/sh\nexit ${HOST_SMOKE_STUB_RC:-0}\n' > "$d/scripts/host-smoke.sh"
     printf '{ "name": "fx", "version": "0.1.0" }\n' > "$d/.claude-plugin/plugin.json"
     printf '# Changelog\n\n## [Unreleased]\n%s\n## [0.1.0] — 2026-01-01\n\n- перший\n' "$2" > "$d/CHANGELOG.md"
     ( cd "$d" && git init -q -b main && git config user.email t@t && git config user.name t \
@@ -31,7 +32,7 @@ want() { # want <rc-код: 0|nonzero> <назва> <тека> <шматок|-> 
     local out rc ok=1
     out=$(cd "$d" && bash scripts/release.sh patch --dry-run --no-gh -y "$@" 2>&1); rc=$?
     if [ "$code" = 0 ]; then [ $rc -eq 0 ] || ok=0; else [ $rc -ne 0 ] || ok=0; fi
-    [ "$nugget" = "-" ] || printf '%s' "$out" | grep -q -- "$nugget" || ok=0
+    case "$nugget" in -) ;; *) case "$out" in *"$nugget"*) ;; *) ok=0 ;; esac ;; esac
     if [ $ok -eq 1 ]; then printf 'ok   %s\n' "$name"; pass=$((pass+1))
     else printf 'FAIL %s (rc=%d, очікував %s)\n' "$name" "$rc" "$code"; printf '%s\n' "$out" | tail -5 | sed 's/^/       /'; fail=$((fail+1)); fi
 }
@@ -50,7 +51,8 @@ want nonzero "[Unreleased] лише з БАГАТОРЯДКОВИМ комент
 mkfixture "$TMP/mixed" $'\n<!--\nпідказка\n-->\n- справжній запис\n'
 want 0       "коментар + справжній запис → ок, нотатки = запис без підказки" "$TMP/mixed" "справжній запис"
 out=$(cd "$TMP/mixed" && bash scripts/release.sh patch --dry-run --no-gh -y 2>&1)
-if printf '%s' "$out" | grep -q "підказка"; then printf 'FAIL %s\n' "текст коментаря не потрапляє в нотатки"; fail=$((fail+1)); else printf 'ok   %s\n' "текст коментаря не потрапляє в нотатки"; pass=$((pass+1)); fi
+case "$out" in *"підказка"*) ok_c=0 ;; *) ok_c=1 ;; esac
+if [ $ok_c -eq 0 ]; then printf 'FAIL %s\n' "текст коментаря не потрапляє в нотатки"; fail=$((fail+1)); else printf 'ok   %s\n' "текст коментаря не потрапляє в нотатки"; pass=$((pass+1)); fi
 want nonzero "-m з самих пробілів → відмова"                       "$TMP/empty" "реліз без нотаток не робиться" -m "   "
 mkfixture "$TMP/unclosed" $'\n<!--\nсюди додай запис\n- ніби запис\n'
 want nonzero "незакритий <!-- → відмова (секція зламана, не «нотатки з маркером»)" "$TMP/unclosed" "непарний HTML-коментар"
@@ -59,7 +61,8 @@ want 0       "маркер <!-- у бектиках — текст, не ком�
 mkfixture "$TMP/span-plus-comment" $'\n- запис Alpha про маркер `<!--` у бектиках\n<!-- підказка: сюди додай запис -->\n- запис Bravo справжній\n'
 want 0       "спан + справжній закритий коментар → ок, коментар знято, спан цілий" "$TMP/span-plus-comment" "у бектиках"
 out=$(cd "$TMP/span-plus-comment" && bash scripts/release.sh patch --dry-run --no-gh -y 2>&1)
-if printf '%s' "$out" | grep -q 'підказка' || ! printf '%s' "$out" | grep -q 'маркер `<!--` у бектиках'; then printf 'FAIL %s\n' "…нотатки: без підказки, зі спаном дослівно"; fail=$((fail+1)); else printf 'ok   %s\n' "…нотатки: без підказки, зі спаном дослівно"; pass=$((pass+1)); fi
+case "$out" in *"підказка"*) ok_c=0 ;; *) case "$out" in *'маркер `<!--` у бектиках'*) ok_c=1 ;; *) ok_c=0 ;; esac ;; esac
+if [ $ok_c -eq 0 ]; then printf 'FAIL %s\n' "…нотатки: без підказки, зі спаном дослівно"; fail=$((fail+1)); else printf 'ok   %s\n' "…нотатки: без підказки, зі спаном дослівно"; pass=$((pass+1)); fi
 mkfixture "$TMP/span-plus-unclosed" $'\n- запис про `<!--` у бектиках\n<!-- справжній незакритий\n- ніби запис\n'
 want nonzero "спан + справжній незакритий <!-- → відмова (спан не ховає маркер)" "$TMP/span-plus-unclosed" "непарний HTML-коментар"
 mkfixture "$TMP/odd-backtick" $'\n- запис з одним ` бектиком\n<!-- справжній незакритий коментар\n- ніби запис\n- і `код` наприкінці\n'
@@ -69,6 +72,20 @@ want 0       "повний <!-- … --> у бектиках лишається �
 mkfixture "$TMP/nosection" ""
 ( cd "$TMP/nosection" && printf '# Changelog\n\n## [0.1.0] — 2026-01-01\n\n- перший\n' > CHANGELOG.md && git add -A && git -c user.email=t@t -c user.name=t commit -qm nosec ) >/dev/null 2>&1
 want nonzero "CHANGELOG без секції [Unreleased] → відмова (не плейсхолдер)" "$TMP/nosection" "реліз без нотаток не робиться"
+
+# host-smoke — гейт ДОСЯЖНИЙ з release.sh (09.09.2026): 1 — відмова, 2 — WARN і реліз іде,
+# відсутній скрипт — відмова. Проба на досяжність окремо від логіки самого гейта
+# (його логіка — у host-smoke.test.sh).
+mkfixture "$TMP/smoke" $'\n- запис для smoke\n'
+want 0       "host-smoke rc=0 → dry-run зелений"                     "$TMP/smoke" "host-smoke зелений"
+out=$(cd "$TMP/smoke" && HOST_SMOKE_STUB_RC=1 bash scripts/release.sh patch --dry-run --no-gh -y 2>&1); rc=$?
+case "$out" in *"host-smoke червоний"*) ok_c=1 ;; *) ok_c=0 ;; esac
+if [ $rc -ne 0 ] && [ $ok_c -eq 1 ]; then printf 'ok   %s\n' "host-smoke rc=1 → реліз не робиться"; pass=$((pass+1)); else printf 'FAIL %s (rc=%d)\n' "host-smoke rc=1 → реліз не робиться" "$rc"; fail=$((fail+1)); fi
+out=$(cd "$TMP/smoke" && HOST_SMOKE_STUB_RC=2 bash scripts/release.sh patch --dry-run --no-gh -y 2>&1); rc=$?
+case "$out" in *"не поміряно повністю"*) ok_c=1 ;; *) ok_c=0 ;; esac
+if [ $rc -eq 0 ] && [ $ok_c -eq 1 ]; then printf 'ok   %s\n' "host-smoke rc=2 → WARN, реліз іде"; pass=$((pass+1)); else printf 'FAIL %s (rc=%d)\n' "host-smoke rc=2 → WARN, реліз іде" "$rc"; fail=$((fail+1)); fi
+rm -f "$TMP/smoke/scripts/host-smoke.sh"
+want nonzero "без scripts/host-smoke.sh → відмова (гейт не пропускається мовчки)" "$TMP/smoke" "немає"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ $fail -eq 0 ]
