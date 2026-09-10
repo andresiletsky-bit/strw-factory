@@ -27,7 +27,8 @@
 # Контракт виходу:
 #   0 — зелено (кожен доступний хост вантажить плагін)
 #   1 — червоно (хост доступний і НЕ вантажить; або сам плагін не зібрано)
-#   2 — не поміряно: хост відсутній у PATH — названо, не пропущено мовчки
+#   2 — не поміряно: хост відсутній у PATH АБО свідомо пропущено HOST_SMOKE_SKIP_* —
+#       причина названа в підсумковому рядку, не пропущено мовчки
 #       (release.sh читає 2 як гучне WARN, 1 — як відмову)
 # Ніколи не висне: кожен виклик хоста під perl alarm (timeout на macOS немає).
 #
@@ -116,6 +117,9 @@ NAME="$(sed -n 2p "$TMP/meta")"; VER="$(sed -n 3p "$TMP/meta")"; MKT="$(sed -n 4
 
 N_SKILLS=0
 for d in "$PLUGIN_DIR"/skills/*/; do [ -f "${d}SKILL.md" ] && N_SKILLS=$((N_SKILLS + 1)); done
+# Нуль скілів — нема предмета: без цієї межі «0 == 0» на обох хостах зеленіло
+# (клас green-because-subject-missing; 6a р.2 по #25, Major).
+[ "$N_SKILLS" -gt 0 ] || { fail "скілів на диску 0 (skills/*/SKILL.md) — предмета виміру немає, гейт не може бути зеленим"; echo "host-smoke: ❌"; exit 1; }
 N_AGENTS="$(find "$PLUGIN_DIR/agents" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
 # Імена агентів — з frontmatter, щоб вимір «агенти в промті» не був прибитий до цього плагіна.
 AGENT_NAMES="$(find "$PLUGIN_DIR/agents" -name '*.md' 2>/dev/null | xargs -I{} sed -n 's/^name:[[:space:]]*//p' {} 2>/dev/null | tr '\n' ' ')"
@@ -179,13 +183,22 @@ else
     local out="$1"; shift
     CODEX_HOME="$HOME_C" alarm_run "$out" "$CODEX_BIN" "$@"
   }
-  if ! run_codex "$TMP/mkt.out" plugin marketplace add "$STAGE"; then
+  run_codex "$TMP/mkt.out" plugin marketplace add "$STAGE"; mrc=$?
+  arc=0; [ "$mrc" -eq 0 ] && { run_codex "$TMP/add.out" plugin add "$NAME@$MKT"; arc=$?; }
+  # зависання (будильник, rc ≥ 128) називається окремо від відмови — як у Claude-гілці (6a р.2)
+  if [ "$mrc" -ge 128 ]; then
+    fail "Codex — plugin marketplace add завис (> ${TIMEOUT}s)"
+  elif [ "$mrc" -ne 0 ]; then
     fail "Codex — plugin marketplace add не вдався:"; tail -3 "$TMP/mkt.out" | sed 's/^/      /'
-  elif ! run_codex "$TMP/add.out" plugin add "$NAME@$MKT"; then
+  elif [ "$arc" -ge 128 ]; then
+    fail "Codex — plugin add завис (> ${TIMEOUT}s)"
+  elif [ "$arc" -ne 0 ]; then
     fail "Codex — plugin add $NAME@$MKT не вдався (маркетплейс без плагінів? форма source):"; tail -3 "$TMP/add.out" | sed 's/^/      /'
   else
     ( cd "$STAGE" && run_codex "$TMP/prompt.json" debug prompt-input ); prc=$?
-    if [ "$prc" -ne 0 ]; then
+    if [ "$prc" -ge 128 ]; then
+      fail "Codex — debug prompt-input завис (> ${TIMEOUT}s)"
+    elif [ "$prc" -ne 0 ]; then
       fail "Codex — debug prompt-input rc=$prc:"; tail -3 "$TMP/prompt.json" | sed 's/^/      /'
     else
       python3 - "$TMP/prompt.json" "$NAME" "$HOME_C" "$AGENT_NAMES" > "$TMP/counts" <<'PY'

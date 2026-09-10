@@ -78,6 +78,10 @@ else
     skip "(a)–(d)" "codex немає в PATH — Codex-половину гейта тут не поміряти"
 fi
 
+echo "  (e0) skills/ порожня → 1, не «0/0 зелено» (6a р.2, Major: green-because-subject-missing)"
+mkfixture "$TMP/noskills"; rm -rf "$TMP/noskills/skills"; mkdir -p "$TMP/noskills/skills"
+want 1 "нуль скілів на диску → 1 з причиною" "предмета виміру немає" --tree "$TMP/noskills"
+
 echo "  (e) зламаний plugin.json → 1 ще до хостів"
 mkfixture "$TMP/noname"; printf '{ "version": "0.0.1" }\n' > "$TMP/noname/.claude-plugin/plugin.json"
 want 1 "plugin.json без name → 1 (порожнє поле не зсуває сусідів)" "без name" --tree "$TMP/noname"
