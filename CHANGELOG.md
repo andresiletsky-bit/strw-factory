@@ -4,6 +4,18 @@
 ## [Unreleased]
 
 ### Added
+- **`validate-items.sh` відмовляє на дубльованому ключі YAML** (tri-094, елемент
+  `factory.validate-items-no-duplicate-keys`): `yaml.safe_load` брав останнє значення мовчки —
+  deck-content мав два `attempts:`, реєстр читав 0. Тепер item-файли, lanes.yaml, frontmatter
+  вузлів рішень (`affects:`) і design-індекс (`hash:`) читаються `NoDupLoader`: дубль у будь-якій
+  мапі → ERROR з іменем ключа і обома рядками (1-based). Merge-ключ `<<` — валідний YAML,
+  розгортається як і раніше; ключі розрізняються за типом (`1` і `true` — різні); нехешований
+  ключ → ConstructorError з міткою. Перший прогін по живому реєстру знайшов ще два файли з
+  дублями у вкладеній `evidence:` (картка міряла лише верхній рівень) — виправлено в strw-state
+  #113. П'ять проб у `validate-items.test.sh` (верхній рівень, вкладена мапа, lanes.yaml,
+  merge/типи як негативний контроль, frontmatter вузла); фікстури — з відомого рядка.
+
+### Added
 - **`scripts/host-smoke.sh` — гейт «плагін вантажиться в обох хостах»** (Claude Code і
   Codex CLI) у `scripts/release.sh` між evals і bump. Без моделі й без авторизації:
   `claude plugin validate` + ізольований `CODEX_HOME` у tmp (конфіг користувача не

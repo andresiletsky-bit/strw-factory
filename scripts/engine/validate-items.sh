@@ -59,6 +59,36 @@ except ImportError:
 
 errors, stales, warns = [], [], []
 def err(m):   errors.append(m)
+
+# ---------- YAML без дублікатів ключів (tri-094) ----------
+# yaml.safe_load бере ОСТАННЄ значення дубльованого ключа мовчки: deck-content мав два
+# `attempts:` (рядки 84 і 101), інтеграція виставила 1 у першому, реєстр читав 0.
+# Тут дублікат — ERROR з іменем ключа і обома рядками, а не тихий вибір одного з них.
+class NoDupLoader(yaml.SafeLoader):
+    def construct_mapping(self, node, deep=False):
+        seen = {}
+        for k_node, _ in node.value:
+            # merge-ключ `<<` — валідний YAML, його розгортає super() через flatten_mapping;
+            # конструювати його тут не можна (SafeConstructor не має конструктора для
+            # tag:yaml.org,2002:merge → брехливий «не парситься»; 6a #27, Major).
+            if k_node.tag == "tag:yaml.org,2002:merge":
+                continue
+            k = self.construct_object(k_node, deep=deep)
+            try:
+                key = (type(k), k)   # 1 і true — різні ключі YAML, хоч hash(1) == hash(True) (6a #27)
+                hash(key)
+            except TypeError:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping", node.start_mark,
+                    f"found unhashable key ({type(k).__name__})", k_node.start_mark)
+            if key in seen:
+                raise yaml.YAMLError(
+                    f"дубльований ключ `{k}` (рядки {seen[key]} і {k_node.start_mark.line + 1}) — "
+                    f"YAML узяв би останній мовчки (tri-094)")
+            seen[key] = k_node.start_mark.line + 1
+        return super().construct_mapping(node, deep=deep)
+def load_nodup(f):
+    return yaml.load(f, Loader=NoDupLoader)
 def stale(m): stales.append(m)
 def warn(m):  warns.append(m)
 
@@ -114,7 +144,7 @@ if not os.path.isfile(lanes_path):
     err(f"немає {lanes_path}")
 else:
     try:
-        doc = yaml.safe_load(open(lanes_path)) or {}
+        doc = load_nodup(open(lanes_path)) or {}
     except Exception as e:
         err(f"lanes.yaml не парситься: {e}"); doc = {}
     if str(doc.get("schema_version")) != "1":
@@ -245,7 +275,7 @@ def _affects(path, rel):
     if not m:
         return None
     try:
-        fm = yaml.safe_load(m.group(1)) or {}
+        fm = load_nodup(m.group(1)) or {}   # affects: дублем → протухання не на ті елементи (6a #27)
     except Exception as e:
         err(f"{rel}: frontmatter вузла рішення не читається: {e}")
         return None
@@ -324,7 +354,7 @@ items = {}
 for path in item_files:
     name = os.path.basename(path)
     try:
-        it = yaml.safe_load(open(path))
+        it = load_nodup(open(path))
     except Exception as e:
         err(f"{name}: не парситься: {e}"); continue
     if not isinstance(it, dict):
@@ -509,7 +539,7 @@ for path in item_files:
             # ґрепає саме ці префікси, тож лишалось голе «🔴 FAIL» без причини,
             # і ОДНА поламана дизайн-одиниця ховала всі інші помилки реєстру.
             try:
-                idx = yaml.safe_load(open(design_index)) or {}
+                idx = load_nodup(open(design_index)) or {}   # другий hash: одиниці → хибний STALE (6a #27)
             except Exception as e:
                 err(f"{name}: дизайн-індекс {design_index} не парситься: {e}")
                 idx = None
