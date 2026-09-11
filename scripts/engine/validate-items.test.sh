@@ -122,5 +122,50 @@ if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q "словник репо ро
     ok "валідатор зі словником, що розійшовся сам із собою → ERROR і стоп"
 else bad "валідатор мав би зупинитись на зламаному словнику" "rc=$rc $out"; fi
 
+# 7. дубльований ключ у item → ERROR з іменем ключа і ОБОМА рядками (tri-094: safe_load
+# брав останній мовчки — deck-content читався з attempts: 0). Фікстура — окремий чистий
+# реєстр з одного елемента, щоб проба не залежала від стану живого (у ньому дублі теж
+# бували — саме їх цей гейт і знайшов першим прогоном: subscribe-gate-handoff, ty-to-vy).
+cp -R "$LIVE/engine" "$FX/engine.clean" && rm -rf "$FX/engine" && mv "$FX/engine.clean" "$FX/engine"
+DUP="$FX/engine/items/zz.dup-probe.yaml"
+cp "$FX/engine/items/$(ls "$FX/engine/items" | head -1)" "$DUP"
+python3 - "$DUP" <<'PY'
+import sys, io, re
+p = sys.argv[1]; t = io.open(p, encoding="utf-8").read()
+t = re.sub(r"^id:.*$", "id: zz.dup-probe", t, count=1, flags=re.M)
+t = t.rstrip("\n") + "\nattempts: 7\nattempts: 8\n"
+io.open(p, "w", encoding="utf-8").write(t)
+PY
+out="$(run_v)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'zz.dup-probe.yaml: не парситься: дубльований ключ `attempts` (рядки [0-9]* і [0-9]*)'; then
+    ok "дубльований ключ attempts у item → ERROR з іменем ключа і двома рядками"
+else bad "дубльований ключ у item мав би бути ERROR із назвою ключа" "$out"; fi
+rm -f "$DUP"
+# 7b. дубль у ВКЛАДЕНІЙ мапі (evidence.cwd) — саме така форма була в живому реєстрі
+cp "$FX/engine/items/$(ls "$FX/engine/items" | head -1)" "$DUP"
+python3 - "$DUP" <<'PY'
+import sys, io, re
+p = sys.argv[1]; t = io.open(p, encoding="utf-8").read()
+t = re.sub(r"^id:.*$", "id: zz.dup-probe", t, count=1, flags=re.M)
+t = re.sub(r"^evidence:.*$", "", t, count=1, flags=re.M)
+t = t.rstrip("\n") + "\nevidence:\n  run_id: a\n  cwd: /x\n  cwd: /y\n"
+io.open(p, "w", encoding="utf-8").write(t)
+PY
+out="$(run_v)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'zz.dup-probe.yaml: не парситься: дубльований ключ `cwd`'; then
+    ok "дубльований ключ у вкладеній мапі (evidence.cwd) → ERROR"
+else bad "дубль у вкладеній мапі мав би бути ERROR" "$out"; fi
+rm -f "$DUP"
+# 7c. lanes.yaml з дубльованим ключем → ERROR
+python3 - "$FX/engine/lanes.yaml" <<'PY'
+import sys, io
+p = sys.argv[1]; t = io.open(p, encoding="utf-8").read()
+io.open(p, "w", encoding="utf-8").write(t.rstrip("\n") + "\nschema_version: 1\n")
+PY
+out="$(run_v)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'дубльований ключ `schema_version`'; then
+    ok "lanes.yaml з дубльованим schema_version → ERROR"
+else bad "дубль у lanes.yaml мав би бути ERROR" "$out"; fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

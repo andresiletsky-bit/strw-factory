@@ -4,6 +4,15 @@
 ## [Unreleased]
 
 ### Added
+- **`validate-items.sh` відмовляє на дубльованому ключі YAML** (tri-094, елемент
+  `factory.validate-items-no-duplicate-keys`): `yaml.safe_load` брав останнє значення мовчки —
+  deck-content мав два `attempts:`, реєстр читав 0. Тепер item-файли і lanes.yaml читаються
+  `NoDupLoader`: дубль у будь-якій мапі → ERROR з іменем ключа і обома рядками. Перший прогін
+  по живому реєстру знайшов ще два файли з дублями у вкладеній `evidence:` (картка міряла лише
+  верхній рівень) — виправлено в strw-state. Три проби у `validate-items.test.sh` (верхній
+  рівень, вкладена мапа, lanes.yaml).
+
+### Added
 - **`scripts/host-smoke.sh` — гейт «плагін вантажиться в обох хостах»** (Claude Code і
   Codex CLI) у `scripts/release.sh` між evals і bump. Без моделі й без авторизації:
   `claude plugin validate` + ізольований `CODEX_HOME` у tmp (конфіг користувача не
