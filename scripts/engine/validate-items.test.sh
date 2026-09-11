@@ -137,14 +137,14 @@ cp -R "$LIVE/engine" "$FX/engine.clean" && rm -rf "$FX/engine" && mv "$FX/engine
 DUP="$FX/engine/items/zz.dup-probe.yaml"
 printf 'schema_version: 1\nid: zz.dup-probe\nattempts: 7\nattempts: 8\n' > "$DUP"
 out="$(run_v)"; rc=$?
-if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'zz.dup-probe.yaml: не парситься: дубльований ключ `attempts` (рядки [0-9]* і [0-9]*)'; then
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'zz.dup-probe.yaml: не парситься: дубльований ключ `attempts` (рядки 3 і 4)'; then   # точні номери: 1-based, обидва (6a р.2)
     ok "дубльований ключ attempts у item → ERROR з іменем ключа і двома рядками"
 else bad "дубльований ключ у item мав би бути ERROR із назвою ключа" "$out"; fi
 rm -f "$DUP"
 # 7b. дубль у ВКЛАДЕНІЙ мапі (evidence.cwd) — саме така форма була в живому реєстрі
 printf 'schema_version: 1\nid: zz.dup-probe\nevidence:\n  run_id: a\n  cwd: /x\n  cwd: /y\n' > "$DUP"
 out="$(run_v)"; rc=$?
-if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'zz.dup-probe.yaml: не парситься: дубльований ключ `cwd`'; then
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'zz.dup-probe.yaml: не парситься: дубльований ключ `cwd` (рядки 5 і 6)'; then
     ok "дубльований ключ у вкладеній мапі (evidence.cwd) → ERROR"
 else bad "дубль у вкладеній мапі мав би бути ERROR" "$out"; fi
 rm -f "$DUP"
@@ -188,8 +188,8 @@ PY
         if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'дубльований ключ `zz_dup`'; then
             ok "дубль у frontmatter вузла рішення → ERROR"
         else bad "дубль у frontmatter вузла мав би бути ERROR" "$out"; fi
-    fi
-fi
+    else echo "SKIP · 7e: у фікстурі немає вузлів рішень (decisions/*.md) — проба не ганялась"; fi
+else echo "SKIP · 7e: у фікстурі немає decisions/ — проба не ганялась"; fi
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
