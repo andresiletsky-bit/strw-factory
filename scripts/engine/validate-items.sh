@@ -68,12 +68,24 @@ class NoDupLoader(yaml.SafeLoader):
     def construct_mapping(self, node, deep=False):
         seen = {}
         for k_node, _ in node.value:
+            # merge-ключ `<<` — валідний YAML, його розгортає super() через flatten_mapping;
+            # конструювати його тут не можна (SafeConstructor не має конструктора для
+            # tag:yaml.org,2002:merge → брехливий «не парситься»; 6a #27, Major).
+            if k_node.tag == "tag:yaml.org,2002:merge":
+                continue
             k = self.construct_object(k_node, deep=deep)
-            if k in seen:
+            try:
+                key = (type(k), k)   # 1 і true — різні ключі YAML, хоч hash(1) == hash(True) (6a #27)
+                hash(key)
+            except TypeError:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping", node.start_mark,
+                    f"found unhashable key ({type(k).__name__})", k_node.start_mark)
+            if key in seen:
                 raise yaml.YAMLError(
-                    f"дубльований ключ `{k}` (рядки {seen[k]} і {k_node.start_mark.line + 1}) — "
+                    f"дубльований ключ `{k}` (рядки {seen[key]} і {k_node.start_mark.line + 1}) — "
                     f"YAML узяв би останній мовчки (tri-094)")
-            seen[k] = k_node.start_mark.line + 1
+            seen[key] = k_node.start_mark.line + 1
         return super().construct_mapping(node, deep=deep)
 def load_nodup(f):
     return yaml.load(f, Loader=NoDupLoader)
@@ -263,7 +275,7 @@ def _affects(path, rel):
     if not m:
         return None
     try:
-        fm = yaml.safe_load(m.group(1)) or {}
+        fm = load_nodup(m.group(1)) or {}   # affects: дублем → протухання не на ті елементи (6a #27)
     except Exception as e:
         err(f"{rel}: frontmatter вузла рішення не читається: {e}")
         return None
@@ -527,7 +539,7 @@ for path in item_files:
             # ґрепає саме ці префікси, тож лишалось голе «🔴 FAIL» без причини,
             # і ОДНА поламана дизайн-одиниця ховала всі інші помилки реєстру.
             try:
-                idx = yaml.safe_load(open(design_index)) or {}
+                idx = load_nodup(open(design_index)) or {}   # другий hash: одиниці → хибний STALE (6a #27)
             except Exception as e:
                 err(f"{name}: дизайн-індекс {design_index} не парситься: {e}")
                 idx = None
