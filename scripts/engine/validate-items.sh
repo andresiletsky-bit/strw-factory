@@ -44,7 +44,11 @@ command -v python3 >/dev/null || { echo "ERROR: потрібен python3" >&2; e
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-python3 - "$ENGINE_DIR" "$DECISIONS_LOG" "$STRW_ROOT" "$WORK" "$STRW_REPO_DIRS" <<'PY'
+# Читач YAML — lib/yaml_nodup.py поруч зі скриптом: без нього валідатор НЕ міряє (2 і
+# названа передумова, не трейсбек ModuleNotFoundError — копія скрипта без lib/ — це
+# зламана інсталяція, не «реєстр валідний»).
+[ -f "$SCRIPT_DIR/lib/yaml_nodup.py" ] || { echo "ERROR: немає $SCRIPT_DIR/lib/yaml_nodup.py — читач YAML рушія (strw-factory: scripts/engine/lib/); валідатор без нього не міряє" >&2; exit 2; }
+STRW_ENGINE_LIB="$SCRIPT_DIR/lib" python3 - "$ENGINE_DIR" "$DECISIONS_LOG" "$STRW_ROOT" "$WORK" "$STRW_REPO_DIRS" <<'PY'
 import os, re, sys, subprocess, glob as globmod
 
 engine_dir, decisions_log, strw_root, work, repo_dirs_arg = sys.argv[1:6]
@@ -61,34 +65,10 @@ errors, stales, warns = [], [], []
 def err(m):   errors.append(m)
 
 # ---------- YAML без дублікатів ключів (tri-094) ----------
-# yaml.safe_load бере ОСТАННЄ значення дубльованого ключа мовчки: deck-content мав два
-# `attempts:` (рядки 84 і 101), інтеграція виставила 1 у першому, реєстр читав 0.
-# Тут дублікат — ERROR з іменем ключа і обома рядками, а не тихий вибір одного з них.
-class NoDupLoader(yaml.SafeLoader):
-    def construct_mapping(self, node, deep=False):
-        seen = {}
-        for k_node, _ in node.value:
-            # merge-ключ `<<` — валідний YAML, його розгортає super() через flatten_mapping;
-            # конструювати його тут не можна (SafeConstructor не має конструктора для
-            # tag:yaml.org,2002:merge → брехливий «не парситься»; 6a #27, Major).
-            if k_node.tag == "tag:yaml.org,2002:merge":
-                continue
-            k = self.construct_object(k_node, deep=deep)
-            try:
-                key = (type(k), k)   # 1 і true — різні ключі YAML, хоч hash(1) == hash(True) (6a #27)
-                hash(key)
-            except TypeError:
-                raise yaml.constructor.ConstructorError(
-                    "while constructing a mapping", node.start_mark,
-                    f"found unhashable key ({type(k).__name__})", k_node.start_mark)
-            if key in seen:
-                raise yaml.YAMLError(
-                    f"дубльований ключ `{k}` (рядки {seen[key]} і {k_node.start_mark.line + 1}) — "
-                    f"YAML узяв би останній мовчки (tri-094)")
-            seen[key] = k_node.start_mark.line + 1
-        return super().construct_mapping(node, deep=deep)
-def load_nodup(f):
-    return yaml.load(f, Loader=NoDupLoader)
+# Читач один на всі скрипти рушія — scripts/engine/lib/yaml_nodup.py (шлях — з bash через
+# STRW_ENGINE_LIB); toolchain-filter.sh, design-emit.py і bin/strw-run.sh читають ним же.
+sys.path.insert(0, os.environ["STRW_ENGINE_LIB"])
+from yaml_nodup import load_nodup
 def stale(m): stales.append(m)
 def warn(m):  warns.append(m)
 

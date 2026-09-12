@@ -69,6 +69,8 @@ import argparse, datetime, glob, io, json, os, re, sys
 
 import yaml
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
+from yaml_nodup import load_nodup  # один читач реєстру на весь рушій (tri-094)
 from design_tokens import dc_truncated, tokens_of
 
 RC_REPORT = 2
@@ -163,7 +165,7 @@ def read_lanes(items_dir):
     if not os.path.isfile(path):
         return None, f"немає {path} — смугу елемента вивести нема з чого"
     try:
-        doc = yaml.safe_load(open(path, encoding="utf-8")) or {}
+        doc = load_nodup(open(path, encoding="utf-8")) or {}   # дубль ключа — помилка (tri-094)
     except Exception as e:
         return None, f"{path} не парситься: {e}"
     lanes = {l.get("id"): l for l in (doc.get("lanes") or []) if l.get("id")}
