@@ -37,7 +37,7 @@ PROBE_TIMEOUT="${TOOLCHAIN_PROBE_TIMEOUT:-10}"   # секунд на один pr
 
 # Читач YAML: поруч зі скриптом → STRW_ENGINE_LIB → strw-factory парасольки; ніде — код 2.
 ENGINE_LIB=""
-for c in "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib" "${STRW_ENGINE_LIB:-}" "${STRW_ROOT:-$HOME/Developer/STRW}/strw-factory/scripts/engine/lib"; do
+for c in "${STRW_ENGINE_LIB:-}" "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib" "${STRW_ROOT:-$HOME/Developer/STRW}/strw-factory/scripts/engine/lib"; do   # явна змінна → поруч → парасолька
   [ -n "$c" ] && [ -f "$c/yaml_nodup.py" ] && { ENGINE_LIB="$c"; break; }
 done
 [ -n "$ENGINE_LIB" ] || { echo "toolchain-filter: немає lib/yaml_nodup.py — читач YAML рушія (ні поруч, ні STRW_ENGINE_LIB, ні STRW_ROOT/strw-factory); не поміряти (код 2)" >&2; exit 2; }

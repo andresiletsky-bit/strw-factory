@@ -48,7 +48,7 @@ trap 'rm -rf "$WORK"' EXIT
 # парасольки (копії скрипта у фікстурах тестів strw-ops лежать без lib/). Ніде немає — код 2 з
 # названою передумовою, не трейсбек ModuleNotFoundError.
 ENGINE_LIB=""
-for c in "$SCRIPT_DIR/lib" "${STRW_ENGINE_LIB:-}" "${STRW_ROOT:-$HOME/Developer/STRW}/strw-factory/scripts/engine/lib"; do
+for c in "${STRW_ENGINE_LIB:-}" "$SCRIPT_DIR/lib" "${STRW_ROOT:-$HOME/Developer/STRW}/strw-factory/scripts/engine/lib"; do   # явна змінна → поруч → парасолька
   [ -n "$c" ] && [ -f "$c/yaml_nodup.py" ] && { ENGINE_LIB="$c"; break; }
 done
 [ -n "$ENGINE_LIB" ] || { echo "ERROR: немає lib/yaml_nodup.py — читач YAML рушія (strw-factory: scripts/engine/lib/; ні поруч зі скриптом, ні в STRW_ENGINE_LIB, ні в STRW_ROOT/strw-factory); валідатор без нього не міряє (код 2)" >&2; exit 2; }

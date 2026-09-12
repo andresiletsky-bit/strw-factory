@@ -37,8 +37,8 @@
 import argparse, hashlib, io, json, os, re, sys, yaml
 # Читач YAML рушія (tri-094): поруч зі скриптом → STRW_ENGINE_LIB → strw-factory парасольки
 # (копії скриптів у фікстурах лежать без lib/); ніде — код 2 з названою передумовою.
-for _c in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"),
-           os.environ.get("STRW_ENGINE_LIB", ""),
+for _c in (os.environ.get("STRW_ENGINE_LIB", ""),   # явна змінна → поруч → парасолька
+           os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"),
            os.path.join(os.environ.get("STRW_ROOT", os.path.expanduser("~/Developer/STRW")),
                         "strw-factory", "scripts", "engine", "lib")):
     if _c and os.path.isfile(os.path.join(_c, "yaml_nodup.py")):
@@ -261,7 +261,7 @@ def main():
     args = ap.parse_args()
 
     try:
-        doc = load_nodup(open(args.index))   # дубль ключа — помилка (tri-094) or {}
+        doc = load_nodup(open(args.index)) or {}   # дубль ключа — помилка (tri-094)
     except Exception as e:
         print(f"ERROR: {args.index} не парситься: {e}", file=sys.stderr)
         return RC_INDEX

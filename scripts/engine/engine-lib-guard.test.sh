@@ -36,7 +36,7 @@ for mode in nolib withlib; do
     probe "validate-items.sh"        "$D" $mode bash ./validate-items.sh "$E"
     probe "toolchain-filter.sh"      "$D" $mode bash ./toolchain-filter.sh "$E"
     probe "design-emit.py --help"    "$D" $mode python3 ./design-emit.py --help
-    probe "design-hash.py"           "$D" $mode python3 ./design-hash.py --index "$TMP/index.yaml"
+    probe "design-hash.py"           "$D" $mode python3 ./design-hash.py "$TMP/index.yaml"
     probe "validate-design-index.py" "$D" $mode python3 ./validate-design-index.py "$TMP/index.yaml"
 done
 
@@ -44,8 +44,25 @@ done
 UMB="$TMP/umb"; mkdir -p "$UMB/strw-factory/scripts/engine"; cp -R "$HERE/lib" "$UMB/strw-factory/scripts/engine/lib"
 out="$(cd "$NOLIB" && env -u STRW_ENGINE_LIB STRW_ROOT="$UMB" bash ./toolchain-filter.sh "$E" 2>&1)"; rc=$?
 if ! printf '%s' "$out" | grep -q 'yaml_nodup.py'; then ok "fallback STRW_ROOT/strw-factory: копія без lib знаходить читача"; else bad "fallback через STRW_ROOT мав би знайти читача" "rc=$rc $out"; fi
-out="$(cd "$NOLIB" && env -u STRW_ENGINE_LIB STRW_ROOT="$UMB" python3 ./design-hash.py --index "$TMP/index.yaml" 2>&1)"; rc=$?
+out="$(cd "$NOLIB" && env -u STRW_ENGINE_LIB STRW_ROOT="$UMB" python3 ./design-hash.py "$TMP/index.yaml" 2>&1)"; rc=$?
 if ! printf '%s' "$out" | grep -q 'yaml_nodup.py'; then ok "fallback STRW_ROOT/strw-factory: design-hash.py теж"; else bad "fallback для python-читача" "rc=$rc $out"; fi
+
+# (г) читачі design-індексу СПРАВДІ читають load_nodup: дубль ключа → rc≠0 і назва ключа
+# (мутація «назад на safe_load» у будь-якому з двох лишала б усе зеленим — 6a #28 р.2)
+printf 'schema_version: 1\nunits: []\nschema_version: 1\n' > "$TMP/dupindex.yaml"
+for s in "design-hash.py" "validate-design-index.py"; do
+    out="$(cd "$WITHLIB" && python3 "./$s" "$TMP/dupindex.yaml" 2>&1)"; rc=$?
+    if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'дубльований ключ `schema_version`'; then ok "$s на індексі з дублем → rc=$rc і назва ключа"
+    else bad "$s мав би відмовити на дублі з назвою ключа" "rc=$rc $out"; fi
+done
+# (д) порожній індекс — не «корінь не мапа»: `or {}` на місці (6a #28 р.2, Major)
+: > "$TMP/empty.yaml"
+out="$(cd "$WITHLIB" && python3 ./design-hash.py "$TMP/empty.yaml" 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ]; then ok "design-hash.py на порожньому індексі → 0 (нічого не стежиться), не «корінь не мапа»"; else bad "порожній індекс мав би дати 0" "rc=$rc $out"; fi
+# (е) STRW_ENGINE_LIB перекриває lib/ поруч (шов для підміни робочий)
+FAKELIB="$TMP/fakelib"; mkdir -p "$FAKELIB"; printf 'def load_nodup(f):\n    raise SystemExit(77)\n' > "$FAKELIB/yaml_nodup.py"
+out="$(cd "$WITHLIB" && STRW_ENGINE_LIB="$FAKELIB" bash ./toolchain-filter.sh "$E" 2>&1)"; rc=$?
+if [ "$rc" -eq 77 ]; then ok "STRW_ENGINE_LIB має пріоритет над lib/ поруч (шов робочий)"; else bad "явна змінна мала б перекрити lib/ поруч" "rc=$rc $out"; fi
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
