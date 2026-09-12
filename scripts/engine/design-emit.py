@@ -69,8 +69,19 @@ import argparse, datetime, glob, io, json, os, re, sys
 
 import yaml
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
-from yaml_nodup import load_nodup  # один читач реєстру на весь рушій (tri-094)
+# Читач YAML рушія (tri-094): поруч зі скриптом → STRW_ENGINE_LIB → strw-factory парасольки
+# (копії скриптів у фікстурах лежать без lib/); ніде — код 2 з названою передумовою.
+for _c in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"),
+           os.environ.get("STRW_ENGINE_LIB", ""),
+           os.path.join(os.environ.get("STRW_ROOT", os.path.expanduser("~/Developer/STRW")),
+                        "strw-factory", "scripts", "engine", "lib")):
+    if _c and os.path.isfile(os.path.join(_c, "yaml_nodup.py")):
+        sys.path.insert(0, _c); break
+try:
+    from yaml_nodup import load_nodup  # один читач реєстру на весь рушій (tri-094)
+except ImportError:
+    sys.stderr.write("ERROR: немає lib/yaml_nodup.py — читач YAML рушія (ні поруч зі скриптом, ні STRW_ENGINE_LIB, ні STRW_ROOT/strw-factory); не поміряти (код 2)\n")
+    sys.exit(2)
 from design_tokens import dc_truncated, tokens_of
 
 RC_REPORT = 2

@@ -35,6 +35,19 @@
       свіжість ДУБЛІКАТА, не про читаність джерела — з `--verify` не змішувати.
 """
 import argparse, hashlib, io, json, os, re, sys, yaml
+# Читач YAML рушія (tri-094): поруч зі скриптом → STRW_ENGINE_LIB → strw-factory парасольки
+# (копії скриптів у фікстурах лежать без lib/); ніде — код 2 з названою передумовою.
+for _c in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"),
+           os.environ.get("STRW_ENGINE_LIB", ""),
+           os.path.join(os.environ.get("STRW_ROOT", os.path.expanduser("~/Developer/STRW")),
+                        "strw-factory", "scripts", "engine", "lib")):
+    if _c and os.path.isfile(os.path.join(_c, "yaml_nodup.py")):
+        sys.path.insert(0, _c); break
+try:
+    from yaml_nodup import load_nodup  # один читач реєстру на весь рушій (tri-094)
+except ImportError:
+    sys.stderr.write("ERROR: немає lib/yaml_nodup.py — читач YAML рушія (ні поруч зі скриптом, ні STRW_ENGINE_LIB, ні STRW_ROOT/strw-factory); не поміряти (код 2)\n")
+    sys.exit(2)
 
 from design_tokens import dc_truncated, tokens_of
 
@@ -248,7 +261,7 @@ def main():
     args = ap.parse_args()
 
     try:
-        doc = yaml.safe_load(open(args.index)) or {}
+        doc = load_nodup(open(args.index))   # дубль ключа — помилка (tri-094) or {}
     except Exception as e:
         print(f"ERROR: {args.index} не парситься: {e}", file=sys.stderr)
         return RC_INDEX

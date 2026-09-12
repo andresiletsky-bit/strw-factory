@@ -35,8 +35,12 @@ ENGINE="$1"
 command -v python3 >/dev/null 2>&1 || { echo "toolchain-filter: немає python3 (код 2)" >&2; exit 2; }
 PROBE_TIMEOUT="${TOOLCHAIN_PROBE_TIMEOUT:-10}"   # секунд на один probe; таймаут = «не поміряти»
 
-ENGINE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
-[ -f "$ENGINE_LIB/yaml_nodup.py" ] || { echo "toolchain-filter: немає $ENGINE_LIB/yaml_nodup.py — читач YAML рушія; не поміряти (код 2)" >&2; exit 2; }
+# Читач YAML: поруч зі скриптом → STRW_ENGINE_LIB → strw-factory парасольки; ніде — код 2.
+ENGINE_LIB=""
+for c in "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib" "${STRW_ENGINE_LIB:-}" "${STRW_ROOT:-$HOME/Developer/STRW}/strw-factory/scripts/engine/lib"; do
+  [ -n "$c" ] && [ -f "$c/yaml_nodup.py" ] && { ENGINE_LIB="$c"; break; }
+done
+[ -n "$ENGINE_LIB" ] || { echo "toolchain-filter: немає lib/yaml_nodup.py — читач YAML рушія (ні поруч, ні STRW_ENGINE_LIB, ні STRW_ROOT/strw-factory); не поміряти (код 2)" >&2; exit 2; }
 STRW_ENGINE_LIB="$ENGINE_LIB" python3 - "$ENGINE" "$PROBE_TIMEOUT" <<'PY'
 import glob, os, subprocess, sys
 

@@ -44,11 +44,15 @@ command -v python3 >/dev/null || { echo "ERROR: потрібен python3" >&2; e
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# Читач YAML — lib/yaml_nodup.py поруч зі скриптом: без нього валідатор НЕ міряє (2 і
-# названа передумова, не трейсбек ModuleNotFoundError — копія скрипта без lib/ — це
-# зламана інсталяція, не «реєстр валідний»).
-[ -f "$SCRIPT_DIR/lib/yaml_nodup.py" ] || { echo "ERROR: немає $SCRIPT_DIR/lib/yaml_nodup.py — читач YAML рушія (strw-factory: scripts/engine/lib/); валідатор без нього не міряє" >&2; exit 2; }
-STRW_ENGINE_LIB="$SCRIPT_DIR/lib" python3 - "$ENGINE_DIR" "$DECISIONS_LOG" "$STRW_ROOT" "$WORK" "$STRW_REPO_DIRS" <<'PY'
+# Читач YAML — lib/yaml_nodup.py: поруч зі скриптом, або STRW_ENGINE_LIB, або зі strw-factory
+# парасольки (копії скрипта у фікстурах тестів strw-ops лежать без lib/). Ніде немає — код 2 з
+# названою передумовою, не трейсбек ModuleNotFoundError.
+ENGINE_LIB=""
+for c in "$SCRIPT_DIR/lib" "${STRW_ENGINE_LIB:-}" "${STRW_ROOT:-$HOME/Developer/STRW}/strw-factory/scripts/engine/lib"; do
+  [ -n "$c" ] && [ -f "$c/yaml_nodup.py" ] && { ENGINE_LIB="$c"; break; }
+done
+[ -n "$ENGINE_LIB" ] || { echo "ERROR: немає lib/yaml_nodup.py — читач YAML рушія (strw-factory: scripts/engine/lib/; ні поруч зі скриптом, ні в STRW_ENGINE_LIB, ні в STRW_ROOT/strw-factory); валідатор без нього не міряє (код 2)" >&2; exit 2; }
+STRW_ENGINE_LIB="$ENGINE_LIB" python3 - "$ENGINE_DIR" "$DECISIONS_LOG" "$STRW_ROOT" "$WORK" "$STRW_REPO_DIRS" <<'PY'
 import os, re, sys, subprocess, glob as globmod
 
 engine_dir, decisions_log, strw_root, work, repo_dirs_arg = sys.argv[1:6]
@@ -66,7 +70,8 @@ def err(m):   errors.append(m)
 
 # ---------- YAML без дублікатів ключів (tri-094) ----------
 # Читач один на всі скрипти рушія — scripts/engine/lib/yaml_nodup.py (шлях — з bash через
-# STRW_ENGINE_LIB); toolchain-filter.sh, design-emit.py і bin/strw-run.sh читають ним же.
+# STRW_ENGINE_LIB); toolchain-filter.sh, design-emit.py, design-hash.py, validate-design-index.py
+# читають ним же; bin/strw-run.sh (strw-ops) — парним PR strw-ops #19.
 sys.path.insert(0, os.environ["STRW_ENGINE_LIB"])
 from yaml_nodup import load_nodup
 def stale(m): stales.append(m)
