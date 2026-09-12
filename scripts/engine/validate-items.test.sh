@@ -76,7 +76,7 @@ if [ "$rc" -eq 0 ]; then ok "фікстура = живий реєстр: вал�
 # Без env-шва: копія валідатора поруч зі СТАРИМ словником (валідатор бере repo-dir.sh
 # зі своєї теки) — так само, як він побачив би зламаний словник у релізі.
 add_lane strw-ops
-OLDDIR="$TMP/old"; mkdir -p "$OLDDIR"; cp "$V" "$OLDDIR/validate-items.sh"
+OLDDIR="$TMP/old"; mkdir -p "$OLDDIR"; cp "$V" "$OLDDIR/validate-items.sh"; cp -R "$HERE/lib" "$OLDDIR/lib"   # читач YAML — з lib/ поруч зі скриптом
 cat > "$OLDDIR/repo-dir.sh" <<'SH'
 STRW_REPOS="strw-ops strw-state strw-factory pact-ios pact-backend"
 strw_repo_dir() { printf '%s/%s' "$1" "$2"; }
@@ -119,7 +119,7 @@ if [ "$rc" -eq 64 ] && ! printf '%s' "$out" | grep -q '^pact-web='; then
     ok "перелік ≠ case (pact-web) → strw_repo_dirs rc 64, пари pact-web= немає"
 else bad "розходження переліку і case мало б дати rc 64" "rc=$rc $out"; fi
 # 6. …і валідатор на такому словнику зупиняється ERROR-ом, не міряє далі
-BAD="$TMP/bad"; mkdir -p "$BAD"; cp "$V" "$BAD/validate-items.sh"
+BAD="$TMP/bad"; mkdir -p "$BAD"; cp "$V" "$BAD/validate-items.sh"; cp -R "$HERE/lib" "$BAD/lib"
 sed 's/^STRW_REPOS=.*/STRW_REPOS="strw-ops strw-state strw-factory pact-ios pact-backend pact-web"/' "$HERE/repo-dir.sh" > "$BAD/repo-dir.sh"
 out="$(STRW_ROOT="$STRW_ROOT" bash "$BAD/validate-items.sh" "$FX/engine" 2>&1)"; rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q "словник репо розійшовся сам із собою"; then

@@ -35,7 +35,13 @@ ENGINE="$1"
 command -v python3 >/dev/null 2>&1 || { echo "toolchain-filter: немає python3 (код 2)" >&2; exit 2; }
 PROBE_TIMEOUT="${TOOLCHAIN_PROBE_TIMEOUT:-10}"   # секунд на один probe; таймаут = «не поміряти»
 
-python3 - "$ENGINE" "$PROBE_TIMEOUT" <<'PY'
+# Читач YAML: поруч зі скриптом → STRW_ENGINE_LIB → strw-factory парасольки; ніде — код 2.
+ENGINE_LIB=""
+for c in "${STRW_ENGINE_LIB:-}" "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib" "${STRW_ROOT:-$HOME/Developer/STRW}/strw-factory/scripts/engine/lib"; do   # явна змінна → поруч → парасолька
+  [ -n "$c" ] && [ -f "$c/yaml_nodup.py" ] && { ENGINE_LIB="$c"; break; }
+done
+[ -n "$ENGINE_LIB" ] || { echo "toolchain-filter: немає lib/yaml_nodup.py — читач YAML рушія (ні поруч, ні STRW_ENGINE_LIB, ні STRW_ROOT/strw-factory); не поміряти (код 2)" >&2; exit 2; }
+STRW_ENGINE_LIB="$ENGINE_LIB" python3 - "$ENGINE" "$PROBE_TIMEOUT" <<'PY'
 import glob, os, subprocess, sys
 
 def die(msg, code=2):
@@ -46,6 +52,10 @@ def main():
         import yaml
     except ImportError:
         die("немає pyyaml — lanes.yaml не прочитати")
+    # Один читач на весь рушій: дубль ключа — «не парситься», не тихий «останній»
+    # (tri-094; другий контур після strw-factory #27).
+    sys.path.insert(0, os.environ["STRW_ENGINE_LIB"])
+    from yaml_nodup import load_nodup
     engine, timeout = sys.argv[1], float(sys.argv[2])
     lanes_path = os.path.join(engine, "lanes.yaml")
     items_dir = os.path.join(engine, "items")
@@ -53,7 +63,10 @@ def main():
         die(f"немає {lanes_path}")
     if not os.path.isdir(items_dir):
         die(f"немає {items_dir} — це «нічим міряти», не «немає роботи»")
-    doc = yaml.safe_load(open(lanes_path, encoding="utf-8")) or {}
+    try:
+        doc = load_nodup(open(lanes_path, encoding="utf-8")) or {}
+    except Exception as e:
+        die(f"lanes.yaml не парситься: {e}")
     tools = doc.get("tools")
     if tools is not None and not isinstance(tools, dict):
         die("lanes.yaml: `tools:` має бути мапою")
@@ -66,7 +79,7 @@ def main():
     items = []
     for p in sorted(glob.glob(os.path.join(items_dir, "*.yaml"))):
         try:
-            it = yaml.safe_load(open(p, encoding="utf-8")) or {}
+            it = load_nodup(open(p, encoding="utf-8")) or {}
         except Exception as e:
             die(f"{os.path.basename(p)} не парситься: {e}")
         if it.get("state") != "ready" or it.get("blocked_by"):

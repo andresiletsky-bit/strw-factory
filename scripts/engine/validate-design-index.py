@@ -16,7 +16,20 @@
 НІ З ЧИМ звіряти, і блок мовчки не працював би. Мовчазна непрацездатність
 гірша за відмову.
 """
-import sys, yaml
+import os, sys, yaml
+# Читач YAML рушія (tri-094): поруч зі скриптом → STRW_ENGINE_LIB → strw-factory парасольки
+# (копії скриптів у фікстурах лежать без lib/); ніде — код 2 з названою передумовою.
+for _c in (os.environ.get("STRW_ENGINE_LIB", ""),   # явна змінна → поруч → парасолька
+           os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"),
+           os.path.join(os.environ.get("STRW_ROOT", os.path.expanduser("~/Developer/STRW")),
+                        "strw-factory", "scripts", "engine", "lib")):
+    if _c and os.path.isfile(os.path.join(_c, "yaml_nodup.py")):
+        sys.path.insert(0, _c); break
+try:
+    from yaml_nodup import load_nodup  # один читач реєстру на весь рушій (tri-094)
+except ImportError:
+    sys.stderr.write("ERROR: немає lib/yaml_nodup.py — читач YAML рушія (ні поруч зі скриптом, ні STRW_ENGINE_LIB, ні STRW_ROOT/strw-factory); не поміряти (код 2)\n")
+    sys.exit(2)
 
 ALLOWED_STATE = {"watched", "unwatched"}
 ALLOWED_SURFACE = {"canvas-artifact", "claude-design", "code"}
@@ -27,7 +40,7 @@ def main(path):
     # падає traceback'ом, не друкує ЖОДНОГО рядка `ERROR:`, а споживач (крок 2
     # strw-design-sync) саме їх і читає.
     try:
-        doc = yaml.safe_load(open(path)) or {}
+        doc = load_nodup(open(path)) or {}   # дубль ключа — помилка (tri-094)
     except Exception as e:
         print(f"ERROR: {path} не парситься: {e}", file=sys.stderr)
         return 1

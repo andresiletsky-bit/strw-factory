@@ -3,6 +3,20 @@
 
 ## [Unreleased]
 
+### Changed
+- **Один читач YAML на всі читачі реєстру в рушії — `scripts/engine/lib/yaml_nodup.py`** (другий
+  контур tri-094; елемент `factory.nodup-yaml-second-contour` заводиться парним PR у strw-state):
+  `validate-items.sh`, `toolchain-filter.sh`, `design-emit.py`, `design-hash.py`,
+  `validate-design-index.py` читають item-файли, lanes.yaml, вузли рішень і design-індекс одним
+  `load_nodup` (дубль ключа — помилка з іменем і рядками; `<<` валідний; ключі за типом).
+  Досі фільтр і раннер брали «останній» мовчки — контур C без SessionStart-хука дубль не бачив.
+  Без `lib/yaml_nodup.py` поруч кожен із п'яти — код 2 з названою передумовою, не трейсбек
+  (свідок `scripts/engine/engine-lib-guard.test.sh`: копія без lib/ → 2 і назва файла; з lib/ —
+  не 2). `toolchain-filter-nodup.test.sh`: дубль у item → 2 з іменем; у lanes.yaml → 2;
+  merge-ключ — не 2; мутація «фільтр назад на safe_load» → червона. `bin/strw-run.sh` —
+  парний PR strw-ops #19. Поза обсягом (названо): `1:`/`true:` лоадер розрізняє, а Python-dict
+  згортає — у реєстрі всі ключі рядкові.
+
 ### Added
 - **`validate-items.sh` відмовляє на дубльованому ключі YAML** (tri-094, елемент
   `factory.validate-items-no-duplicate-keys`): `yaml.safe_load` брав останнє значення мовчки —

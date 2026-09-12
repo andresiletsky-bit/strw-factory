@@ -69,6 +69,19 @@ import argparse, datetime, glob, io, json, os, re, sys
 
 import yaml
 
+# Читач YAML рушія (tri-094): поруч зі скриптом → STRW_ENGINE_LIB → strw-factory парасольки
+# (копії скриптів у фікстурах лежать без lib/); ніде — код 2 з названою передумовою.
+for _c in (os.environ.get("STRW_ENGINE_LIB", ""),   # явна змінна → поруч → парасолька
+           os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"),
+           os.path.join(os.environ.get("STRW_ROOT", os.path.expanduser("~/Developer/STRW")),
+                        "strw-factory", "scripts", "engine", "lib")):
+    if _c and os.path.isfile(os.path.join(_c, "yaml_nodup.py")):
+        sys.path.insert(0, _c); break
+try:
+    from yaml_nodup import load_nodup  # один читач реєстру на весь рушій (tri-094)
+except ImportError:
+    sys.stderr.write("ERROR: немає lib/yaml_nodup.py — читач YAML рушія (ні поруч зі скриптом, ні STRW_ENGINE_LIB, ні STRW_ROOT/strw-factory); не поміряти (код 2)\n")
+    sys.exit(2)
 from design_tokens import dc_truncated, tokens_of
 
 RC_REPORT = 2
@@ -163,7 +176,7 @@ def read_lanes(items_dir):
     if not os.path.isfile(path):
         return None, f"немає {path} — смугу елемента вивести нема з чого"
     try:
-        doc = yaml.safe_load(open(path, encoding="utf-8")) or {}
+        doc = load_nodup(open(path, encoding="utf-8")) or {}   # дубль ключа — помилка (tri-094)
     except Exception as e:
         return None, f"{path} не парситься: {e}"
     lanes = {l.get("id"): l for l in (doc.get("lanes") or []) if l.get("id")}
