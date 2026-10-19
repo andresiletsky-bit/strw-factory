@@ -3,7 +3,24 @@
 
 ## [Unreleased]
 
+### Fixed
+- **`.githooks/pre-commit`: дрейф паспортів міряється на ВСІХ паспортах з індексу, не лише змінених.**
+  Тимчасова тека з одним staged-паспортом давала дрейф-тесту strw-ops «немає L3-build.md» (rc=3) —
+  будь-який коміт у паспорт, крім L3, падав на власній проводці хука. Відтворено 19.10 на L4-growth,
+  з L3 поруч — зелено. Пін на сам хук — поза обсягом, названо (колокаційні тести фабрики без раннера).
+
 ### Changed
+- **L4 Growth: канал черги і соцметрик — Metricool MCP** (`loops/L4-growth.md` п. 4–6, `agents/growth.md`
+  правила 6–8, `agents/validators/brand-reviewer.md` перевірка 5; бриф strw-ops
+  `reports/2026-10-18-social-reel-metricool-research.md`, рішення CEO 19.10 «виконати»): чернетка йде через
+  `createScheduledPost` ЛИШЕ у стані «на затвердження» — черга ≠ публікація, білий список не росте; соцметрики
+  growth-report — лише з `getAnalyticsDataByMetrics`, перший крок — `claude mcp get metricool` з виводом у trace,
+  не «connected» → дослівно «н/д: Metricool не підключено» і жодного числа (число поруч — Blocker у checker).
+  Сім інструментів сервера перелічено в паспорті — вигаданий інструмент ловить пін у strw-ops
+  (`tests/unit/l4-metricool-channel.test.sh`, парний PR). Новий `references/hook-formulas.md`: 12 формул хука,
+  бал 0–5 з порогом 3 — Nit у checker, не Blocker (ідея з MIT youtube-agent-skill, текст власний, межа «евристика,
+  не передбачення» взята в автора). Поза обсягом (названо): автентифікація MCP — CEO; Flows/Inbox — лише REST API
+  плану Advanced; скрипт скорингу — окремим елементом після першого тижня L4 з даними.
 - **Один читач YAML на всі читачі реєстру в рушії — `scripts/engine/lib/yaml_nodup.py`** (другий
   контур tri-094; елемент `factory.nodup-yaml-second-contour` заводиться парним PR у strw-state):
   `validate-items.sh`, `toolchain-filter.sh`, `design-emit.py`, `design-hash.py`,

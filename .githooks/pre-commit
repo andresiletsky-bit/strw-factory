@@ -98,7 +98,11 @@ if grep -q '^loops/' <<<"$STAGED"; then
   # з історії при зеленому хуку. Відтворено на живому хуку. Рев-ю 6b, G1.
   STAGED="$(mktemp -d)"
   trap 'rm -rf "$STAGED"' EXIT
-  git diff --cached --name-only --diff-filter=ACM -- 'loops/*.md' | while IFS= read -r f; do
+  # УСІ паспорти з індексу, не лише змінені: дрейф-тест стереже набір (L3 мусить вимагати
+  # мутацію, кожна петля — стелю в budget.md), і на теці з одним паспортом падав на
+  # «немає L3-build.md» → будь-який коміт у паспорт, крім L3, був неможливий без --no-verify
+  # (відтворено 19.10 на L4-growth: rc=3 «паспорт L3 вимагає мутацію»; з L3 поруч — зелено).
+  git ls-files -z -- 'loops/*.md' | while IFS= read -r -d '' f; do
     git show ":$f" > "$STAGED/$(basename "$f")" 2>/dev/null
   done
   STRW_LOOPS_DIR="$STAGED" bash "$DRIFT" >/dev/null 2>&1 || {
