@@ -15,30 +15,21 @@
 ### Changed
 - **L4 Growth: канал черги і соцметрик — Metricool MCP** (`loops/L4-growth.md` п. 4–6, `agents/growth.md`
   правила 6–8, `agents/validators/brand-reviewer.md` перевірка 5; бриф strw-ops
-  `reports/2026-10-18-social-reel-metricool-research.md`, рішення CEO 19.10 «виконати»): чернетка йде через
-  `createScheduledPost` ЛИШЕ у стані «на затвердження» — черга ≠ публікація, білий список не росте; соцметрики
-  growth-report — лише з `getAnalyticsDataByMetrics`, перший крок — `claude mcp get metricool` з виводом у trace,
-  не «connected» → дослівно «н/д: Metricool не підключено» і жодного числа (число поруч — Blocker у checker);
-  підключено, але метрика/період недоступні → «н/д: <причина>», нуль чи повний період — Blocker.
-  Передумова черги (чекер 6a #29, Blocker): система затвердження Metricool є лише на Advanced/Custom і має
-  критерій «Auto-approve if no one rejects» — тому `createScheduledPost` не викликається, доки
-  `getBrandSettings` не підтвердить «Everyone must approve» з reviewer Andrii; після виклику —
-  `getScheduledPosts` зі станом «pending review» у trace, інакше Blocker. Раунд 2 (opus-субагент; `claude -p`
-  не залогінений, Codex у ліміті): правка через `updateScheduledPost` скидає review (довідка Metricool) — стан
-  читається після КОЖНОГО виклику; стан не «pending review» → негайно назад на затвердження + термінова картка з
-  часом публікації; `output` паспорта умовний («черга порожня без передумови — не FAIL»); п. 4 розбито на
-  4a/4b/4c, щоб правило стояло окремим рядком, а пін strw-ops стеріг речення, не рядок.
-  Жива перевірка 19.10 (сесія metricool-live, `reports/2026-10-19-metricool-live-check.md` у strw-ops): інструментів
-  дев'ять, не сім — `createScheduledPostForReview` (новий пост → review; `approvalSystem` any/all/optional,
-  `reviewers` email) і `sendScheduledPostForReview` (існуючий пост → review); `getBrandSettings` затвердження не
-  показує. Тому передумова 4a — параметри виклику (`approvalSystem: "all"`, `reviewers` = email Andrii з
-  company-context), а не налаштування бренду; `createScheduledPost` (прямий розклад) у L4 заборонений завжди;
-  після `updateScheduledPost` — `sendScheduledPostForReview`.
-  Сім інструментів сервера перелічено в паспорті — вигаданий інструмент ловить пін у strw-ops
-  (`tests/unit/l4-metricool-channel.test.sh`, парний PR). Новий `references/hook-formulas.md`: 12 формул хука,
-  бал 0–5 з порогом 3 — Nit у checker, не Blocker (ідея з MIT youtube-agent-skill, текст власний, межа «евристика,
-  не передбачення» взята в автора). Поза обсягом (названо): автентифікація MCP — CEO; Flows/Inbox — лише REST API
-  плану Advanced; скрипт скорингу — окремим елементом після першого тижня L4 з даними.
+  `reports/2026-10-18-social-reel-metricool-research.md`, жива перевірка `reports/2026-10-19-metricool-live-check.md`,
+  рішення CEO 19.10 «виконати»). Чинне правило (після чотирьох раундів чекера 6a і живої перевірки):
+  інструментів у сервера ДЕВ'ЯТЬ; новий пост — лише `createScheduledPostForReview` з `approvalSystem: "all"` і
+  `reviewers` = email Andrii з company-context ("optional"/"any" заборонено; email немає або «plan does not
+  allow» → цитата без повтору, чернетки лишаються в products/<id>/growth/, запит в inbox); `createScheduledPost`
+  (прямий розклад) заборонений завжди; `updateScheduledPost` скидає review → в `info` завжди `autoPublish: false`
+  і одразу `sendScheduledPostForReview`; після кожного виклику — `getScheduledPosts` у trace (поле стану схемою
+  не обіцяне — названо «не встановлено»); помилка/відсутній пост → без повтору, картка з часом публікації;
+  `getBrandSettings` затвердження і тариф не показує. Соцметрики growth-report — лише з
+  `getAnalyticsDataByMetrics`; не «connected» → «н/д: Metricool не підключено», недоступна метрика →
+  «н/д: <причина>», число поруч/нуль/повний період — Blocker. Черга «на затвердження» — чернетка, не публікація;
+  `output` умовний. `references/hook-formulas.md`: 12 формул хука, бал 0–5, поріг 3 → Nit (ідея з MIT
+  youtube-agent-skill, текст власний). Пін — strw-ops `tests/unit/l4-metricool-channel.test.sh` (парний PR #23).
+  Історія раундів — коментарі в PR #29; клас «пін на прозу не збігається» названо і відкладено під механізм.
+  Поза обсягом: автентифікація MCP — CEO; Flows/Inbox — REST API плану Advanced; скрипт скорингу хука.
 - **Один читач YAML на всі читачі реєстру в рушії — `scripts/engine/lib/yaml_nodup.py`** (другий
   контур tri-094; елемент `factory.nodup-yaml-second-contour` заводиться парним PR у strw-state):
   `validate-items.sh`, `toolchain-filter.sh`, `design-emit.py`, `design-hash.py`,
