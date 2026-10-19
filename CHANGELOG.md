@@ -28,6 +28,12 @@
   читається після КОЖНОГО виклику; стан не «pending review» → негайно назад на затвердження + термінова картка з
   часом публікації; `output` паспорта умовний («черга порожня без передумови — не FAIL»); п. 4 розбито на
   4a/4b/4c, щоб правило стояло окремим рядком, а пін strw-ops стеріг речення, не рядок.
+  Жива перевірка 19.10 (сесія metricool-live, `reports/2026-10-19-metricool-live-check.md` у strw-ops): інструментів
+  дев'ять, не сім — `createScheduledPostForReview` (новий пост → review; `approvalSystem` any/all/optional,
+  `reviewers` email) і `sendScheduledPostForReview` (існуючий пост → review); `getBrandSettings` затвердження не
+  показує. Тому передумова 4a — параметри виклику (`approvalSystem: "all"`, `reviewers` = email Andrii з
+  company-context), а не налаштування бренду; `createScheduledPost` (прямий розклад) у L4 заборонений завжди;
+  після `updateScheduledPost` — `sendScheduledPostForReview`.
   Сім інструментів сервера перелічено в паспорті — вигаданий інструмент ловить пін у strw-ops
   (`tests/unit/l4-metricool-channel.test.sh`, парний PR). Новий `references/hook-formulas.md`: 12 формул хука,
   бал 0–5 з порогом 3 — Nit у checker, не Blocker (ідея з MIT youtube-agent-skill, текст власний, межа «евристика,
