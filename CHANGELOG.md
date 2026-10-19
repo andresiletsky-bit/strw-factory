@@ -20,8 +20,9 @@
   інструментів у сервера ДЕВ'ЯТЬ; новий пост — лише `createScheduledPostForReview` з `approvalSystem: "all"` і
   `reviewers` = email Andrii з company-context ("optional"/"any" заборонено; email немає або «plan does not
   allow» → цитата без повтору, чернетки лишаються в products/<id>/growth/, запит в inbox); `createScheduledPost`
-  (прямий розклад) заборонений завжди; `updateScheduledPost` скидає review → в `info` завжди `autoPublish: false`
-  і одразу `sendScheduledPostForReview`; після кожного виклику — `getScheduledPosts` у trace (поле стану схемою
+  (прямий розклад) заборонений завжди; кожен виклик запису несе в `info` `autoPublish: false` (за замовчуванням True —
+  Metricool публікував би сам; false — push у мобільний застосунок, публікує Andrii); `updateScheduledPost` скидає
+  review → одразу `sendScheduledPostForReview`; після кожного виклику — `getScheduledPosts` у trace (поле стану схемою
   не обіцяне — названо «не встановлено»); помилка/відсутній пост → без повтору, картка з часом публікації;
   `getBrandSettings` затвердження і тариф не показує. Соцметрики growth-report — лише з
   `getAnalyticsDataByMetrics`; не «connected» → «н/д: Metricool не підключено», недоступна метрика →
