@@ -99,6 +99,10 @@ check "status: 'Open  ' (змішаний регістр, пробіли) → л
 fixture; card open 907 "'open'"; regen
 check "status: 'open' (лапки) → лічильник +1" '[ "$(opens)" = "$((BASE_OPEN+1))" ]'
 
+# ── 3c. Лапки + пробіли всередині й ззовні: обидва trim() потрібні ──────────
+fixture; card open 909 "' Open '  "; regen
+check "status: ' Open '  (пробіли в лапках і за ними) → лічильник +1" '[ "$(opens)" = "$((BASE_OPEN+1))" ]'
+
 # ── 4. Закрита картка з великими: не випадає з лічильника закритих ──────────
 fixture; card resolved/2099-W01 904 RESOLVED; regen
 check "status: RESOLVED → закритих +1" '[ "$(resolved)" = "$((BASE_RES+1))" ]'
