@@ -9,7 +9,8 @@
   будь-який коміт у паспорт, крім L3, падав на власній проводці хука. Відтворено 19.10 на L4-growth,
   з L3 поруч — зелено. Чекер 6a (#29) знайшов другу половину: видалення/перейменування паспорта
   (`D`/`R`) не запускали дрейф узагалі — тригер тепер окремий вимір `ACMDR` по `loops/`. Пін на
-  досяжність хука — strw-ops `tests/unit/factory-pre-commit-drift.test.sh` (парний PR #23).
+  досяжність хука — strw-ops `tests/unit/factory-pre-commit-drift.test.sh` (парний PR #23). Evals-гейт того ж
+  хука теж читав `ACM` і мовчав на видаленні агента — тепер `ACMDR` (раунд 2, Nit).
 
 ### Changed
 - **L4 Growth: канал черги і соцметрик — Metricool MCP** (`loops/L4-growth.md` п. 4–6, `agents/growth.md`
@@ -22,7 +23,11 @@
   Передумова черги (чекер 6a #29, Blocker): система затвердження Metricool є лише на Advanced/Custom і має
   критерій «Auto-approve if no one rejects» — тому `createScheduledPost` не викликається, доки
   `getBrandSettings` не підтвердить «Everyone must approve» з reviewer Andrii; після виклику —
-  `getScheduledPosts` зі станом «pending review» у trace, інакше Blocker.
+  `getScheduledPosts` зі станом «pending review» у trace, інакше Blocker. Раунд 2 (opus-субагент; `claude -p`
+  не залогінений, Codex у ліміті): правка через `updateScheduledPost` скидає review (довідка Metricool) — стан
+  читається після КОЖНОГО виклику; стан не «pending review» → негайно назад на затвердження + термінова картка з
+  часом публікації; `output` паспорта умовний («черга порожня без передумови — не FAIL»); п. 4 розбито на
+  4a/4b/4c, щоб правило стояло окремим рядком, а пін strw-ops стеріг речення, не рядок.
   Сім інструментів сервера перелічено в паспорті — вигаданий інструмент ловить пін у strw-ops
   (`tests/unit/l4-metricool-channel.test.sh`, парний PR). Новий `references/hook-formulas.md`: 12 формул хука,
   бал 0–5 з порогом 3 — Nit у checker, не Blocker (ідея з MIT youtube-agent-skill, текст власний, межа «евристика,
