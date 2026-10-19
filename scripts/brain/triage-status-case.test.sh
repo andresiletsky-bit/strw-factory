@@ -95,6 +95,10 @@ check "status: OPEN (великі) → тіло картки у фасаді" 'g
 fixture; card open 903 'Open  '; regen
 check "status: 'Open  ' (змішаний регістр, пробіли) → лічильник +1" '[ "$(opens)" = "$((BASE_OPEN+1))" ]'
 
+# ── 3b. Лапки: `status: 'open'` — теж open (CHANGELOG обіцяє нормалізацію лапок) ───
+fixture; card open 907 "'open'"; regen
+check "status: 'open' (лапки) → лічильник +1" '[ "$(opens)" = "$((BASE_OPEN+1))" ]'
+
 # ── 4. Закрита картка з великими: не випадає з лічильника закритих ──────────
 fixture; card resolved/2099-W01 904 RESOLVED; regen
 check "status: RESOLVED → закритих +1" '[ "$(resolved)" = "$((BASE_RES+1))" ]'
@@ -104,6 +108,10 @@ fixture; card open 905 opne; regen
 check "status: opne (друкарська помилка) → rc≠0" '[ "$(cat "$TMP/rc")" != 0 ]'
 check "і повідомлення називає файл і значення" \
       'grep -q "905-question.md" "$TMP/err" && grep -q "opne" "$TMP/err"'
+
+# ── 5b. Ключ з великої: `Status:` генератор не бачить — повідомлення мусить це сказати ──
+fixture; card open 908 open; sed -i.bak "s/^status:/Status:/" "$TMP/state/triage/open/2099-01-01-908-question.md"; regen
+check "Status: (ключ з великої) → rc≠0 і підказка про ключ" '[ "$(cat "$TMP/rc")" != 0 ] && grep -q "малими" "$TMP/err"'
 
 # ── 6. ДОСЯЖНІСТЬ: гейт --check-facade червоніє на фасаді без картки OPEN ───
 # Фасад зроблено ДО появи картки (як у коміті, що додав вузол без --regen).

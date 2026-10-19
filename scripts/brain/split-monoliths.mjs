@@ -566,7 +566,8 @@ function seqOf(t) { return Number((fmVal(t, "id").match(/(\d+)$/) ?? [])[1] ?? 0
 function triageStatus(raw, rel) {
   const s = raw.trim().replace(/^["']|["']$/g, "").trim().toLowerCase();
   if (s === "open" || s === "resolved") return s;
-  console.error(`FAIL: ${rel}: status: «${raw}» — очікується open або resolved (регістр байдужий).`);
+  console.error(`FAIL: ${rel}: status: «${raw}» — очікується open або resolved (регістр значення байдужий).`);
+  if (!s) console.error("  Поле порожнє або відсутнє: ключ має бути саме `status:` малими літерами (`Status:` генератор не бачить).");
   console.error("  Невпізнаний статус випав би з фасаду мовчки — «Чекає рішення» не порахувало б картку.");
   process.exit(1);
 }
