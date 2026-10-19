@@ -84,7 +84,10 @@ fi
 
 # Дрейф паспортів перевіряється лише коли коміт ЇХ чіпає — інакше кожен коміт
 # у цьому репо платив би за прогін чужого набору.
-if grep -q '^loops/' <<<"$STAGED"; then
+# Видалення і перейменування паспорта — теж дрейф (чекер 6a #29: `D`/`R` давали rc=0 без
+# прогону, бо STAGED вище — ACM для evals-гейта). Окремий вимір, ACMDR, лише по loops/.
+STAGED_LOOPS="$(git diff --cached --name-only --diff-filter=ACMDR -- 'loops/*.md')"
+if [ -n "${STAGED_LOOPS}" ]; then
   DRIFT="${STRW_ROOT:-$HOME/Developer/STRW}/tests/integration/docs-current.test.sh"
   if [ ! -f "$DRIFT" ]; then
     echo "pre-commit FAIL: немає $DRIFT — перевірка дрейфу паспортів недоступна,"

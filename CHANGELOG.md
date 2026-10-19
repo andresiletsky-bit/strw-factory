@@ -7,7 +7,9 @@
 - **`.githooks/pre-commit`: дрейф паспортів міряється на ВСІХ паспортах з індексу, не лише змінених.**
   Тимчасова тека з одним staged-паспортом давала дрейф-тесту strw-ops «немає L3-build.md» (rc=3) —
   будь-який коміт у паспорт, крім L3, падав на власній проводці хука. Відтворено 19.10 на L4-growth,
-  з L3 поруч — зелено. Пін на сам хук — поза обсягом, названо (колокаційні тести фабрики без раннера).
+  з L3 поруч — зелено. Чекер 6a (#29) знайшов другу половину: видалення/перейменування паспорта
+  (`D`/`R`) не запускали дрейф узагалі — тригер тепер окремий вимір `ACMDR` по `loops/`. Пін на
+  досяжність хука — strw-ops `tests/unit/factory-pre-commit-drift.test.sh` (парний PR #23).
 
 ### Changed
 - **L4 Growth: канал черги і соцметрик — Metricool MCP** (`loops/L4-growth.md` п. 4–6, `agents/growth.md`
@@ -15,7 +17,12 @@
   `reports/2026-10-18-social-reel-metricool-research.md`, рішення CEO 19.10 «виконати»): чернетка йде через
   `createScheduledPost` ЛИШЕ у стані «на затвердження» — черга ≠ публікація, білий список не росте; соцметрики
   growth-report — лише з `getAnalyticsDataByMetrics`, перший крок — `claude mcp get metricool` з виводом у trace,
-  не «connected» → дослівно «н/д: Metricool не підключено» і жодного числа (число поруч — Blocker у checker).
+  не «connected» → дослівно «н/д: Metricool не підключено» і жодного числа (число поруч — Blocker у checker);
+  підключено, але метрика/період недоступні → «н/д: <причина>», нуль чи повний період — Blocker.
+  Передумова черги (чекер 6a #29, Blocker): система затвердження Metricool є лише на Advanced/Custom і має
+  критерій «Auto-approve if no one rejects» — тому `createScheduledPost` не викликається, доки
+  `getBrandSettings` не підтвердить «Everyone must approve» з reviewer Andrii; після виклику —
+  `getScheduledPosts` зі станом «pending review» у trace, інакше Blocker.
   Сім інструментів сервера перелічено в паспорті — вигаданий інструмент ловить пін у strw-ops
   (`tests/unit/l4-metricool-channel.test.sh`, парний PR). Новий `references/hook-formulas.md`: 12 формул хука,
   бал 0–5 з порогом 3 — Nit у checker, не Blocker (ідея з MIT youtube-agent-skill, текст власний, межа «евристика,
