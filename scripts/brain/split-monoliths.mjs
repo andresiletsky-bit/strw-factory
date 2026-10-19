@@ -557,6 +557,20 @@ function fmVal(t, k) {
 }
 function seqOf(t) { return Number((fmVal(t, "id").match(/(\d+)$/) ?? [])[1] ?? 0); }
 
+// Статус вузла тріажу читається ТУТ і більше ніде. Раніше фасад порівнював сире
+// поле з "open" малими, і `status: OPEN` (так писав tri-175) мовчки випадав з
+// лічильника й тіла фасаду, а `--check-facade` лишався зеленим — генератор і
+// фасад були однаково сліпі. Монолітний розбір на невпізнане кидає виняток;
+// читач вузлів мусить так само: регістр і лапки нормалізуються, а все, що не
+// open/resolved, зупиняє генератор з назвою файлу.
+function triageStatus(raw, rel) {
+  const s = raw.trim().replace(/^["']|["']$/g, "").trim().toLowerCase();
+  if (s === "open" || s === "resolved") return s;
+  console.error(`FAIL: ${rel}: status: «${raw}» — очікується open або resolved (регістр байдужий).`);
+  console.error("  Невпізнаний статус випав би з фасаду мовчки — «Чекає рішення» не порахувало б картку.");
+  process.exit(1);
+}
+
 function lsRec(dir) {
   const abs = path.join(STATE, dir);
   if (!fs.existsSync(abs)) return [];
@@ -607,7 +621,7 @@ function facadesFromNodes() {
   const tri = lsRec("triage").map((rel) => {
     const t = fs.readFileSync(path.join(STATE, rel), "utf8");
     return {
-      rel, seq: seqOf(t), status: fmVal(t, "status"), date: fmVal(t, "date"),
+      rel, seq: seqOf(t), status: triageStatus(fmVal(t, "status"), rel), date: fmVal(t, "date"),
       loop: fmVal(t, "loop"), kind: fmVal(t, "kind"), body: stripFm(t),
     };
   }).sort(byKeyThenPath((x) => x.seq));
