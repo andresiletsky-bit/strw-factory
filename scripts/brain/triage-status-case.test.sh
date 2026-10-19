@@ -41,6 +41,12 @@ fixture() { # свіжа копія корпусу на кожен випадо�
     for p in budget budget.md decisions decisions-log.md triage triage-inbox.md; do
         [ -e "$SRC/$p" ] && cp -R "$SRC/$p" "$TMP/state/"
     done
+    # Корпус — лише форма й обсяг: власні `status: OPEN` у ньому (на момент
+    # написання untracked-картки 162–165 спільної копії) не мають давати шум.
+    # Регістр, який міряємо, задають лише `card` нижче.
+    find "$TMP/state/triage" -name "*.md" -exec sed -i.bak \
+        -e "s/^status: *OPEN *$/status: open/" -e "s/^status: *RESOLVED *$/status: resolved/" {} +
+    find "$TMP/state/triage" -name "*.bak" -delete
     node "$GEN" --regen --state "$TMP/state" >/dev/null 2>"$TMP/err" \
         || { echo "FAIL: фікстура не перегенерувалась: $(cat "$TMP/err")"; exit 1; }
 }
