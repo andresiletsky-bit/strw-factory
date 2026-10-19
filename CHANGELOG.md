@@ -3,7 +3,34 @@
 
 ## [Unreleased]
 
+### Fixed
+- **`.githooks/pre-commit`: дрейф паспортів міряється на ВСІХ паспортах з індексу, не лише змінених.**
+  Тимчасова тека з одним staged-паспортом давала дрейф-тесту strw-ops «немає L3-build.md» (rc=3) —
+  будь-який коміт у паспорт, крім L3, падав на власній проводці хука. Відтворено 19.10 на L4-growth,
+  з L3 поруч — зелено. Чекер 6a (#29) знайшов другу половину: видалення/перейменування паспорта
+  (`D`/`R`) не запускали дрейф узагалі — тригер тепер окремий вимір `ACMDR` по `loops/`. Пін на
+  досяжність хука — strw-ops `tests/unit/factory-pre-commit-drift.test.sh` (парний PR #23). Evals-гейт того ж
+  хука теж читав `ACM` і мовчав на видаленні агента — тепер `ACMDR` (раунд 2, Nit).
+
 ### Changed
+- **L4 Growth: канал черги і соцметрик — Metricool MCP** (`loops/L4-growth.md` п. 4–6, `agents/growth.md`
+  правила 6–8, `agents/validators/brand-reviewer.md` перевірка 5; бриф strw-ops
+  `reports/2026-10-18-social-reel-metricool-research.md`, жива перевірка `reports/2026-10-19-metricool-live-check.md`,
+  рішення CEO 19.10 «виконати»). Чинне правило (після чотирьох раундів чекера 6a і живої перевірки):
+  інструментів у сервера ДЕВ'ЯТЬ; новий пост — лише `createScheduledPostForReview` з `approvalSystem: "all"` і
+  `reviewers` = email Andrii з company-context ("optional"/"any" заборонено; email немає або «plan does not
+  allow» → цитата без повтору, чернетки лишаються в products/<id>/growth/, запит в inbox); `createScheduledPost`
+  (прямий розклад) заборонений завжди; кожен виклик запису несе в `info` `autoPublish: false` (за замовчуванням True —
+  Metricool публікував би сам; false — push у мобільний застосунок, публікує Andrii); `updateScheduledPost` скидає
+  review → одразу `sendScheduledPostForReview`; після кожного виклику — `getScheduledPosts` у trace (поле стану схемою
+  не обіцяне — названо «не встановлено»); помилка/відсутній пост → без повтору, картка з часом публікації;
+  `getBrandSettings` затвердження і тариф не показує. Соцметрики growth-report — лише з
+  `getAnalyticsDataByMetrics`; не «connected» → «н/д: Metricool не підключено», недоступна метрика →
+  «н/д: <причина>», число поруч/нуль/повний період — Blocker. Черга «на затвердження» — чернетка, не публікація;
+  `output` умовний. `references/hook-formulas.md`: 12 формул хука, бал 0–5, поріг 3 → Nit (ідея з MIT
+  youtube-agent-skill, текст власний). Пін — strw-ops `tests/unit/l4-metricool-channel.test.sh` (парний PR #23).
+  Історія раундів — коментарі в PR #29; клас «пін на прозу не збігається» названо і відкладено під механізм.
+  Поза обсягом: автентифікація MCP — CEO; Flows/Inbox — REST API плану Advanced; скрипт скорингу хука.
 - **Один читач YAML на всі читачі реєстру в рушії — `scripts/engine/lib/yaml_nodup.py`** (другий
   контур tri-094; елемент `factory.nodup-yaml-second-contour` заводиться парним PR у strw-state):
   `validate-items.sh`, `toolchain-filter.sh`, `design-emit.py`, `design-hash.py`,

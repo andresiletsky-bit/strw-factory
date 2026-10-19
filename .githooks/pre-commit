@@ -63,7 +63,9 @@ portability_gate || exit $?
 # `pipefail` `grep -q` виходить на першому збігу, git отримує SIGPIPE, і статус
 # пайпа стає 141 — тобто «збіг є» читалось би як «збігів немає», і гейт тим
 # сліпіший, чим більший коміт. Клас уже куплений (gate-dead-from-plumbing).
-STAGED="$(git diff --cached --name-only --diff-filter=ACM)"
+# ACMDR, не ACM: видалення агента чи паспорта теж міняє поведінку (чекер 6a #29, р.2) — evals
+# мають прогнатись і на дереві без файла. Вміст тут не читається, лише імена.
+STAGED="$(git diff --cached --name-only --diff-filter=ACMDR)"
 
 # Evals-гейт (П1.2 аудиту 2026-09-03, F7). Зміна промпту агента, скіла,
 # паспорта, конституції або самого валідатора мусить прогнати набір фікстур —
@@ -84,7 +86,10 @@ fi
 
 # Дрейф паспортів перевіряється лише коли коміт ЇХ чіпає — інакше кожен коміт
 # у цьому репо платив би за прогін чужого набору.
-if grep -q '^loops/' <<<"$STAGED"; then
+# Видалення і перейменування паспорта — теж дрейф (чекер 6a #29: `D`/`R` давали rc=0 без
+# прогону, бо STAGED тоді був ACM). Окремий вимір лише по loops/ — щоб коміт поза паспортами не платив за дрейф.
+STAGED_LOOPS="$(git diff --cached --name-only --diff-filter=ACMDR -- 'loops/*.md')"
+if [ -n "${STAGED_LOOPS}" ]; then
   DRIFT="${STRW_ROOT:-$HOME/Developer/STRW}/tests/integration/docs-current.test.sh"
   if [ ! -f "$DRIFT" ]; then
     echo "pre-commit FAIL: немає $DRIFT — перевірка дрейфу паспортів недоступна,"
@@ -98,7 +103,11 @@ if grep -q '^loops/' <<<"$STAGED"; then
   # з історії при зеленому хуку. Відтворено на живому хуку. Рев-ю 6b, G1.
   STAGED="$(mktemp -d)"
   trap 'rm -rf "$STAGED"' EXIT
-  git diff --cached --name-only --diff-filter=ACM -- 'loops/*.md' | while IFS= read -r f; do
+  # УСІ паспорти з індексу, не лише змінені: дрейф-тест стереже набір (L3 мусить вимагати
+  # мутацію, кожна петля — стелю в budget.md), і на теці з одним паспортом падав на
+  # «немає L3-build.md» → будь-який коміт у паспорт, крім L3, був неможливий без --no-verify
+  # (відтворено 19.10 на L4-growth: rc=3 «паспорт L3 вимагає мутацію»; з L3 поруч — зелено).
+  git ls-files -z -- 'loops/*.md' | while IFS= read -r -d '' f; do
     git show ":$f" > "$STAGED/$(basename "$f")" 2>/dev/null
   done
   STRW_LOOPS_DIR="$STAGED" bash "$DRIFT" >/dev/null 2>&1 || {
