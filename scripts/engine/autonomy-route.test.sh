@@ -135,6 +135,8 @@ printf -- '---\naffects: [product:other]\n---\n## 2026-10-19 · dec-002 · не 
 route "близнюк: дописане рішення не торкається елемента" f.fresh 0 "unattended"
 printf -- '---\naffects: [factory]\n---\n## 2026-10-19 · dec-002 · про фабрику\n' > "${S}/decisions/2026/dec-002-b.md"
 route "дописане рішення торкається елемента → STALE"     f.fresh 1 "підстава застаріла"
+printf -- '---\nid: dec-002\n---\n## 2026-10-19 · dec-002 · без affects\n' > "${S}/decisions/2026/dec-002-b.md"
+route "вузол без affects торкається всього (стара семантика) → STALE" f.fresh 1 "підстава застаріла"
 rm -f "${S}/decisions/2026/dec-002-b.md"
 gen f.no-basis-date 'del it["acceptance_basis"]["verified_against_decisions_log_at"]'
 route "acceptance_basis без дати звірки"                  f.no-basis-date 1 "не звірено з журналом"
@@ -181,6 +183,13 @@ if [ "${rc}" = 2 ] && printf '%s' "${out}" | /usr/bin/grep -q 'yaml_nodup.py'; t
 HALF="${TMP}/halflib"; mkdir -p "${HALF}/lib"; cp "${ROUTE}" "${HALF}/"; cp "${HERE}/lib/yaml_nodup.py" "${HALF}/lib/"
 out="$(env -u STRW_ENGINE_LIB STRW_ROOT=/nonexistent bash "${HALF}/autonomy-route.sh" "${S}/engine/items/f.base.yaml")"; rc=$?
 if [ "${rc}" = 2 ] && printf '%s' "${out}" | /usr/bin/grep -q 'item_fields.py'; then ok "стара lib/ (лише yaml_nodup.py) → rc 2, не трейсбек"; else bad "неповна lib/ мала б дати rc 2" "rc=${rc} ${out}"; fi
+
+# читач падає посеред виміру (трейсбек) → rc 2 «упав», не rc 1 і не кілька рядків
+FAKE="${TMP}/fakelib"; mkdir -p "${FAKE}"; cp "${HERE}/lib/"*.py "${FAKE}/"
+printf '\ndef form_errors(it):\n    raise RuntimeError("проба")\n' >> "${FAKE}/item_fields.py"
+out="$(STRW_ENGINE_LIB="${FAKE}" bash "${ROUTE}" "${S}/engine/items/f.base.yaml")"; rc=$?
+n="$(printf '%s\n' "${out}" | /usr/bin/grep -c .)"
+if [ "${rc}" = 2 ] && [ "${n}" = 1 ] && printf '%s' "${out}" | /usr/bin/grep -q 'маршрутизатор упав'; then ok "трейсбек читача → rc 2, один рядок"; else bad "трейсбек мав би дати rc 2 одним рядком" "rc=${rc} рядків=${n} ${out}"; fi
 
 # --plan-sha: той самий хеш, що в plan_review базового; зміна плану — інший хеш
 want="$(python3 -c 'import yaml,sys; print(yaml.safe_load(open(sys.argv[1]))["plan_review"]["sha"])' "${S}/engine/items/f.base.yaml")"
