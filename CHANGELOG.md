@@ -3,6 +3,27 @@
 
 ## [Unreleased]
 
+### Added
+- **Режими A/B (рішення CEO 20.10): `scripts/engine/autonomy-route.sh` + нові поля елемента + L3 правило 11.**
+  Спека strw-ops `reports/2026-10-20-hybrid-autonomy-spec.md` §2–§3, шматок 2 з §7. Маршрут друкує рівно один
+  рядок — `unattended` (rc 0) або `with-ceo: <перша причина>` (rc 1), rc 2 — не поміряно (немає файла, читача,
+  стадії продукту, журналу рішень чи `triage/open/`). Умови: 5-Build (factory — без стадії) · S|M · `touches`
+  порожній · `blocked_by` порожній і без `ceo:*` · жодної відкритої картки тріажу з id · підстава не STALE ·
+  готовність до A (і для S) · не «великий» за 6a за `plan.files` (маска/тека в плані — теж B).
+  `validate-items.sh` знає `autonomy` / `touches` / `tests_spec` / `plan_review` / `budget`: невідоме значення
+  чи покручена форма — ERROR; для `autonomy: unattended` — ERROR на кожну прогалину готовності, зокрема
+  `plan_review.sha` ≠ версії поточних `acceptance`/`not_in_scope`/`plan`/`tests_spec` (`autonomy-route.sh --plan-sha`:
+  sha256 hex, повний або префікс ≥12; `tests_spec` — `name` · `cmd` · `red_when` · `negative_control` обов'язкові,
+  решта вільні — інтерфейс узгоджено з раннером strw-ops, шматок 3). Форма, готовність і свіжість
+  підстави винесені в `lib/item_fields.py` і `lib/decisions_basis.py` — валідатор і маршрут читають один код
+  (вивід валідатора на живому реєстрі до/після винесення — побайтно однаковий). Повна `lib/` (усі три модулі)
+  тепер умова пошуку читача: стара тека без нових модулів дає код 2, не трейсбек. Остання умова маршруту — `validate-items.sh` без
+  жодного ERROR/STALE про елемент (раунд 1 чекера 6a, Codex: маршрут казав `unattended` про елементи без
+  `sources`, зі зламаним вузлом журналу, протухлим дизайном, без `id`); шляхи плану нормалізуються, тека-предок
+  чутливої теки — B. Довідка —
+  `references/autonomy-modes.md`; тести — `scripts/engine/autonomy-route.test.sh` (червоний + близнюк на кожну
+  умову), пін на досяжність — strw-ops `tests/unit/autonomy-route.test.sh`.
+
 ### Fixed
 - **`.githooks/pre-commit`: дрейф паспортів міряється на ВСІХ паспортах з індексу, не лише змінених.**
   Тимчасова тека з одним staged-паспортом давала дрейф-тесту strw-ops «немає L3-build.md» (rc=3) —
