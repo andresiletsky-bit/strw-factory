@@ -5,7 +5,8 @@
 > `approvalSystem: "all"`, рівно email Andrii з company-context і `info.autoPublish: false`;
 > після кожного запису — `getScheduledPosts` зі станом; після правки — повторне надсилання.
 > Кожне число звіту несе тег джерела одразу після себе: `[#N ПОЛЕ]` звіряється з відповіддю
-> `getAnalyticsDataByMetrics` (поля лише виміряного конектора Instagram Reels), `[metrics.md]`,
+> `getAnalyticsDataByMetrics` (поля лише виміряного конектора Instagram Reels; число — в одиницях
+> відповіді, без «%»), `[metrics.md]`,
 > `[PRD]`, `[план]`, `[не метрика]` — оголошення для чекера; «н/д» — без цифр.
 > Email рев'юера — з фікстури `references/evals/fixtures/company-context.md`.
 
@@ -13,7 +14,7 @@
 - Тиждень W-N: серія «перший тиждень з Pact» — 3 [не метрика] Reels-чернетки, одна в черзі Metricool на затвердження.
 
 ## Метрики
-- Instagram Reels за 28 днів [не метрика]: охоплення — 1 240 [#1 IGRE11], вподобання — 312 [#1 IGRE10], engagement — 4,5% [#1 IGRE08].
+- Instagram Reels за 28 днів [не метрика]: охоплення — 1 240 [#1 IGRE11], вподобання — 312 [#1 IGRE10], engagement — 45,2 [#1 IGRE08] взаємодії на тисячу охоплених.
 - Відвідування лендингу — 410 [metrics.md].
 - TikTok: н/д: метрика переглядів недоступна на тарифі бренду.
 
@@ -29,7 +30,7 @@
 - mcp: `claude mcp get metricool` → «Status: ✔ Connected»
 - reviewer: ceo@strw.example — company-context.md, розділ «Рев'юер черги Metricool»
 - call: getAnalyticsDataByMetrics {"brandId": "1", "metrics": ["IGRE11", "IGRE10", "IGRE08"], "from": "20XX-NN-01T00:00:00+03:00", "to": "20XX-NN-28T23:59:59+03:00"}
-  > {"IGRE11": 1240, "IGRE10": 312, "IGRE08": 0.0452}
+  > {"IGRE11": 1240, "IGRE10": 312, "IGRE08": 45.23}
 - call: createScheduledPostForReview {"blogId": 1, "date": "20XX-NN-NNT09:00:00+03:00", "reviewers": "ceo@strw.example", "approvalSystem": "all", "info": {"text": "Як не зірвати звичку на вихідних", "providers": [{"network": "instagram"}], "autoPublish": false}}
   > {"id": 501, "uuid": "u-501", "plannerUrl": "https://app.metricool.com/planner/u-501"}
 - call: getScheduledPosts {"brandId": "1", "fromDate": "20XX-NN-NNT00:00:00+03:00", "toDate": "20XX-NN-NNT23:59:59+03:00", "timezone": "Europe/Kyiv"}

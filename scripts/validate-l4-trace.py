@@ -21,6 +21,7 @@
 # файлі немає, не число словами і не хибно оголошене джерело. Стану Metricool не читає.
 #
 # Лише stdlib: python3 є і на Mac (3.9), і в хмарі.
+from decimal import Decimal, ROUND_HALF_UP
 import io
 import json
 import os
@@ -35,6 +36,19 @@ TOOLS = {
 }
 FOR_REVIEW = ("createScheduledPostForReview", "sendScheduledPostForReview")
 WRITES = FOR_REVIEW + ("updateScheduledPost", "createScheduledPost")
+# Аргументи — лише ключі схеми інструмента (live-check 19.10 §4). Невідомий ключ — FAIL:
+# інакше аргументи ставали б місцем для чисел без тегу (р.4, A14 `{"note": "TikTok 48000"}`).
+ARG_KEYS = {
+    "getBrandSettings": set(),
+    "getAnalyticsAvailableMetrics": {"network", "connector"},
+    "getAnalyticsDataByMetrics": {"brandId", "from", "to", "metrics"},
+    "getScheduledPosts": {"brandId", "fromDate", "toDate", "timezone", "extendedRange"},
+    "getBestTimeToPostByNetwork": {"brandId", "fromDate", "toDate", "timezone", "socialNetwork"},
+    "createScheduledPost": {"blogId", "date", "info", "mediaFiles"},
+    "updateScheduledPost": {"id", "uuid", "blogId", "info", "mediaFiles"},
+    "createScheduledPostForReview": {"date", "blogId", "info", "reviewers", "approvalSystem", "notify"},
+    "sendScheduledPostForReview": {"id", "uuid", "blogId", "info", "reviewers", "approvalSystem", "notify"},
+}
 # Згадка шукається в рядку, зведеному до малих літер без `_`: «create_scheduled_post»
 # і «CreateScheduledPost» — той самий інструмент (р.1, C3/C4). Межа слова вручну:
 # «createscheduledpost» — підрядок «createscheduledpostforreview».
@@ -42,25 +56,33 @@ WRITE_MENTION = re.compile(r"(?<![a-z])(createscheduledpostforreview|sendschedul
                            r"|updatescheduledpost|createscheduledpost)(?![a-z])")
 CALL_LINE = re.compile(r"^\s*-\s*call\s*:", re.I)
 ERROR_TEXT = re.compile(r"error|does not allow|not allowed|forbidden|denied|unauthori|помилк", re.I)
+MCP_LINE = re.compile(r"^- mcp: `claude mcp get metricool` → «[^»]*»\s*$")
 # Тег джерела числа. Metricool: `[#N ПОЛЕ]`, ПОЛЕ — Data Studio field ID
 # (network+connector+index, live-check 19.10 §4.3). Інші — оголошення без звірки.
 SOURCE_TAG = re.compile(r"\[(?:#(\d+)\s+([A-Z]{4}\d{2})|(metrics\.md|PRD)(?::[^\]]*)?|(план|не метрика))\]")
 # Конектори, чиї поля ВИМІРЯНО (live-check 19.10 §1.2: IGRE01–IGRE29 = Instagram Reels).
 # Поле іншого конектора — FAIL «не виміряно», а не здогад про його зміст.
 MEASURED_CONNECTORS = {"IGRE"}
-# Цифри, що числом-твердженням не є: посилання, дати, час, ідентифікатори (pact-001,
-# tri-138, L4, G1, W43, l4-trace), номери PR, нумерація списку, пункти паспорта.
-# «x48000» — не id: одна літера + понад дві цифри — число (р.2, N11).
+# Цифри, що числом-твердженням не є, — ЛИШЕ точні форми контракту (р.4, Blocker 1: широкі
+# винятки «x10», «#3 у трендах», «ER-4,5%», «2b», «- 48000. …» вирізали справжні числа):
+# посилання; дата ISO (інші формати дат — з тегом `[не метрика]`); час; версія `v0.11.0`;
+# ідентифікатор = літери, дефіс/підкреслення, цифри, і не число з комою/крапкою/% далі
+# (pact-001, tri-138, IGRE11); велика літера + 1–2 цифри (L4, G1, W43; не «x10»);
+# `l4-trace`; номер PR `PR #N` / `репо #N` / `owner/repo#N`; посилання на виклик `виклик… #N`;
+# пункт паспорта `п. 5`, `п. 4b–4c`, `§3`; нумерація впорядкованого списку `1. ` на початку рядка.
 NOT_A_NUMBER = [
     re.compile(r"https?://\S+"),
-    re.compile(r"\d{4}-\d{2}-\d{2}(?:T[\d:+-]+)?"),
-    re.compile(r"(?<!\d)\d{1,2}:\d{2}(?!\d)"),
-    re.compile(r"(?:[A-Za-z]{2,}|[A-Za-z]+[-_])\d+[A-Za-z0-9_-]*"),
-    re.compile(r"(?<!\w)[A-Za-z]\d{1,2}(?!\d)"),
-    re.compile(r"#\d+"),
-    re.compile(r"^\s*-?\s*\d+[.)]\s"),
-    re.compile(r"(?:п\.|§)\s*\d+[a-h]?(?!\w)"),
-    re.compile(r"(?<![\d.,])\d+[a-h](?!\w)"),
+    re.compile(r"(?<![\d.,])\d{4}-\d{2}-\d{2}(?:T[\d:+-]+)?(?![\d.,])"),
+    re.compile(r"(?<![\d.,:])\d{1,2}:\d{2}(?![\d.,:])"),
+    re.compile(r"\bv\d+\.\d+\.\d+\b"),
+    re.compile(r"(?<![\w.,])[A-Za-z]{2,}[-_]?\d+(?!\d|[.,]\d|%)[A-Za-z0-9_-]*"),
+    re.compile(r"(?<![\w.,])[A-Za-z]+[-_]\d+(?!\d|[.,]\d|%)[A-Za-z0-9_-]*"),
+    re.compile(r"(?<![\w.,])[A-WYZ]\d{1,2}(?![\w%]|[.,]\d)"),
+    re.compile(r"(?<![\w.,])[a-z]\d(?=-[a-z])"),
+    re.compile(r"(?:\bPR|[\w.-]+/[\w.-]+|\b[a-z]+-[a-z]+)\s*#\d+\b"),
+    re.compile(r"виклик\w*\s+#\d+\b"),
+    re.compile(r"(?:п\.|§)\s*\d+[a-h]?(?:\s*[–-]\s*\d+[a-h]?)?(?!\w|[.,]\d|%)"),
+    re.compile(r"^\s*\d{1,2}\.\s"),
 ]
 NUM = re.compile(r"(?<![\d.,])(\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)(?![\d])"
                  r"(\s*(?:k|к|тис|млн|m|м)(?![a-zа-яіїєґ]))?(\s*%)?", re.I)
@@ -180,14 +202,14 @@ def shown_values(tok):
     return cands
 
 
-def matches(tok, pct, vals):
-    """Показане число дорівнює значенню з точністю до показаних знаків (р.3, F16: AVG-поля
-    неокруглені); «%» — і саме значення, і частка ×100."""
+def matches(tok, vals):
+    """Показане число дорівнює значенню з точністю до показаних знаків, округлення —
+    звичайне (half-up; р.3 F16, р.4 L07/L08: AVG-поля неокруглені)."""
     for v, places in shown_values(tok):
+        q = Decimal(1).scaleb(-places)
         for x in vals:
-            for y in ((x, x * 100) if pct else (x,)):
-                if round(y, places) == round(v, places):
-                    return True
+            if Decimal(repr(x)).quantize(q, rounding=ROUND_HALF_UP) == Decimal(repr(v)).quantize(q, rounding=ROUND_HALF_UP):
+                return True
     return False
 
 
@@ -213,11 +235,11 @@ def is_error(resp_text):
     """Помилка — за ВЕРХНІМ рівнем відповіді, не за ехом тексту поста (р.3, F19)."""
     rj = as_json(resp_text)
     if isinstance(rj, dict):
+        # Лише ключі помилки і 4xx: «Sent for review without errors» у `message` — не помилка
+        # (р.4, Blocker 2: такий текст вимикав перевірку поста з autoPublish: true).
         if rj.get("error") or rj.get("errors"):
             return True
-        if re.match(r"4\d\d$", str(rj.get("status") or rj.get("statusCode") or "")):
-            return True
-        return bool(ERROR_TEXT.search(str(rj.get("message") or "")))
+        return bool(re.match(r"4\d\d$", str(rj.get("status") or rj.get("statusCode") or "")))
     return bool(ERROR_TEXT.search(resp_text))
 
 
@@ -236,9 +258,14 @@ def check(lines):
     errs += write_mentions("звіт", [(i, ln) for i, ln in enumerate(report) if not CALL_LINE.match(ln)])
     errs += write_mentions("trace", other)
 
-    mcp = " ".join(ln for ln in text if re.match(r"^- mcp:", ln))
+    mcp_lines = [ln for ln in text if re.match(r"^- mcp:", ln)]
+    mcp = " ".join(mcp_lines)
     if not mcp:
         errs.append("немає рядка `- mcp:` — вивід `claude mcp get metricool` дослівно (паспорт L4 п. 5)")
+    for ln in mcp_lines:
+        # Рядок mcp — лише команда і вивід у «…», нічого після (р.4, A01: число після виводу).
+        if not MCP_LINE.match(ln):
+            errs.append("рядок `- mcp:` — лише «- mcp: `claude mcp get metricool` → «<вивід>»», без іншого тексту")
     connected = bool(re.search(r"connected", mcp, re.I)) and not re.search(
         r"needs authentication|not connected|failed|disconnected", mcp, re.I)
 
@@ -261,14 +288,17 @@ def check(lines):
             continue
         if not c["resp"]:
             errs.append("%s: немає цитати відповіді (`  > …`)" % tag)
+        args = as_json(c["args_raw"]) if c["args_raw"] else {}
+        if not isinstance(args, dict):
+            errs.append("%s: аргументи не JSON-об'єкт в одному рядку — передумову не перевірити" % tag)
+            continue
+        extra = sorted(set(args) - ARG_KEYS[c["tool"]])
+        if extra:
+            errs.append("%s: аргументи поза схемою інструмента: %s (live-check §4)" % (tag, ", ".join(extra)))
         if c["tool"] == "createScheduledPost":
             errs.append("%s: прямий розклад без людини, у L4 заборонений завжди (паспорт 4b)" % tag)
             continue
         if c["tool"] not in WRITES:
-            continue
-        args = as_json(c["args_raw"]) if c["args_raw"] else None
-        if not isinstance(args, dict):
-            errs.append("%s: аргументи не JSON-об'єкт в одному рядку — передумову не перевірити" % tag)
             continue
         info = args.get("info")
         if isinstance(info, str):
@@ -331,13 +361,15 @@ def check(lines):
             if not later or later[0]["tool"] != "sendScheduledPostForReview":
                 errs.append("%s: наступний запис — не sendScheduledPostForReview (правка скидає review, паспорт 4b)" % tag)
         resp = " ".join(c["resp"])
-        if c["tool"] in FOR_REVIEW and is_error(resp):
-            if any(x["tool"] == c["tool"] for x in calls[k + 1:]):
-                errs.append("%s: відповів помилкою, а виклик повторено (паспорт 4c — без повтору)" % tag)
+        failed = c["tool"] in FOR_REVIEW and is_error(resp)
+        if failed:
+            # Після відмови ForReview у чергу не йде НІЧОГО — жоден запис, не лише той самий
+            # інструмент (паспорт 4a/4c; р.4, A12: update+send після «plan does not allow»).
+            if any(x["tool"] in WRITES for x in calls[k + 1:]):
+                errs.append("%s: відповів помилкою, а після нього є запис (паспорт 4a/4c — без повтору, у чергу нічого)" % tag)
             if not card_for(c["n"]):
                 errs.append("%s: відповів помилкою, а рядка `- inbox: … #%d …` про цей виклик немає (паспорт 4c)"
                             % (tag, c["n"]))
-            continue
         if nxt is None:
             continue
         # Ключ — uuid (не змінюється між викликами), інакше id (рядок чи число — р.3, F20).
@@ -349,12 +381,13 @@ def check(lines):
             elif isinstance(rj.get("id"), (int, str)) and not isinstance(rj.get("id"), bool) and str(rj["id"]):
                 key = ("id", str(rj["id"]))
         if key is None:
-            errs.append("%s: у відповіді немає uuid/id поста — getScheduledPosts не звірити (паспорт 4b)" % tag)
+            if not failed:
+                errs.append("%s: у відповіді немає uuid/id поста — getScheduledPosts не звірити (паспорт 4b)" % tag)
             continue
         posts = [d for d in walk(as_json(" ".join(nxt["resp"])))
                  if key[1] == (str(d.get(key[0])) if d.get(key[0]) is not None else None)]
         if not posts:
-            if not card_for(c["n"]):
+            if not failed and not card_for(c["n"]):
                 errs.append("%s: поста немає у відповіді getScheduledPosts, а рядка `- inbox: … #%d …` немає (паспорт 4c)"
                             % (tag, c["n"]))
             continue
@@ -365,7 +398,7 @@ def check(lines):
         # У пості — рекурсивно, включно з `info` рядком: autoPublish і поле стану (р.3, S3).
         auto_true, status = False, []
         for d in walk(posts[0]):
-            if d.get("autoPublish") is True:
+            if d.get("autoPublish") is True or str(d.get("autoPublish")).lower() == "true":
                 auto_true = True
             for k2, v2 in d.items():
                 if re.search(r"status|state", k2, re.I) and isinstance(v2, str):
@@ -379,7 +412,11 @@ def check(lines):
         if state is None:
             errs.append("%s: під getScheduledPosts немає рядка `  стан: …` (паспорт 4b)" % tag)
         elif re.fullmatch(r"(?i)pending review\.?", state):
-            if status and not all(PENDING_VALUE.match(v) for v in status):
+            # «pending review» — твердження, якому потрібне поле стану у відповіді (р.4, A10).
+            if not status:
+                errs.append("%s: «стан: pending review», а поля стану у відповіді немає — пиши «поле стану не"
+                            " встановлено» з plannerUrl (паспорт 4b)" % tag)
+            elif not all(PENDING_VALUE.match(v) for v in status):
                 errs.append("%s: «стан: pending review», а у відповіді стан %s (паспорт 4b–4c)" % (tag, ", ".join(status)))
         elif state.startswith("поле стану не встановлено"):
             if status:
@@ -411,7 +448,12 @@ def check(lines):
         vals = field_values(as_json(" ".join(c["resp"])), field)
         if not vals:
             return "%s: у відповіді виклику #%d немає скалярного значення поля %s" % (ln_no, n, field)
-        if not matches(t.group(1), bool(t.group(3)), vals):
+        if t.group(3):
+            # Одиниці полів не виміряно (IGRE08 — взаємодії на 1000 охоплених, не частка; р.4 A13):
+            # «%» біля тегу Metricool не звірити — пиши число як у відповіді.
+            return "%s: «%s» з «%%» біля тегу Metricool — одиницю поля %s не виміряно, пиши як у відповіді" % (
+                ln_no, shown, field)
+        if not matches(t.group(1), vals):
             return "%s: «%s» ≠ значенню %s у відповіді #%d (%s)" % (
                 ln_no, shown, field, n, ", ".join("%g" % x for x in sorted(vals)))
         return None
@@ -450,8 +492,14 @@ def check(lines):
         if not CALL_LINE.match(ln):
             errs += number_errors("звіт", i + 1, ln)
     for i, ln in other:
-        if not re.match(r"^- (?:mcp|reviewer):", ln):   # вивід команди й email — дослівні
-            errs += number_errors("trace", i + 1, ln)
+        if re.match(r"^- mcp:", ln):
+            ln = re.sub(r"«[^»]*»", " ", ln)       # дослівний вивід команди — у «…» (формат — вище)
+        elif re.match(r"^- reviewer:", ln):
+            ln = EMAIL.sub(" ", ln)                 # email — не число; хвіст рядка — вільний текст
+        errs += number_errors("trace", i + 1, ln)
+    for c in calls:
+        if c["state"] is not None:                  # хвіст `стан:` — теж вільний текст (р.4, A03)
+            errs += number_errors("trace стан виклику #%d" % c["n"], 0, c["state"])
 
     return errs, len(calls), sum(1 for c in calls if c["tool"] in WRITES)
 
