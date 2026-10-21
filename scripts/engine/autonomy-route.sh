@@ -202,9 +202,7 @@ SENSITIVE = [
 # Теки чутливих префіксів: запис-предок (`.github`, `.claude`) накриває їх — теж «великий».
 SENSITIVE_DIRS = (".claude/hooks/", "hooks/", ".githooks/", ".github/workflows/", "scripts/engine/lib/")
 files = it["plan"]["files"]
-for raw in files:
-    if not isinstance(raw, str) or not raw.strip():
-        b(f"plan.files має бути переліком шляхів-рядків, а не {raw!r}")
+for raw in files:   # рядки — гарантовано: plan_errors у готовності вище відсікає не-рядки
     f = raw.strip()
     # normpath: `docs/../.github/workflows/x.yml` — це `.github/workflows/x.yml`; вихід за корінь
     # репо або абсолютний шлях — не файл цього репо.

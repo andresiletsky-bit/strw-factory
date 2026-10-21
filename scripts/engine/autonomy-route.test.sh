@@ -238,6 +238,17 @@ shape() { # shape <назва> <python-тіло form_errors>
 shape "«unattended» з кодом 3"     'import sys; print("unattended"); sys.exit(3)'
 shape "«unattended» з кодом 1"     'import sys; print("unattended"); sys.exit(1)'
 shape "«with-ceo» з кодом 0"       'import sys; print("with-ceo: x"); sys.exit(0)'
+shape "два рядки з кодом 1"        'print("зайвий рядок"); return ["x"]'
+# причина з переносом рядка (значення з YAML) — усе одно ОДИН рядок і rc 1, не «упав»
+gen f.nl-reason 'it["blocked_by"]=["ceo:перший\nдругий"]; it["state"]="blocked"'
+route "перенос рядка в значенні поля → причина одним рядком" f.nl-reason 1 "чекає рішення CEO (ceo:перший другий)"
+# валідатор поруч не доміряв (rc 2 або без підсумку) — rc 2, а не «претензій немає»
+for stub in 'exit 2' 'echo OK; exit 0'; do
+    SD="${TMP}/stubv-$(printf '%s' "${stub}" | tr -cd 'a-z0-9')"; mkdir -p "${SD}"; cp -R "${HERE}/lib" "${SD}/lib"; cp "${ROUTE}" "${SD}/"
+    printf '#!/usr/bin/env bash\n%s\n' "${stub}" > "${SD}/validate-items.sh"
+    out="$(bash "${SD}/autonomy-route.sh" "${S}/engine/items/f.base.yaml")"; rc=$?
+    if [ "${rc}" = 2 ] && printf '%s' "${out}" | /usr/bin/grep -q 'validate-items.sh не доміряв'; then ok "валідатор «${stub}» → rc 2"; else bad "валідатор «${stub}» мав би дати rc 2" "rc=${rc} ${out}"; fi
+done
 out="$(bash "${ROUTE}" "$(printf 'a\nb.yaml')")"; rc=$?; n="$(printf '%s\n' "${out}" | /usr/bin/grep -c .)"
 if [ "${rc}" = 2 ] && [ "${n}" = 1 ]; then ok "аргумент із переносом рядка → rc 2 одним рядком"; else bad "перенос рядка в аргументі зламав контракт" "rc=${rc} рядків=${n} ${out}"; fi
 OUTSIDE="${TMP}/outside"; mkdir -p "${OUTSIDE}"; cp "${S}/engine/items/f.base.yaml" "${OUTSIDE}/"
