@@ -10,8 +10,9 @@
 # trace (паспорт L4 п. 4a–4c, 5; контракт — references/artifact-contracts.md §growth-report).
 #
 # Межа: trace пише сам maker. Скрипт ловить порушення, яке maker записав чесно
-# (і запис у неканонічній формі — згадку інструмента запису поза `- call:`), але
-# не виклик, який у trace не потрапив. Стану самого Metricool він не читає.
+# (і запис у неканонічній формі — згадку інструмента запису будь-де поза `- call:`
+# trace), але не виклик, який у файл не потрапив, і не число, написане словами.
+# Стану самого Metricool він не читає.
 #
 # Лише stdlib: python3 є і на Mac (3.9), і в хмарі; bash 3.2 не має JSON-розбору,
 # а `"autoPublish": false` регуляркою — це знову форма замість властивості.
@@ -29,53 +30,69 @@ TOOLS = {
 }
 FOR_REVIEW = ("createScheduledPostForReview", "sendScheduledPostForReview")
 WRITES = FOR_REVIEW + ("updateScheduledPost", "createScheduledPost")
-# Межа слова вручну: «createScheduledPost» — підрядок «createScheduledPostForReview».
-WRITE_MENTION = re.compile(r"(?<![A-Za-z])(createScheduledPostForReview|sendScheduledPostForReview"
-                           r"|updateScheduledPost|createScheduledPost)(?![A-Za-z])")
-ERROR_RESP = re.compile(r"error|does not allow|not allowed|помилк", re.I)
+# Згадка шукається в рядку, зведеному до малих літер без `_`: «create_scheduled_post»
+# і «CreateScheduledPost» — той самий інструмент (чекер 6a #33 р.1, C3/C4). Межа слова
+# вручну: «createscheduledpost» — підрядок «createscheduledpostforreview».
+WRITE_MENTION = re.compile(r"(?<![a-z])(createscheduledpostforreview|sendscheduledpostforreview"
+                           r"|updatescheduledpost|createscheduledpost)(?![a-z])")
+CALL_LINE = re.compile(r"^\s*-\s*call\s*:", re.I)
+ERROR_RESP = re.compile(r"error|does not allow|not allowed|forbidden|denied|unauthori|помилк"
+                        r"|\"status\"\s*:\s*4\d\d", re.I)
+# Мережа (латиниця, кирилиця, абревіатури) і метрика — тригер «число по соцмережах».
+# Без метрики число біля назви мережі — не вимір («3 Reels-чернетки», «Reels до 30
+# секунд» — хибні червоні р.1, F/F2), окрім чисел зі знаком, відсотком чи скороченням.
 SOCIAL = re.compile(r"instagram|tiktok|youtube|facebook|linkedin|threads|pinterest|twitter|соцмереж"
-                    r"|metricool|reels|shorts", re.I)
+                    r"|інстаграм|тікток|тік-ток|ютуб|фейсбук|лінкедін|reels|shorts|stories|сторіс|metricool"
+                    r"|\b(?:IG|TT|YT|FB)\b", re.I)
+METRIC = re.compile(r"охоплен|підписник|перегляд|вподобан|лайк|коментар|репост|збереж|показ|залученн"
+                    r"|reach|follower|impression|view|like|engagement|\bER\b|CTR|saves|shares", re.I)
 # Цифри, що метрикою не є: посилання, дати, час, ідентифікатори (W43, pact-001,
-# tri-138), номери PR, нумерація списку. Решта цифр речення — число.
+# tri-138), номери PR, нумерація списку, пункти паспорта. Решта цифр речення — число.
 NOT_A_NUMBER = [
     re.compile(r"https?://\S+"),
     re.compile(r"\d{4}-\d{2}-\d{2}"),
     re.compile(r"(?<!\d)\d{1,2}:\d{2}(?!\d)"),
     re.compile(r"[A-Za-z]+[-_]?\d+[A-Za-z0-9_-]*"),
     re.compile(r"#\d+"),
-    re.compile(r"^\s*\d+[.)]\s"),
+    re.compile(r"^\s*-?\s*\d+[.)]\s"),
     # посилання на пункти: «п. 5», «§3», «4a–4c» (лише a–h: «5k»/«5к» — це число)
     re.compile(r"(?:п\.|§)\s*\d+[a-h]?(?!\w)"),
     re.compile(r"(?<![\d.,])\d+[a-h](?!\w)"),
 ]
+# Період вибірки («за 28 днів») — не метрика, у відповіді аналітики його немає.
+PERIOD = re.compile(r"\d+\s*(?:дн|день|тиж|міс|рок|day|week|month)", re.I)
+NUM = re.compile(r"(?<![\d.,])(\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)(?![\d])"
+                 r"(\s*(?:k|к|тис|млн|m|м)(?![a-zа-яіїєґ]))?", re.I)
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+
+def strip_not_numbers(text, period=False):
+    for rx in NOT_A_NUMBER + ([PERIOD] if period else []):
+        text = rx.sub(" ", text)
+    return text
 
 
 def numbers_in(text):
-    for rx in NOT_A_NUMBER:
-        text = rx.sub(" ", text)
-    return re.findall(r"\d", text)
+    return re.findall(r"\d", strip_not_numbers(text))
 
 
-def sentences(lines):
-    for ln in lines:
-        for s in re.split(r"(?<=[.!?;])\s+", ln):
-            if s.strip():
-                yield s
+def sentences(line):
+    return [s for s in re.split(r"(?<=[.!?;])\s+", line) if s.strip()]
 
 
 def split_trace(lines):
-    """→ (trace, report, found). Trace — від заголовка «Trace (L4)» до наступного
-    заголовка того ж або вищого рівня; усе інше — сам growth-report."""
-    trace, report, level, found = [], [], None, False
+    """→ (trace, report, found). Trace — від заголовка «Trace (L4)» до НАСТУПНОГО
+    заголовка будь-якого рівня: підсекція під trace — уже звіт (чекер р.1, B5)."""
+    trace, report, inside, found = [], [], False, False
     for ln in lines:
         m = HEADING.match(ln)
-        if m and level is not None and len(m.group(1)) <= level:
-            level = None
-        if m and level is None and "Trace (L4)" in m.group(2):
-            level, found = len(m.group(1)), True
-            continue
-        (trace if level is not None else report).append(ln)
+        if m:
+            inside = "Trace (L4)" in m.group(2)
+            found = found or inside
+            if inside:
+                continue
+        (trace if inside else report).append(ln)
     return trace, report, found
 
 
@@ -104,12 +121,33 @@ def parse_calls(trace):
     return calls, other
 
 
+def as_json(text):
+    try:
+        return json.loads(text)
+    except ValueError:
+        return None
+
+
+def to_float(tok):
+    return float(re.sub(r"[   ]", "", tok).replace(",", "."))
+
+
 def company_context_path():
     p = os.environ.get("STRW_COMPANY_CONTEXT")
     if p:
         return p
     root = os.environ.get("STRW_ROOT") or os.path.join(os.path.expanduser("~"), "Developer", "STRW")
     return os.path.join(root, "strw-state", "company-context.md")
+
+
+def write_mentions(where, lines):
+    out = []
+    for i, ln in lines:
+        m = WRITE_MENTION.search(ln.replace("_", "").lower())
+        if m:
+            out.append("%s рядок %d: згадка інструмента запису `%s` поза рядком `- call:` trace — виклик запису"
+                       " фіксується лише як `- call: <інструмент> {…}` у «Trace (L4)»" % (where, i + 1, m.group(1)))
+    return out
 
 
 def check(lines):
@@ -119,6 +157,14 @@ def check(lines):
     errs = []
     calls, other = parse_calls(trace)
     text = [ln for _, ln in other]
+
+    # Виклик поза trace (додаток, підсекція) скрипт не розібрав би — тому FAIL, а не тиша
+    # (чекер р.1, Blocker 1: `- call: createScheduledPost` у «## Додаток» давав PASS).
+    for i, ln in enumerate(report):
+        if CALL_LINE.match(ln):
+            errs.append("звіт рядок %d: `- call:` поза «Trace (L4)» — виклики Metricool живуть лише в trace" % (i + 1))
+    errs += write_mentions("звіт", [(i, ln) for i, ln in enumerate(report) if not CALL_LINE.match(ln)])
+    errs += write_mentions("trace", other)
 
     mcp = " ".join(ln for ln in text if re.match(r"^- mcp:", ln))
     if not mcp:
@@ -132,15 +178,12 @@ def check(lines):
         if m:
             reviewer, reviewer_idx = m.group(1), i
             break
-    inbox = any(re.match(r"^- inbox:\s*\S", ln) for ln in text)
+    inbox_lines = [ln for ln in text if re.match(r"^- inbox:\s*\S", ln)]
 
-    # Виклик запису, записаний прозою, скрипт не побачив би зовсім — тому канон
-    # один: інструмент запису в trace існує лише рядком `- call:`.
-    for i, ln in other:
-        m = WRITE_MENTION.search(ln)
-        if m:
-            errs.append("рядок trace %d: `%s` поза рядком `- call:` — виклик запису фіксується лише як `- call: %s {…}`"
-                        % (i + 1, m.group(1), m.group(1)))
+    def card_for(n):
+        # Картка — про ЦЕЙ виклик: рядок `- inbox:` називає його номер (`#n`), а не будь-яка
+        # картка trace (чекер р.1, Nit G: помилка #2 «закривалась» карткою про TikTok).
+        return any(re.search(r"#%d(?!\d)" % n, ln) for ln in inbox_lines)
 
     for c in calls:
         tag = "виклик #%d %s" % (c["n"], c["tool"])
@@ -154,10 +197,7 @@ def check(lines):
             continue
         if c["tool"] not in WRITES:
             continue
-        try:
-            args = json.loads(c["args_raw"]) if c["args_raw"] else None
-        except ValueError:
-            args = None
+        args = as_json(c["args_raw"]) if c["args_raw"] else None
         if not isinstance(args, dict):
             errs.append("%s: аргументи не JSON-об'єкт в одному рядку — передумову не перевірити" % tag)
             continue
@@ -176,7 +216,8 @@ def check(lines):
                 errs.append("%s: reviewers=%s, а мусить бути рівно email Andrii %s (паспорт 4a)"
                             % (tag, json.dumps(args.get("reviewers"), ensure_ascii=False), reviewer))
 
-    # Передумова 4a: email рев'юера — з company-context, не вигаданий maker'ом.
+    # Передумова 4a: email рев'юера — РІВНО email з рядка Andrii у company-context, не
+    # підрядок файлу (чекер р.1: «o@strw.exam» проходив як входження «ceo@strw.example»).
     if reviewer is not None and any(c["tool"] in FOR_REVIEW for c in calls):
         cc = company_context_path()
         try:
@@ -186,11 +227,15 @@ def check(lines):
         if cc_text is None:
             errs.append("company-context не прочитано (%s) — email рев'юера не звірено (передумова 4a; STRW_COMPANY_CONTEXT)"
                         % cc)
-        elif reviewer not in cc_text:
-            errs.append("reviewer %s відсутній у company-context (%s) — передумова 4a не виконана" % (reviewer, cc))
+        else:
+            andrii = {e for ln in cc_text.splitlines() if re.search(r"andrii|андрій", ln, re.I)
+                      for e in EMAIL.findall(ln)}
+            if reviewer not in andrii:
+                errs.append("reviewer %s — не email Andrii з company-context (%s; там: %s) — передумова 4a не виконана"
+                            % (reviewer, cc, ", ".join(sorted(andrii)) or "email Andrii немає"))
 
-    # Послідовність (паспорт 4b–4c): після КОЖНОГО запису одразу getScheduledPosts;
-    # після updateScheduledPost наступний запис — sendScheduledPostForReview;
+    # Послідовність (паспорт 4b–4c): після КОЖНОГО запису одразу getScheduledPosts, і пост
+    # запису в ньому є; після updateScheduledPost наступний запис — sendScheduledPostForReview;
     # помилка ForReview — без повтору й з карткою; стан — pending review або доказ plannerUrl.
     for k, c in enumerate(calls):
         if c["tool"] not in WRITES or c["tool"] == "createScheduledPost":
@@ -205,41 +250,83 @@ def check(lines):
             later = [x for x in calls[k + 1:] if x["tool"] != "getScheduledPosts"]
             if not later or later[0]["tool"] != "sendScheduledPostForReview":
                 errs.append("%s: наступний запис — не sendScheduledPostForReview (правка скидає review, паспорт 4b)" % tag)
-            continue
         resp = " ".join(c["resp"])
-        if ERROR_RESP.search(resp):
+        if c["tool"] in FOR_REVIEW and ERROR_RESP.search(resp):
             if any(x["tool"] == c["tool"] for x in calls[k + 1:]):
                 errs.append("%s: відповів помилкою, а виклик повторено (паспорт 4c — без повтору)" % tag)
-            if not inbox:
-                errs.append("%s: відповів помилкою, а рядка `- inbox: <картка>` немає (паспорт 4c)" % tag)
+            if not card_for(c["n"]):
+                errs.append("%s: відповів помилкою, а рядка `- inbox: … #%d …` про цей виклик немає (паспорт 4c)"
+                            % (tag, c["n"]))
             continue
         if nxt is None:
             continue
+        # Пост запису мусить бути в наступному getScheduledPosts (паспорт 4c: «пост відсутній» —
+        # теж зупинка). Ключ — uuid (не змінюється між викликами), інакше id.
+        rj = as_json(resp)
+        key = None
+        if isinstance(rj, dict):
+            if isinstance(rj.get("uuid"), str) and rj["uuid"]:
+                key = '"%s"' % rj["uuid"]
+            elif isinstance(rj.get("id"), int):
+                key = rj["id"]
+        nresp = " ".join(nxt["resp"])
+        if key is None:
+            errs.append("%s: у відповіді немає uuid/id поста — getScheduledPosts не звірити (паспорт 4b)" % tag)
+            continue
+        present = (key in nresp) if isinstance(key, str) else bool(re.search(r'"id"\s*:\s*%d(?!\d)' % key, nresp))
+        if not present and not card_for(c["n"]):
+            errs.append("%s: поста немає у відповіді getScheduledPosts, а рядка `- inbox: … #%d …` немає (паспорт 4c)"
+                        % (tag, c["n"]))
+        if c["tool"] == "updateScheduledPost":
+            continue   # правка скидає review — стан «на затвердження» дає наступний send
         state = nxt["state"]
+        planner = rj.get("plannerUrl") if isinstance(rj, dict) else None
         if state is None:
             errs.append("%s: під getScheduledPosts немає рядка `  стан: …` (паспорт 4b)" % tag)
         elif re.fullmatch(r"(?i)pending review\.?", state):
             pass
         elif state.startswith("поле стану не встановлено"):
-            if "plannerUrl" not in resp:
-                errs.append("%s: «поле стану не встановлено», а у відповіді ForReview немає plannerUrl — доказу «на затвердження» немає (паспорт 4b)"
-                            % tag)
-        elif not inbox:
-            errs.append("%s: стан «%s» — не pending review, а рядка `- inbox: <картка>` немає (паспорт 4c)" % (tag, state))
+            if not (isinstance(planner, str) and re.match(r"https?://\S", planner)):
+                errs.append("%s: «поле стану не встановлено», а у відповіді ForReview немає plannerUrl-посилання —"
+                            " доказу «на затвердження» немає (паспорт 4b)" % tag)
+        elif not card_for(c["n"]):
+            errs.append("%s: стан «%s» — не pending review, а рядка `- inbox: … #%d …` немає (паспорт 4c)"
+                        % (tag, state, c["n"]))
 
-    # Соцметрики (паспорт п. 5): число по соцмережах — лише з getAnalyticsDataByMetrics
-    # при підключеному MCP; «н/д: …» — без жодної цифри в тому ж реченні.
-    src = [c for c in calls if c["tool"] == "getAnalyticsDataByMetrics" and c["resp"]]
-    for s in sentences(report):
-        if "н/д" in s.lower():
-            if numbers_in(s):
-                errs.append("«н/д» з числом у тому ж реченні — пропуск цифр не має (паспорт п. 5): %s" % s.strip())
+    # Соцметрики (паспорт п. 5): «н/д: …» — без жодної цифри в тому ж реченні; число по
+    # соцмережах — лише те, що ДОСЛІВНО є у відповіді getAnalyticsDataByMetrics, при
+    # підключеному MCP (чекер р.1, Blocker 2: наявності виклику замало — TikTok 48 000
+    # проходив, бо аналітику питали лише про Instagram).
+    src_nums = set()
+    for c in calls:
+        if c["tool"] == "getAnalyticsDataByMetrics":
+            for tok in re.findall(r"-?\d+(?:\.\d+)?", " ".join(c["resp"])):
+                src_nums.add(float(tok))
+    for i, ln in enumerate(report):
+        if CALL_LINE.match(ln):
             continue
-        if SOCIAL.search(s) and numbers_in(s):
-            if not src:
-                errs.append("число по соцмережах без getAnalyticsDataByMetrics у trace: %s" % s.strip())
+        rest = []
+        for s in sentences(ln):
+            if "н/д" in s.lower():
+                if numbers_in(s):
+                    errs.append("«н/д» з числом у тому ж реченні — пропуск цифр не має (паспорт п. 5): %s" % s.strip())
+            else:
+                rest.append(s)
+        body = " ".join(rest)
+        if not SOCIAL.search(body):
+            continue
+        toks = list(NUM.finditer(strip_not_numbers(body, period=True)))
+        flagged = [t for t in toks if t.group(2) or re.search(r"[+−%]", body)] if not METRIC.search(body) else toks
+        for t in flagged:
+            if t.group(2):
+                errs.append("звіт рядок %d: число «%s» зі скороченням по соцмережах — пиши так, як у відповіді"
+                            " getAnalyticsDataByMetrics, інакше його не звірити (паспорт п. 5)" % (i + 1, t.group(0).strip()))
             elif not connected:
-                errs.append("число по соцмережах, а `- mcp:` не каже connected: %s" % s.strip())
+                errs.append("звіт рядок %d: число по соцмережах «%s», а `- mcp:` не каже connected (паспорт п. 5)"
+                            % (i + 1, t.group(1)))
+            elif to_float(t.group(1)) not in src_nums:
+                errs.append("звіт рядок %d: число по соцмережах «%s» відсутнє у відповіді getAnalyticsDataByMetrics"
+                            " у trace (паспорт п. 5)" % (i + 1, t.group(1)))
 
     return errs, len(calls), sum(1 for c in calls if c["tool"] in WRITES)
 

@@ -226,10 +226,12 @@ l4 "без секції Trace (L4) → FAIL" 1 "немає секції «Trace 
 l4 "вигаданий інструмент → FAIL" 1 "немає серед дев'яти" 's/- call: getAnalyticsDataByMetrics/- call: publishPost/'
 # Помилка ForReview (тариф без team management): без повтору і з карткою — PASS; повтор — FAIL.
 ERR='s/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "[^"]+"\}/  > {"error": "Your plan does not allow the approval system"}/'
-l4 "ForReview відповів помилкою, без повтору, з карткою → PASS" 0 "" "$ERR"
-l4 "ForReview відповів помилкою і повторений → FAIL" 1 "повторено" "$ERR; s/(- call: getScheduledPosts \{\"blogId\": 1\}\n  > \[\{\"id\": 501[^\n]*\n[^\n]*\n)/\$1- call: createScheduledPostForReview {\"blogId\": 1, \"reviewers\": \"ceo\\\@strw.example\", \"approvalSystem\": \"all\", \"info\": {\"autoPublish\": false}}\n  > {\"error\": \"retry\"}\n- call: getScheduledPosts {\"blogId\": 1}\n  > []\n/"
+CARD2='s/- inbox: tri-NNN — TikTok/- inbox: tri-NNN — виклик #2 відповів помилкою; TikTok/'
+l4 "ForReview відповів помилкою, без повтору, з карткою про #2 → PASS" 0 "" "$ERR; $CARD2"
+l4 "ForReview відповів помилкою, картка є, але про інше (TikTok) → FAIL" 1 "про цей виклик" "$ERR"
+l4 "ForReview відповів помилкою і повторений → FAIL" 1 "повторено" "$ERR; $CARD2; s/(- call: getScheduledPosts \{\"blogId\": 1\}\n  > \[\{\"id\": 501[^\n]*\n[^\n]*\n)/\$1- call: createScheduledPostForReview {\"blogId\": 1, \"reviewers\": \"ceo\\\@strw.example\", \"approvalSystem\": \"all\", \"info\": {\"autoPublish\": false}}\n  > {\"error\": \"retry\"}\n- call: getScheduledPosts {\"blogId\": 1}\n  > []\n/"
 l4 "ForReview відповів помилкою, картки в inbox немає → FAIL" 1 "inbox" "$ERR; s/- inbox: [^\n]*\n//"
-l4 "стан не pending review, картка є → PASS (4c)" 0 "" 's/стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #2/стан: scheduled/'
+l4 "стан не pending review, картка про #2 є → PASS (4c)" 0 "" 's/стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #2/стан: scheduled/; s/- inbox: tri-NNN — TikTok/- inbox: tri-NNN — виклик #2 не на затвердженні; TikTok/'
 l4 "стан не pending review, картки немає → FAIL" 1 "не pending review" 's/стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #2/стан: scheduled/; s/- inbox: [^\n]*\n//'
 l4 "стан pending review → PASS" 0 "" 's/стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #6/стан: pending review/'
 l4 "«поле стану не встановлено» без plannerUrl → FAIL" 1 "plannerUrl" 's/, "plannerUrl": "https:\/\/app.metricool.com\/planner\/u-501"\}\n- call: getScheduledPosts \{"blogId": 1\}\n  > \[\{"id": 503/}\n- call: getScheduledPosts {"blogId": 1}\n  > [{"id": 503/'
@@ -237,10 +239,29 @@ l4 "під getScheduledPosts після ForReview немає рядка стан
 l4 "reviewer не з company-context → FAIL" 1 "company-context" 's/ceo\@strw.example/smm\@strw.example/g'
 l4 "аргументи запису не JSON → FAIL" 1 "не JSON" 's/(- call: updateScheduledPost) \{[^\n]*/$1 id=501, autoPublish=false/'
 l4 "MCP не підключено, а число по Instagram є → FAIL" 1 "connected" 's/«Status: ✔ Connected»/«Status: ✘ Needs authentication»/'
-l4 "без рядка mcp → FAIL" 1 "- mcp:" 's/- mcp: [^\n]*\n//'
+l4 "без рядка mcp → FAIL" 1 "немає рядка \`- mcp:\`" 's/- mcp: [^\n]*\n//'
 # Хибні червоні: дата, час, id продукту і пункт паспорта поруч із назвою мережі — не число.
 l4 "дата/час/пункт поруч з Instagram — не число → PASS" 0 "" 's/(## Контент\n)/$1- Instagram-допис pact-001 стоїть на 2026-10-25 09:00 (паспорт п. 4b, 4c); W43.\n/'
-l4 "«5k» по Instagram без джерела — число → FAIL" 1 "без getAnalyticsDataByMetrics" 's/(## Контент\n)/$1- Instagram: 5k нових переглядів.\n/; s/- call: getAnalyticsDataByMetrics [^\n]*\n  > [^\n]*\n//'
+l4 "«5k» по Instagram — число зі скороченням → FAIL" 1 "зі скороченням" 's/(## Контент\n)/$1- Instagram: 5k нових переглядів.\n/; s/- call: getAnalyticsDataByMetrics [^\n]*\n  > [^\n]*\n//'
+
+# Раунд 1 чекера 6a #33: кожна атака, що давала PASS, — тепер червона, з причиною.
+l4 "reviewer оголошено ПІСЛЯ ForReview-виклику → FAIL (M01)" 1 "перед викликом немає" 's/(- reviewer: [^\n]*\n)((?:.*\n)*?)(- call: getScheduledPosts \{"blogId": 1\}\n  > \[\{"id": 501)/$2$1$3/'
+l4 "виклик без цитати відповіді → FAIL (M16)" 1 "немає цитати відповіді" 's/(- call: getAnalyticsDataByMetrics [^\n]*\n)  > [^\n]*\n/$1/'
+l4 "createScheduledPost прозою в тілі звіту → FAIL (C2)" 1 "звіт рядок" 's/(## Контент\n)/$1- Ще одну чернетку опубліковано напряму через createScheduledPost.\n/'
+l4 "create_scheduled_post прозою в trace → FAIL (C3)" 1 "createscheduledpost" 's/(- inbox: )/- Також create_scheduled_post для другої чернетки.\n$1/'
+l4 "createscheduledpost малими в trace → FAIL (C4)" 1 "createscheduledpost" 's/(- inbox: )/- Також createscheduledpost для другої.\n$1/'
+l4 "Інстаграм кирилицею з вигаданим числом → FAIL (B)" 1 "відсутнє у відповіді" 's/(## Контент\n)/$1- Інстаграм: охоплення за тиждень — 9 999.\n/'
+l4 "IG з вигаданим числом → FAIL (B2)" 1 "відсутнє у відповіді" 's/(## Контент\n)/$1- IG: охоплення — 7 777.\n/'
+l4 "число в наступному реченні того ж рядка → FAIL (B3)" 1 "відсутнє у відповіді" 's/(## Контент\n)/$1- Охоплення в Instagram зросло. Воно склало 6 666.\n/'
+l4 "підсекція під Trace — уже звіт, число без джерела → FAIL (B5)" 1 "відсутнє у відповіді" 's/\z/\n#### Соцметрики\n- Instagram: охоплення 5 555.\n/'
+l4 "поста немає в getScheduledPosts, картки немає → FAIL (D)" 1 "поста немає у відповіді" 's/  > \[\{"id": 503[^\n]*/  > []/'
+l4 "plannerUrl: null при «не встановлено» → FAIL (D2)" 1 "plannerUrl" 's/"id": 503, "uuid": "u-501", "plannerUrl": "[^"]+"/"id": 503, "uuid": "u-501", "plannerUrl": null/'
+l4 "reviewer — підрядок email Andrii → FAIL (E)" 1 "не email Andrii" 's/ceo\@strw.example/o\@strw.exam/g'
+l4 "Forbidden у відповіді ForReview — помилка, повтор → FAIL (I)" 1 "повторено" 's/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "[^"]+"\}/  > {"message": "Forbidden"}/; s/- call: getScheduledPosts \{"blogId": 1\}\n  > \[\{"id": 501[^\n]*\n[^\n]*\n/$&- call: createScheduledPostForReview {"blogId": 1, "reviewers": "ceo\@strw.example", "approvalSystem": "all", "info": {"autoPublish": false}}\n  > {"id": 601, "uuid": "u-601", "plannerUrl": "https:\/\/app.metricool.com\/planner\/u-601"}\n- call: getScheduledPosts {"blogId": 1}\n  > [{"uuid": "u-601"}]\n  стан: pending review\n/'
+# Хибні червоні р.1: кількість чернеток і тривалість ролика біля назви мережі — не метрика.
+l4 "«3 Reels-чернетки для Instagram, 1 у черзі» — не метрика → PASS (F)" 0 "" 's/(## Контент\n)/$1- 3 Reels-чернетки для Instagram, 1 з них у черзі на затвердження.\n/'
+l4 "«Reels до 30 секунд» — не метрика → PASS (F2)" 0 "" 's/(## Контент\n)/$1- Reels до 30 секунд.\n/'
+l4 "число по Instagram, що Є у відповіді, в іншому рядку → PASS" 0 "" 's/(## Наступний тиждень\n)/$1- Тримати підписників Instagram вище 312.\n/'
 
 # Негативний контроль: мутація правила autoPublish у копії python-скрипта робить
 # фікстуру «autoPublish: true» зеленою — випадки вище міряють скрипт, а не себе.

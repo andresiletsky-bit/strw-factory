@@ -20,7 +20,13 @@
   `references/evals/golden/l4-trace.golden.md`, дев'ять seeded рівня 0 (`references/evals/seeded/l4-trace/`),
   фікстура `references/evals/fixtures/company-context.md` (раннер підставляє її через `STRW_COMPANY_CONTEXT`).
   Раннер evals тепер звіряє ПРИЧИНУ FAIL рівня 0 з `defect_keywords` — фікстура, що падає з чужої причини, червона
-  (`run.test.sh` §7 з контролем-мутацією). Межа: trace пише maker — записане ловиться, пропущене ні.
+  (`run.test.sh` §7 з контролем-мутацією). Чекер 6a р.1 (FAIL: 2 Blocker, 4 Important) закрито в тому ж PR: виклик
+  і згадка інструмента запису шукаються по ВСЬОМУ файлу (регістр і `_` не рятують), trace — листова секція; число
+  по соцмережах звіряється з числами відповіді `getAnalyticsDataByMetrics`, а не з фактом виклику (кирилиця, IG,
+  сусіднє речення; кількість чернеток і тривалість — не метрика); пост запису мусить бути в наступному
+  `getScheduledPosts`; `plannerUrl` — посилання, не ключ; reviewer — рівно email з рядка Andrii у company-context;
+  картка `- inbox:` називає номер виклику. Межа: trace пише maker — записане ловиться, пропущене і число словами ні
+  (це — частина LLM-чекера, перевірка 5).
 
 ### Fixed
 - **`scripts/brain/split-monoliths.mjs`: `status: OPEN` (великими) у вузлі тріажу більше не випадає з фасаду мовчки.**

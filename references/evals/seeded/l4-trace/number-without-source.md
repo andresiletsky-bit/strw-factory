@@ -3,7 +3,7 @@ type: l4-trace
 expect: FAIL
 level: 0
 defect: число Instagram у звіті, а getAnalyticsDataByMetrics у trace немає — цифра без джерела
-defect_keywords: [без getAnalyticsDataByMetrics]
+defect_keywords: [відсутнє у відповіді getAnalyticsDataByMetrics]
 source: чекер 6a #29/#23 р.3 — пін на прозу не збігся, тепер механізм
 ---
 
