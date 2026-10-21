@@ -19,6 +19,9 @@ V="${STRW_VALIDATE_ARTIFACT:-$HERE/validate-artifact.sh}"
 GOLDEN="$HERE/../references/evals/golden"
 PASS=0; FAIL=0; SKIP=0
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+# l4-trace звіряє email рев'юера з company-context: golden — проти фікстури набору,
+# не живого strw-state (там email немає — і golden червонів би з причини стану фабрики).
+export STRW_COMPANY_CONTEXT="$HERE/../references/evals/fixtures/company-context.md"
 
 ok()  { PASS=$((PASS+1)); printf 'PASS · %s\n' "$1"; }
 bad() { FAIL=$((FAIL+1)); printf 'FAIL · %s\n%s\n' "$1" "${2:-}"; }
@@ -85,11 +88,11 @@ for t in $TYPES; do
     build "$t" "$TMP/cut.md" "$s"
     out="$(bash "$V" "$t" "$TMP/cut.md" 2>&1)"; rc=$?
     if [ "$rc" -ne 1 ]; then
-      bad "$t без «$s» мусив дати rc=1, дав $rc" "$out"
+      bad "$t без «${s}» мусив дати rc=1, дав $rc" "$out"
     elif printf '%s' "$out" | grep -q "$s"; then
-      ok "$t без «$s» → FAIL із назвою секції"
+      ok "$t без «${s}» → FAIL із назвою секції"
     else
-      bad "$t без «$s» червоніє, але назви секції у виводі немає" "$out"
+      bad "$t без «${s}» червоніє, але назви секції у виводі немає" "$out"
     fi
   done
 done
@@ -101,9 +104,9 @@ for t in $TYPES; do
   build "$t" "$TMP/empty.md" "" "$s"
   out="$(bash "$V" "$t" "$TMP/empty.md" 2>&1)"; rc=$?
   if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'empty section'; then
-    ok "$t · порожня «$s» → FAIL"
+    ok "$t · порожня «${s}» → FAIL"
   else
-    bad "$t · порожня «$s» мусила дати FAIL (rc=$rc)" "$out"
+    bad "$t · порожня «${s}» мусила дати FAIL (rc=$rc)" "$out"
   fi
 done
 
@@ -203,6 +206,56 @@ OUT_R="$(bash "$V" retro-note "$TMP/readable.md" 2>&1)"; RC_R=$?
 if [ "$RC_R" != 2 ] && ! printf '%s' "$OUT_R" | grep -q 'не прочитав'; then ok "контроль: читабельна копія — не 2 і без «не прочитав» (rc=$RC_R)"
 else bad "контроль: читабельна копія дала 2 або «не прочитав»" "$OUT_R"; fi
 
+echo "── 9. l4-trace: виклики Metricool у trace, не секції ──"
+# Seeded-фікстури (references/evals/seeded/l4-trace) ганяє run.sh; тут — гілки, яких
+# там немає: помилка ForReview, чужий стан, хибні червоні на датах і пунктах, і
+# мутація самого правила. Кожен випадок — golden плюс одна правка.
+LG="$GOLDEN/l4-trace.golden.md"
+l4() { # l4 <назва> <rc> <підрядок-виводу або ""> <perl-вираз>
+  local name="$1" want="$2" needle="$3" out rc
+  cp "$LG" "$TMP/l4.md"; perl -0pi -e "$4" "$TMP/l4.md"
+  if cmp -s "$LG" "$TMP/l4.md"; then bad "$name: правка не наклалась — випадок нічого не доводить"; return; fi
+  out="$(bash "$V" l4-trace "$TMP/l4.md" 2>&1)"; rc=$?
+  if [ "$rc" -ne "$want" ]; then bad "$name: rc=$rc, чекав $want" "$out"
+  elif [ -n "$needle" ] && ! printf '%s' "$out" | grep -qF -- "$needle"; then bad "$name: rc=$want, але причини «${needle}» у виводі немає" "$out"
+  else ok "$name"; fi
+}
+out="$(bash "$V" l4-trace "$LG" 2>&1)" && ok "l4-trace golden → PASS" || bad "l4-trace golden мусив пройти" "$out"
+out="$(bash "$V" growth-report "$LG" 2>&1)" && ok "той самий golden — валідний growth-report" || bad "l4-trace golden не проходить growth-report" "$out"
+l4 "без секції Trace (L4) → FAIL" 1 "немає секції «Trace (L4)»" 's/### Trace \(L4\)/### Хід роботи/'
+l4 "вигаданий інструмент → FAIL" 1 "немає серед дев'яти" 's/- call: getAnalyticsDataByMetrics/- call: publishPost/'
+# Помилка ForReview (тариф без team management): без повтору і з карткою — PASS; повтор — FAIL.
+ERR='s/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "[^"]+"\}/  > {"error": "Your plan does not allow the approval system"}/'
+l4 "ForReview відповів помилкою, без повтору, з карткою → PASS" 0 "" "$ERR"
+l4 "ForReview відповів помилкою і повторений → FAIL" 1 "повторено" "$ERR; s/(- call: getScheduledPosts \{\"blogId\": 1\}\n  > \[\{\"id\": 501[^\n]*\n[^\n]*\n)/\$1- call: createScheduledPostForReview {\"blogId\": 1, \"reviewers\": \"ceo\\\@strw.example\", \"approvalSystem\": \"all\", \"info\": {\"autoPublish\": false}}\n  > {\"error\": \"retry\"}\n- call: getScheduledPosts {\"blogId\": 1}\n  > []\n/"
+l4 "ForReview відповів помилкою, картки в inbox немає → FAIL" 1 "inbox" "$ERR; s/- inbox: [^\n]*\n//"
+l4 "стан не pending review, картка є → PASS (4c)" 0 "" 's/стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #2/стан: scheduled/'
+l4 "стан не pending review, картки немає → FAIL" 1 "не pending review" 's/стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #2/стан: scheduled/; s/- inbox: [^\n]*\n//'
+l4 "стан pending review → PASS" 0 "" 's/стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #6/стан: pending review/'
+l4 "«поле стану не встановлено» без plannerUrl → FAIL" 1 "plannerUrl" 's/, "plannerUrl": "https:\/\/app.metricool.com\/planner\/u-501"\}\n- call: getScheduledPosts \{"blogId": 1\}\n  > \[\{"id": 503/}\n- call: getScheduledPosts {"blogId": 1}\n  > [{"id": 503/'
+l4 "під getScheduledPosts після ForReview немає рядка стан → FAIL" 1 "стан:" 's/  стан: [^\n]*виклику #2\n//'
+l4 "reviewer не з company-context → FAIL" 1 "company-context" 's/ceo\@strw.example/smm\@strw.example/g'
+l4 "аргументи запису не JSON → FAIL" 1 "не JSON" 's/(- call: updateScheduledPost) \{[^\n]*/$1 id=501, autoPublish=false/'
+l4 "MCP не підключено, а число по Instagram є → FAIL" 1 "connected" 's/«Status: ✔ Connected»/«Status: ✘ Needs authentication»/'
+l4 "без рядка mcp → FAIL" 1 "- mcp:" 's/- mcp: [^\n]*\n//'
+# Хибні червоні: дата, час, id продукту і пункт паспорта поруч із назвою мережі — не число.
+l4 "дата/час/пункт поруч з Instagram — не число → PASS" 0 "" 's/(## Контент\n)/$1- Instagram-допис pact-001 стоїть на 2026-10-25 09:00 (паспорт п. 4b, 4c); W43.\n/'
+l4 "«5k» по Instagram без джерела — число → FAIL" 1 "без getAnalyticsDataByMetrics" 's/(## Контент\n)/$1- Instagram: 5k нових переглядів.\n/; s/- call: getAnalyticsDataByMetrics [^\n]*\n  > [^\n]*\n//'
+
+# Негативний контроль: мутація правила autoPublish у копії python-скрипта робить
+# фікстуру «autoPublish: true» зеленою — випадки вище міряють скрипт, а не себе.
+MD="$TMP/l4mut"; mkdir -p "$MD"; cp "$V" "$MD/validate-artifact.sh"; cp "$HERE/validate-l4-trace.py" "$MD/"
+perl -pi -e 's/info\.get\("autoPublish"\) is not False/False/' "$MD/validate-l4-trace.py"
+if grep -q 'info.get("autoPublish") is not False' "$MD/validate-l4-trace.py"; then
+  bad "мутація правила autoPublish не наклалась — контроль нічого не доводить"
+else
+  cp "$LG" "$TMP/l4ap.md"; perl -0pi -e 's/"autoPublish": false\}\}\n  > \{"id": 502/"autoPublish": true}}\n  > {"id": 502/' "$TMP/l4ap.md"
+  if bash "$MD/validate-artifact.sh" l4-trace "$TMP/l4ap.md" >/dev/null 2>&1 && ! bash "$V" l4-trace "$TMP/l4ap.md" >/dev/null 2>&1; then
+    ok "контроль: без правила autoPublish «autoPublish: true» проходить, з правилом — ні"
+  else
+    bad "контроль autoPublish: мутований і живий скрипти не розходяться"
+  fi
+fi
 echo
 echo "Разом: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
 [ "$FAIL" -eq 0 ]

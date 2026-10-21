@@ -27,6 +27,9 @@ VALIDATOR="${STRW_VALIDATE_ARTIFACT:-$REPO/scripts/validate-artifact.sh}"
 RESULTS_DIR="${STRW_EVALS_RESULTS_DIR:-$EVALS_DIR/results}"
 STATE_REPO="${STATE_REPO:-$HOME/Developer/STRW/strw-state}"
 LANES="$STATE_REPO/engine/lanes.yaml"
+# l4-trace звіряє email рев'юера з company-context. Фікстури — з детермінованим
+# файлом набору, не з живим strw-state: інакше golden залежав би від стану фабрики.
+export STRW_COMPANY_CONTEXT="${STRW_COMPANY_CONTEXT:-$EVALS_DIR/fixtures/company-context.md}"
 
 OFFLINE="false"; TYPE_FILTER=""; WRITE_RESULTS="true"
 while [ $# -gt 0 ]; do
@@ -207,6 +210,11 @@ for f in "$EVALS_DIR"/seeded/*/*.md; do
     if [ "$rc" -eq 2 ]; then
       red "seeded $t/$name · валідатор не знає типу '$t'"
       row seeded "$t" "$name" 0 "$exp" ERROR false "unknown type"
+    elif [ "$exp" = "FAIL" ] && [ "$rc" -eq 1 ] && [ -n "$kws" ] && ! mentions_defect "$TMP/out" "$kws"; then
+      # FAIL з чужої причини — це зелена проба, що нічого не доводить: фікстура
+      # «падає», але не на своєму дефекті (evidence-the-lookalike-also-passes).
+      red "seeded $t/$name · рівень 0 дав FAIL, але не про цей дефект (жодного з ключів: $kws): $(sed -n 2,3p "$TMP/out" | tr '\n' ' ')"
+      row seeded "$t" "$name" 0 "$exp" "FAIL-WRONG-REASON" false "$(cat "$TMP/out")"
     elif { [ "$exp" = "FAIL" ] && [ "$rc" -eq 1 ]; } || { [ "$exp" = "PASS" ] && [ "$rc" -eq 0 ]; }; then
       green "seeded $t/$name · рівень 0 дав $exp"
       row seeded "$t" "$name" 0 "$exp" "$exp" true "$def"

@@ -3,7 +3,7 @@ id: L4-growth
 trigger: scheduled — щотижня для кожного продукту в проді (стадія 7–8)
 scope: Тижневий маркетинг-цикл: контент, SEO, лончі, email → growth-report. НЕ робить: публікацію і платні кампанії (незворотні → inbox). Канал черги і соцметрик — Metricool MCP (п. 4–5).
 maker: strw-growth
-checker: strw-brand-reviewer · шкала і формат вердикту — `references/review-policy.md`
+checker: strw-brand-reviewer · шкала і формат вердикту — `references/review-policy.md` · рівень 0 — `validate-artifact.sh growth-report` і `validate-artifact.sh l4-trace` (виклики Metricool у trace, п. 4a–4c, 5)
 stop_condition: growth-report за контрактом + чернетки контенту PASS від checker
 output: growth-report.md · чернетки контенту в products/<id>/growth/ · ті самі чернетки в черзі Metricool у стані «на затвердження» (через `createScheduledPostForReview`) — лише за передумовою п. 4a; без неї черга порожня і це не FAIL
 escalation: пакет «до публікації» → gate-запит в inbox (Andrii публікує або підтверджує автопублікацію каналами з білого списку); бюджетні кампанії → завжди запит

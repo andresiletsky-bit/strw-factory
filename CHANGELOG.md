@@ -3,6 +3,25 @@
 
 ## [Unreleased]
 
+### Added
+- **Рівень 0 для trace L4: тип `l4-trace` у `validate-artifact.sh` (логіка — `scripts/validate-l4-trace.py`).**
+  Безпека черги Metricool переїхала з прози в механізм: шість раундів чекера 6a на #29 (strw-ops #23) щоразу
+  знаходили новий синонім у паспорті, і вердикт р.3 був «пін на прозу не збіжиться». Скрипт читає виклики в
+  `### Trace (L4)` growth-report'а (мова trace — `references/artifact-contracts.md` §growth-report) і дає FAIL із
+  номером і назвою виклику: `createScheduledPost` · ForReview без `approvalSystem: "all"` чи з `reviewers` ≠ рівно
+  email Andrii з company-context · запис без `info.autoPublish: false` (JSON, не регулярка) · запис без
+  `getScheduledPosts` одразу після · правка без повторного `sendScheduledPostForReview` · помилка ForReview з
+  повтором або без картки · стан не pending review без картки · «не встановлено» без `plannerUrl` · число по
+  соцмережах без `getAnalyticsDataByMetrics` · «н/д» з цифрою. Передумова — параметри виклику й company-context,
+  не `getBrandSettings`: бриф задачі просив цитату «Everyone must approve» з `getBrandSettings`, але жива перевірка
+  19.10 показала, що інструмент полів затвердження не віддає, і злитий паспорт 4a вже це записав — механізм іде за
+  паспортом. `agents/validators/brand-reviewer.md` перевірка 5 — прогін скрипта з цитатою виводу замість переліку
+  слів; паспорт L4 (`checker:`) називає обидва прогони рівня 0; `agents/growth.md` 6b — мова trace. Еталон
+  `references/evals/golden/l4-trace.golden.md`, дев'ять seeded рівня 0 (`references/evals/seeded/l4-trace/`),
+  фікстура `references/evals/fixtures/company-context.md` (раннер підставляє її через `STRW_COMPANY_CONTEXT`).
+  Раннер evals тепер звіряє ПРИЧИНУ FAIL рівня 0 з `defect_keywords` — фікстура, що падає з чужої причини, червона
+  (`run.test.sh` §7 з контролем-мутацією). Межа: trace пише maker — записане ловиться, пропущене ні.
+
 ### Fixed
 - **`scripts/brain/split-monoliths.mjs`: `status: OPEN` (великими) у вузлі тріажу більше не випадає з фасаду мовчки.**
   Знахідка 19.10 при заведенні tri-176: `facadeTriage` брав лише `status === "open"` малими, тож
