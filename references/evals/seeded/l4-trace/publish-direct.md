@@ -38,20 +38,20 @@ source: чекер 6a #29/#23 р.3 — пін на прозу не збігся,
 - Читав: products/pact-001/state.md, metrics.md, минулий growth-report, company-context.md.
 - mcp: `claude mcp get metricool` → «Status: ✔ Connected»
 - reviewer: ceo@strw.example — company-context.md, розділ «Рев'юер черги Metricool»
-- call: getAnalyticsDataByMetrics {"brandId": "1", "metrics": ["IGRE11", "IGRE10", "IGRE08"], "from": "20XX-NN-01T00:00:00+03:00", "to": "20XX-NN-28T23:59:59+03:00"}
+- call: getAnalyticsDataByMetrics {"brandId": "1", "metrics": ["IGRE11", "IGRE10", "IGRE08"], "from": "2026-09-23T00:00:00+03:00", "to": "2026-10-20T23:59:59+03:00"}
   > {"IGRE11": 1240, "IGRE10": 312, "IGRE08": 45.23}
-- call: createScheduledPost {"blogId": 1, "date": "20XX-NN-NNT09:00:00+03:00", "info": {"text": "Як не зірвати звичку на вихідних", "providers": [{"network": "instagram"}], "autoPublish": false}}
+- call: createScheduledPost {"blogId": 1, "date": "2026-10-25T09:00:00+03:00", "info": {"text": "Як не зірвати звичку на вихідних", "providers": [{"network": "instagram"}], "autoPublish": false}}
   > {"id": 501, "uuid": "u-501", "plannerUrl": "https://app.metricool.com/planner/u-501"}
-- call: getScheduledPosts {"brandId": "1", "fromDate": "20XX-NN-NNT00:00:00+03:00", "toDate": "20XX-NN-NNT23:59:59+03:00", "timezone": "Europe/Kyiv"}
+- call: getScheduledPosts {"brandId": "1", "fromDate": "2026-10-21T00:00:00+03:00", "toDate": "2026-10-31T23:59:59+03:00", "timezone": "Europe/Kyiv"}
   > [{"id": 501, "uuid": "u-501", "text": "Як не зірвати звичку на вихідних"}]
   стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #2
 - call: updateScheduledPost {"id": 501, "uuid": "u-501", "blogId": 1, "info": {"text": "Як не зірвати звичку у вихідні", "providers": [{"network": "instagram"}], "autoPublish": false}}
   > {"id": 502, "uuid": "u-501"}
-- call: getScheduledPosts {"brandId": "1", "fromDate": "20XX-NN-NNT00:00:00+03:00", "toDate": "20XX-NN-NNT23:59:59+03:00", "timezone": "Europe/Kyiv"}
+- call: getScheduledPosts {"brandId": "1", "fromDate": "2026-10-21T00:00:00+03:00", "toDate": "2026-10-31T23:59:59+03:00", "timezone": "Europe/Kyiv"}
   > [{"id": 502, "uuid": "u-501", "text": "Як не зірвати звичку у вихідні"}]
 - call: sendScheduledPostForReview {"id": 502, "uuid": "u-501", "blogId": 1, "reviewers": "ceo@strw.example", "approvalSystem": "all", "info": {"text": "Як не зірвати звичку у вихідні", "providers": [{"network": "instagram"}], "autoPublish": false}}
   > {"id": 503, "uuid": "u-501", "plannerUrl": "https://app.metricool.com/planner/u-501"}
-- call: getScheduledPosts {"brandId": "1", "fromDate": "20XX-NN-NNT00:00:00+03:00", "toDate": "20XX-NN-NNT23:59:59+03:00", "timezone": "Europe/Kyiv"}
+- call: getScheduledPosts {"brandId": "1", "fromDate": "2026-10-21T00:00:00+03:00", "toDate": "2026-10-31T23:59:59+03:00", "timezone": "Europe/Kyiv"}
   > [{"id": 503, "uuid": "u-501", "text": "Як не зірвати звичку у вихідні"}]
   стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #6
 - inbox: tri-NNN — TikTok: доступ до метрик переглядів
