@@ -13,14 +13,15 @@ source: чекер 6a #29/#23 р.3 — пін на прозу не збігся,
 > секції, а виклики Metricool у «Trace (L4)»: прямий розклад заборонений, ForReview — з
 > `approvalSystem: "all"`, рівно email Andrii з company-context і `info.autoPublish: false`;
 > після кожного запису — `getScheduledPosts` зі станом; після правки — повторне надсилання;
-> число по соцмережах — лише з `getAnalyticsDataByMetrics`, «н/д» — без цифр.
+> число по соцмережах — з тегом `[#N ПОЛЕ]`, що звіряється з відповіддю `getAnalyticsDataByMetrics`
+> (префікс поля — мережа рядка; виміряно лише IG); «н/д» — без цифр.
 > Email рев'юера — з фікстури `references/evals/fixtures/company-context.md`.
 
 ## Кампанії
 - Тиждень W-N: серія «перший тиждень з Pact» — три Reels-чернетки, одна в черзі Metricool на затвердження.
 
 ## Метрики
-- Instagram: охоплення за 28 днів — 1 240, підписники — 312 (`getAnalyticsDataByMetrics`, див. trace).
+- Instagram: охоплення за 28 днів — 1 240 [#1 IGRE07], підписники — 312 [#1 IGPO02], ER — 4,5% [#1 IGPO03].
 - TikTok: н/д: метрика переглядів недоступна, ≈ 900 за тиждень.
 
 ## Контент
@@ -34,8 +35,8 @@ source: чекер 6a #29/#23 р.3 — пін на прозу не збігся,
 - Читав: products/pact-001/state.md, metrics.md, минулий growth-report, company-context.md.
 - mcp: `claude mcp get metricool` → «Status: ✔ Connected»
 - reviewer: ceo@strw.example — company-context.md, розділ «Рев'юер черги Metricool»
-- call: getAnalyticsDataByMetrics {"blogId": 1, "metrics": ["igReach", "igFollowers"], "from": "20XX-NN-01", "to": "20XX-NN-28"}
-  > {"igReach": 1240, "igFollowers": 312}
+- call: getAnalyticsDataByMetrics {"brandId": "1", "metrics": ["IGRE07", "IGPO02", "IGPO03"], "from": "20XX-NN-01T00:00:00+03:00", "to": "20XX-NN-28T23:59:59+03:00"}
+  > {"IGRE07": 1240, "IGPO02": 312, "IGPO03": 0.045}
 - call: createScheduledPostForReview {"blogId": 1, "date": "20XX-NN-NNT09:00:00+03:00", "reviewers": "ceo@strw.example", "approvalSystem": "all", "info": {"text": "Як не зірвати звичку на вихідних", "providers": [{"network": "instagram"}], "autoPublish": false}}
   > {"id": 501, "uuid": "u-501", "plannerUrl": "https://app.metricool.com/planner/u-501"}
 - call: getScheduledPosts {"blogId": 1}

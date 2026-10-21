@@ -250,10 +250,10 @@ l4 "виклик без цитати відповіді → FAIL (M16)" 1 "не�
 l4 "createScheduledPost прозою в тілі звіту → FAIL (C2)" 1 "звіт рядок" 's/(## Контент\n)/$1- Ще одну чернетку опубліковано напряму через createScheduledPost.\n/'
 l4 "create_scheduled_post прозою в trace → FAIL (C3)" 1 "createscheduledpost" 's/(- inbox: )/- Також create_scheduled_post для другої чернетки.\n$1/'
 l4 "createscheduledpost малими в trace → FAIL (C4)" 1 "createscheduledpost" 's/(- inbox: )/- Також createscheduledpost для другої.\n$1/'
-l4 "Інстаграм кирилицею з вигаданим числом → FAIL (B)" 1 "відсутнє у відповіді" 's/(## Контент\n)/$1- Інстаграм: охоплення за тиждень — 9 999.\n/'
-l4 "IG з вигаданим числом → FAIL (B2)" 1 "відсутнє у відповіді" 's/(## Контент\n)/$1- IG: охоплення — 7 777.\n/'
-l4 "число в наступному реченні того ж рядка → FAIL (B3)" 1 "відсутнє у відповіді" 's/(## Контент\n)/$1- Охоплення в Instagram зросло. Воно склало 6 666.\n/'
-l4 "підсекція під Trace — уже звіт, число без джерела → FAIL (B5)" 1 "відсутнє у відповіді" 's/\z/\n#### Соцметрики\n- Instagram: охоплення 5 555.\n/'
+l4 "Інстаграм кирилицею з вигаданим числом → FAIL (B)" 1 "без тегу" 's/(## Контент\n)/$1- Інстаграм: охоплення за тиждень — 9 999.\n/'
+l4 "IG з вигаданим числом → FAIL (B2)" 1 "без тегу" 's/(## Контент\n)/$1- IG: охоплення — 7 777.\n/'
+l4 "число в наступному реченні того ж рядка → FAIL (B3)" 1 "без тегу" 's/(## Контент\n)/$1- Охоплення в Instagram зросло. Воно склало 6 666.\n/'
+l4 "підсекція під Trace — уже звіт, число без джерела → FAIL (B5)" 1 "без тегу" 's/\z/\n#### Соцметрики\n- Instagram: охоплення 5 555.\n/'
 l4 "поста немає в getScheduledPosts, картки немає → FAIL (D)" 1 "поста немає у відповіді" 's/  > \[\{"id": 503[^\n]*/  > []/'
 l4 "plannerUrl: null при «не встановлено» → FAIL (D2)" 1 "plannerUrl" 's/"id": 503, "uuid": "u-501", "plannerUrl": "[^"]+"/"id": 503, "uuid": "u-501", "plannerUrl": null/'
 l4 "reviewer — підрядок email Andrii → FAIL (E)" 1 "не email Andrii" 's/ceo\@strw.example/o\@strw.exam/g'
@@ -261,7 +261,46 @@ l4 "Forbidden у відповіді ForReview — помилка, повтор �
 # Хибні червоні р.1: кількість чернеток і тривалість ролика біля назви мережі — не метрика.
 l4 "«3 Reels-чернетки для Instagram, 1 у черзі» — не метрика → PASS (F)" 0 "" 's/(## Контент\n)/$1- 3 Reels-чернетки для Instagram, 1 з них у черзі на затвердження.\n/'
 l4 "«Reels до 30 секунд» — не метрика → PASS (F2)" 0 "" 's/(## Контент\n)/$1- Reels до 30 секунд.\n/'
-l4 "число по Instagram, що Є у відповіді, в іншому рядку → PASS" 0 "" 's/(## Наступний тиждень\n)/$1- Тримати підписників Instagram вище 312.\n/'
+l4 "число по Instagram з тегом, що збігається, в іншому рядку → PASS" 0 "" 's/(## Наступний тиждень\n)/$1- Тримати підписників Instagram вище 312 [#1 IGPO02].\n/'
+# Раунд 2 чекера 6a #33: число по соцмережах — лише з тегом-цитатою, що звіряється з викликом.
+l4 "«48000 тижнево» по TikTok без тегу → FAIL (N7)" 1 "без тегу" 's/(## Контент\n)/$1- TikTok: перегляди — 48000 тижнево.\n/'
+l4 "«48000 weekly» без тегу → FAIL (N6)" 1 "без тегу" 's/(## Контент\n)/$1- TikTok views: 48000 weekly.\n/'
+l4 "таблиця з мережею без тегу → FAIL (N3)" 1 "без тегу" 's/(## Контент\n)/$1| Мережа | Охоплення |\n|---|---|\n| TikTok | 48 000 |\n/'
+l4 "«кліки по лінку» без слова-метрики → FAIL (N4)" 1 "без тегу" 's/(## Контент\n)/$1- TikTok: 4 200 кліків по лінку в біо.\n/'
+l4 "«x48000» — не id, число → FAIL (N11)" 1 "без тегу" 's/(## Контент\n)/$1- TikTok: перегляди x48000.\n/'
+l4 "мережа в заголовку, число під ним → FAIL (N10)" 1 "без тегу" 's/(## Наступний тиждень\n)/### TikTok\n- перегляди — 48 000.\n\n$1/'
+l4 "перенос рядка: мережа вище, число нижче → FAIL (N9)" 1 "без тегу" 's/(## Контент\n)/$1Охоплення в TikTok за тиждень склало\n48 000.\n/'
+l4 "TikTok з тегом поля Instagram (чуже 1 240) → FAIL (N1)" 1 "іншої мережі" 's/(## Контент\n)/$1- TikTok: перегляди за 28 днів — 1 240 [#1 IGRE07].\n/'
+l4 "тег з невиміряним префіксом поля → FAIL" 1 "не виміряно" 's/(## Контент\n)/$1- TikTok: перегляди — 48 000 [#1 TTPO01].\n/; s/"metrics": \["IGRE07"/"metrics": ["TTPO01", "IGRE07"/'
+l4 "тег, значення не збігається з відповіддю → FAIL" 1 "≠ значенню" 's/підписники — 312 \[#1 IGPO02\]/підписники — 313 [#1 IGPO02]/'
+l4 "тег на поле, якого немає в metrics виклику → FAIL" 1 "немає в \`metrics\`" 's/"metrics": \["IGRE07", "IGPO02", "IGPO03"\]/"metrics": ["IGRE07", "IGPO03"]/'
+l4 "тег на виклик, що не аналітика → FAIL" 1 "не getAnalyticsDataByMetrics" 's/312 \[#1 IGPO02\]/312 [#2 IGPO02]/'
+l4 "ER у відсотках проти частки у відповіді → PASS (F5)" 0 "" 's/ER — 4,5% \[#1 IGPO03\]/ER 4,5% [#1 IGPO03]/'
+# Хибні червоні р.2: тривалість, «Топ-3», кількість постів біля мережі — не метрика.
+l4 "«Reels до 30 секунд» поруч з охопленням → PASS (F3)" 0 "" 's/(## Наступний тиждень\n- )/$1Reels до 30 секунд. /'
+l4 "«Топ-3 Reels за охопленням» → PASS (F6)" 0 "" 's/(## Контент\n)/$1- Топ-3 Reels тижня за охопленням — у metrics.md.\n/'
+l4 "«2 пости в Instagram набрали переглядів» → PASS (F7)" 0 "" 's/(## Контент\n)/$1- 2 пости в Instagram набрали найбільше переглядів.\n/'
+# Передумова 4a: лише розділ «Рев'юер черги Metricool» (р.2, E2).
+printf '\n## Підрядники\n- SMM-підрядник (погоджено з Andrii): smm@agency.example\n' | cat "$STRW_COMPANY_CONTEXT" - > "$TMP/cc-e2.md"
+cp "$LG" "$TMP/e2.md"; perl -pi -e 's/ceo\@strw.example/smm\@agency.example/g' "$TMP/e2.md"
+out="$(STRW_COMPANY_CONTEXT="$TMP/cc-e2.md" bash "$V" l4-trace "$TMP/e2.md" 2>&1)"; rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'не email Andrii'; } && ok "email з іншого розділу company-context («погоджено з Andrii») → FAIL (E2)" || bad "E2: rc=$rc" "$out"
+out="$(STRW_COMPANY_CONTEXT="$TMP/cc-e2.md" bash "$V" l4-trace "$LG" 2>&1)" && ok "контроль-близнюк: той самий company-context, email Andrii → PASS" || bad "E2 близнюк" "$out"
+# Рядок `- Andrii:` поза розділом рев'юера (особиста адреса в «Контактах») — теж не рев'юер.
+printf '\n## Контакти\n- Andrii: andrii.personal@strw.example\n' | cat "$STRW_COMPANY_CONTEXT" - > "$TMP/cc-e3.md"
+cp "$LG" "$TMP/e3.md"; perl -pi -e 's/ceo\@strw.example/andrii.personal\@strw.example/g' "$TMP/e3.md"
+out="$(STRW_COMPANY_CONTEXT="$TMP/cc-e3.md" bash "$V" l4-trace "$TMP/e3.md" 2>&1)"; rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'не email Andrii'; } && ok "«- Andrii: …» поза розділом «Рев'юер черги Metricool» → FAIL" || bad "E3: rc=$rc" "$out"
+# `info` — рядок із JSON, як у схемах (р.2, R1/R2).
+l4 "info рядком із JSON, autoPublish false → PASS (R1)" 0 "" 's/"info": \{"text": "Як не зірвати звичку на вихідних", "providers": \[\{"network": "instagram"\}\], "autoPublish": false\}/"info": "{\\"text\\": \\"x\\", \\"autoPublish\\": false}"/'
+l4 "info рядком із JSON, autoPublish true → FAIL (R2)" 1 "autoPublish: false" 's/"info": \{"text": "Як не зірвати звичку на вихідних", "providers": \[\{"network": "instagram"\}\], "autoPublish": false\}/"info": "{\\"text\\": \\"x\\", \\"autoPublish\\": true}"/'
+# Стан (р.2: мутанти M18 і M09 виживали; S1/S2 — поле стану у відповіді ігнорувалось).
+l4 "«стан: not pending review» — заперечення, картки немає → FAIL (M18)" 1 "не pending review" 's/стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #6/стан: not pending review/'
+l4 "plannerUrl «n/a» — не посилання → FAIL (M09)" 1 "plannerUrl" 's/"id": 503, "uuid": "u-501", "plannerUrl": "[^"]+"/"id": 503, "uuid": "u-501", "plannerUrl": "n\/a"/'
+l4 "«не встановлено», а у відповіді status PUBLISHED → FAIL (S1)" 1 "поле є" 's/  > \[\{"id": 503, "uuid": "u-501", /  > [{"id": 503, "uuid": "u-501", "status": "PUBLISHED", /'
+l4 "«pending review», а у відповіді status SCHEDULED → FAIL (S2)" 1 "а у відповіді status=SCHEDULED" 's/  > \[\{"id": 503, "uuid": "u-501", /  > [{"id": 503, "uuid": "u-501", "status": "SCHEDULED", /; s/стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #6/стан: pending review/'
+l4 "«pending review» і status PENDING_REVIEW у відповіді → PASS" 0 "" 's/  > \[\{"id": 503, "uuid": "u-501", /  > [{"id": 503, "uuid": "u-501", "status": "PENDING_REVIEW", /; s/стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #6/стан: pending review/'
+l4 "пост у getScheduledPosts з autoPublish true → FAIL" 1 "autoPublish: true" 's/  > \[\{"id": 503, "uuid": "u-501", /  > [{"id": 503, "uuid": "u-501", "autoPublish": true, /'
 
 # Негативний контроль: мутація правила autoPublish у копії python-скрипта робить
 # фікстуру «autoPublish: true» зеленою — випадки вище міряють скрипт, а не себе.

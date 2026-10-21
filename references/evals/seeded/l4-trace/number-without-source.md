@@ -2,8 +2,8 @@
 type: l4-trace
 expect: FAIL
 level: 0
-defect: число Instagram у звіті, а getAnalyticsDataByMetrics у trace немає — цифра без джерела
-defect_keywords: [відсутнє у відповіді getAnalyticsDataByMetrics]
+defect: число Instagram з тегом-цитатою, а виклику getAnalyticsDataByMetrics у trace немає — цифра без джерела
+defect_keywords: [не getAnalyticsDataByMetrics]
 source: чекер 6a #29/#23 р.3 — пін на прозу не збігся, тепер механізм
 ---
 
@@ -13,14 +13,15 @@ source: чекер 6a #29/#23 р.3 — пін на прозу не збігся,
 > секції, а виклики Metricool у «Trace (L4)»: прямий розклад заборонений, ForReview — з
 > `approvalSystem: "all"`, рівно email Andrii з company-context і `info.autoPublish: false`;
 > після кожного запису — `getScheduledPosts` зі станом; після правки — повторне надсилання;
-> число по соцмережах — лише з `getAnalyticsDataByMetrics`, «н/д» — без цифр.
+> число по соцмережах — з тегом `[#N ПОЛЕ]`, що звіряється з відповіддю `getAnalyticsDataByMetrics`
+> (префікс поля — мережа рядка; виміряно лише IG); «н/д» — без цифр.
 > Email рев'юера — з фікстури `references/evals/fixtures/company-context.md`.
 
 ## Кампанії
 - Тиждень W-N: серія «перший тиждень з Pact» — три Reels-чернетки, одна в черзі Metricool на затвердження.
 
 ## Метрики
-- Instagram: охоплення за 28 днів — 1 240, підписники — 312 (`getAnalyticsDataByMetrics`, див. trace).
+- Instagram: охоплення за 28 днів — 1 240 [#1 IGRE07], підписники — 312 [#1 IGPO02], ER — 4,5% [#1 IGPO03].
 - TikTok: н/д: метрика переглядів недоступна на тарифі бренду.
 
 ## Контент
