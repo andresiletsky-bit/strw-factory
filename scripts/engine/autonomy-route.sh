@@ -46,8 +46,12 @@ if [ -z "${ENGINE_DIR}" ]; then
   if [ "$(basename "$(dirname "${ITEM}")")" = items ]; then ENGINE_DIR="$(dirname "$(dirname "${ITEM}")")"
   else ENGINE_DIR="${STRW_ROOT}/strw-state/engine"; fi
 fi
-[ -n "${STATE_DIR}" ] || STATE_DIR="$(cd "${ENGINE_DIR}/.." 2>/dev/null && pwd)"
+_parent="$(cd "${ENGINE_DIR}/.." 2>/dev/null && pwd)"
+[ -n "${STATE_DIR}" ] || STATE_DIR="${_parent}"
+# Інша тека стану, ніж батько engine-dir, — маршрут міряв би свіжість одним журналом, а валідатор
+# (крок 8) — іншим (чекер 6a #31, fable). Тому розведення тек — «не поміряно», не тихий вибір.
 [ -n "${STATE_DIR}" ] && [ -d "${STATE_DIR}" ] || unmeasured "немає теки стану (engine-dir ${ENGINE_DIR})"
+[ "$(cd "${STATE_DIR}" && pwd)" = "${_parent}" ] || unmeasured "--state-dir ${STATE_DIR} не є батьком --engine-dir ${ENGINE_DIR} — валідатор міряв би інший журнал рішень"
 
 command -v python3 >/dev/null 2>&1 || unmeasured "немає python3"
 # Читач — та сама повна lib/, що у validate-items.sh: поруч → STRW_ENGINE_LIB → парасолька.
@@ -68,7 +72,8 @@ try:
     import yaml  # noqa: F401  (yaml_nodup на ньому)
     from yaml_nodup import load_nodup
     from decisions_basis import load_decisions, freshness
-    from item_fields import form_errors, readiness_gaps, plan_sha, TOUCHES
+    from item_fields import form_errors, readiness_gaps, plan_sha, _iso_date
+    import datetime
 except ImportError as e:
     print(f"не поміряно: читач не імпортується ({e})"); sys.exit(2)
 
@@ -106,6 +111,8 @@ product = it.get("product")
 if product != "factory":
     if not product:
         na("в елементі немає product — стадію нема де шукати")
+    if not re.match(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$", str(product)) or ".." in str(product):
+        b(f"product {product!r} — не імʼя продукту (шлях до чужого state.md не приймається)")
     sp = os.path.join(state_dir, "products", str(product), "state.md")
     if not os.path.isfile(sp):
         na(f"немає {sp} — стадія продукту невідома")
@@ -164,8 +171,8 @@ if iid:
                     b(f"на елемент посилається відкрита картка тріажу {fn}")
 ab = it.get("acceptance_basis")
 ver = ab.get("verified_against_decisions_log_at") if isinstance(ab, dict) else None
-if not ver or not re.match(r"^\d{4}-\d{2}-\d{2}$", str(ver)[:10]):
-    b("acceptance_basis не звірено з журналом рішень (немає дати звірки)")
+if not (isinstance(ver, (datetime.date, datetime.datetime)) or _iso_date(str(ver or ""))):
+    b("acceptance_basis не звірено з журналом рішень (немає справжньої дати звірки)")
 dec = load_decisions(os.path.join(state_dir, "decisions-log.md"), load_nodup)
 if not dec["found"]:
     na(dec["errors"][0])
@@ -193,7 +200,7 @@ SENSITIVE = [
     ("міграцію бази даних", lambda p, s, n: "migrations" in s or "migration" in s),
     ("крипто або ключі", lambda p, s, n: re.search(r"crypto|keychain|key[-_]?exchange|space[-_]?key|secret", p)),
     ("вимірювальний інструмент (гейт, чек, хук, CI)", lambda p, s, n: (
-        fnmatch.fnmatch(n, "*-check.sh") or fnmatch.fnmatch(n, "*-guard.sh")
+        fnmatch.fnmatch(n, "*-check.*") or fnmatch.fnmatch(n, "*-guard.*") or "gates" in s
         or fnmatch.fnmatch(n, "gates*.json") or fnmatch.fnmatch(n, "validate-*")
         or n in ("dep-allowlist.txt", "autonomy-route.sh", "strw-run.sh")
         or p.startswith((".claude/hooks/", "hooks/", ".githooks/", ".github/workflows/", "scripts/engine/lib/"))
@@ -207,8 +214,8 @@ for raw in files:   # рядки — гарантовано: plan_errors у го
     # normpath: `docs/../.github/workflows/x.yml` — це `.github/workflows/x.yml`; вихід за корінь
     # репо або абсолютний шлях — не файл цього репо.
     p = posixpath.normpath(f).lower()
-    if p.startswith(("/", "../")) or p == "..":
-        b(f"plan.files містить шлях поза репо ({f})")
+    if p.startswith(("/", "../")) or p in ("..", ".") or "\\" in f:
+        b(f"plan.files містить шлях поза репо або не файл ({f})")
     segs = set(p.split("/")[:-1])
     name = p.rsplit("/", 1)[-1]
     for label, hit in SENSITIVE:
@@ -216,7 +223,8 @@ for raw in files:   # рядки — гарантовано: plan_errors у го
             b(f"великий за правилом 6a: план чіпає {label} ({f})")
     if any(d.startswith(p + "/") for d in SENSITIVE_DIRS):
         b(f"великий за правилом 6a: план чіпає теку вимірювального інструмента ({f})")
-    if re.search(r"[*?\[]", f) or f.endswith("/") or "." not in name:
+    # Тека — усе, що не має розширення в останньому сегменті (`.vitepress`, `Makefile` теж: хибно-B дешевше).
+    if re.search(r"[*?\[]", f) or f.endswith("/") or "." not in name.lstrip("."):
         b(f"plan.files містить маску або теку ({f}) — для режиму A потрібен перелік файлів")
 if len(files) > 15:
     b(f"великий за правилом 6a: у плані {len(files)} файлів (межа 15)")
@@ -231,7 +239,8 @@ vr = subprocess.run(["bash", validator, engine_dir], capture_output=True, text=T
                     stdin=subprocess.DEVNULL, env=dict(os.environ))
 if vr.returncode not in (0, 1) or "\nсмуг: " not in "\n" + vr.stdout:
     na(f"validate-items.sh не доміряв (rc={vr.returncode}): {(vr.stderr or vr.stdout).strip()[-200:]}")
-subjects = {os.path.basename(item_path), iid, iid + ".yaml"}
+# Ключ рядка валідатора — імʼя файла; рядки за голим id (blocked_by) недосяжні: blocked — уже B вище.
+subjects = {os.path.basename(item_path)}
 for line in vr.stdout.splitlines():
     m = re.match(r"^(ERROR|STALE): ([^:]+): (.*)$", line)
     if m and m.group(2) in subjects:

@@ -178,6 +178,13 @@ def readiness_gaps(it):
         gaps.append("немає acceptance — критеріїв, що має бути правдою")
     if not _text_or_items(it.get("not_in_scope")):
         gaps.append("немає not_in_scope — що свідомо не робимо")
+    ab = it.get("acceptance_basis")
+    cnt = ab.get("decisions_log_entries") if isinstance(ab, dict) else None
+    if not (isinstance(cnt, int) and not isinstance(cnt, bool)):
+        # Без лічильника свіжість міряється лише датою — рішення того ж дня після звірки невидиме.
+        # Для A це fail-open (чекер 6a #31, fable): нічний прохід будував би скасоване вдень.
+        gaps.append("немає acceptance_basis.decisions_log_entries — свіжість підстави лише за датою, "
+                    "рішення того ж дня не видно")
     plan = it.get("plan")
     if plan is None:
         gaps.append("немає plan — файлів, порядку, ризиків і доказу до першого коміту")

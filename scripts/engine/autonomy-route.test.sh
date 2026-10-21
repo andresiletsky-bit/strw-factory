@@ -146,9 +146,14 @@ rm -f "${S}/decisions/2026/dec-002-b.md"
 gen f.date-stale 'del it["acceptance_basis"]["decisions_log_entries"]; it["acceptance_basis"]["verified_against_decisions_log_at"]="2026-09-01"'
 route "без лічильника: новіше рішення за датою → STALE" f.date-stale 1 "у журналі є новіші рішення"
 gen f.date-fresh 'del it["acceptance_basis"]["decisions_log_entries"]'
-route "близнюк: без лічильника, звірено після останнього рішення" f.date-fresh 0 "unattended"
+route "без лічильника і без новіших дат — усе одно B (датовий шлях не для A)" f.date-fresh 1 "decisions_log_entries"
 gen f.vanished 'it["acceptance_basis"]["decisions_log_entries"]=5'; route "лічильник більший за журнал"  f.vanished 1 "лічильник звірки"
 gen f.boolcnt 'it["acceptance_basis"]["decisions_log_entries"]=True'; route "лічильник true — не число" f.boolcnt 1 "лічильник звірки"
+printf -- '---\naffects: [item:f.fresh]\n---\n## 2026-10-19 · dec-002 · про цей елемент\n' > "${S}/decisions/2026/dec-002-b.md"
+route "рішення з affects item:<id> → STALE"              f.fresh 1 "підстава застаріла"
+gen f.fresh-prod 'it["product"]="pact-x"'
+printf -- '---\naffects: [product:pact-x]\n---\n## 2026-10-19 · dec-002 · про продукт\n' > "${S}/decisions/2026/dec-002-b.md"
+route "рішення з affects product:<id> → STALE"           f.fresh-prod 1 "підстава застаріла"
 printf -- '---\naffects: [facotry]\n---\n## 2026-10-19 · dec-002 · одрук\n' > "${S}/decisions/2026/dec-002-b.md"
 gen f.fresh2 'it["acceptance_basis"]["decisions_log_entries"]=2'
 route "вузол журналу з одруком в affects → свіжість не доведено" f.fresh2 1 "журнал рішень має помилку"
@@ -181,6 +186,21 @@ gen f.r-date 'it["plan_review"]["at"]="2026-99-99"';            route "plan_revi
 gen f.r-null 'it["acceptance"]=[None]; resha()';               route "acceptance: [null]"               f.r-null 1 "немає acceptance"
 gen f.r-bfalse 'it["blocked_by"]=False';                        route "blocked_by: false — не «порожньо»" f.r-bfalse 1 "blocked_by має бути списком"
 gen f.r-nosrc 'it["acceptance_basis"]["sources"]=[]';           route "реєстр: acceptance_basis.sources порожній" f.r-nosrc 1 "реєстр не приймає елемент"
+gen f.r-nocnt 'del it["acceptance_basis"]["decisions_log_entries"]'; route "§3 без лічильника журналу — лише дата" f.r-nocnt 1 "decisions_log_entries"
+gen f.r-baddate 'it["acceptance_basis"]["verified_against_decisions_log_at"]="2026-99-99"'; route "дата звірки 2026-99-99" f.r-baddate 1 "справжньої дати звірки"
+gen f.r-nis-chg 'it["not_in_scope"]+="- і ще не робимо Z\n"';   route "§3 not_in_scope змінено після рев'ю" f.r-nis-chg 1 "план змінено після рев'ю"
+gen f.r-nis-empty 'it["not_in_scope"]=""; resha()';             route "§3 not_in_scope порожній рядок"   f.r-nis-empty 1 "немає not_in_scope"
+gen f.r-noname 'del it["tests_spec"][0]["name"]; resha()';      route "tests_spec без name"              f.r-noname 1 "tests_spec[0].name"
+gen f.r-nored 'del it["tests_spec"][0]["red_when"]; resha()';   route "tests_spec без red_when"          f.r-nored 1 "tests_spec[0].red_when"
+gen f.r-mcbool 'it["budget"]["max_cycles"]=True';               route "budget.max_cycles: true"          f.r-mcbool 1 "budget.max_cycles"
+gen f.r-mh0 'it["budget"]["max_hours"]=0';                      route "budget.max_hours: 0"              f.r-mh0 1 "budget.max_hours"
+gen f.r-mhbool 'it["budget"]["max_hours"]=True';                route "budget.max_hours: true"           f.r-mhbool 1 "budget.max_hours"
+gen f.r-pkey 'it["plan"]["owner"]="x"; resha()';                route "plan з непізнаним ключем"         f.r-pkey 1 "непізнані ключі"
+gen f.r-noproof 'del it["plan"]["proof"]; resha()';             route "plan без proof"                   f.r-noproof 1 "plan.proof"
+gen f.r-nofiles 'it["plan"]["files"]=[]; resha()';              route "plan.files порожній"              f.r-nofiles 1 "plan.files"
+gen f.r-prkey 'it["plan_review"]["note"]="x"';                  route "plan_review з непізнаним ключем"  f.r-prkey 1 "plan_review має непізнані ключі"
+gen f.r-mid 'it["plan_review"]["sha"]=it["plan_review"]["sha"][5:17]'; route "sha — середина хешу, не префікс" f.r-mid 1 "план змінено після рев'ю"
+gen f.r-prod 'it["product"]="../products/pact-x"';               route "product як шлях до чужого state.md" f.r-prod 1 "не імʼя продукту"
 gen f.r-noid 'del it["id"]';                                    route "немає id"                         f.r-noid 1 "немає id"
 
 # §2.3 «великий» за 6a — за plan.files
@@ -192,6 +212,18 @@ big keys       "App/Sources/Spaces/SpaceKeys.swift"         "ключі прос
 big check      "scripts/event-coverage-check.sh"            "*-check.sh"          "вимірювальний інструмент"
 big gates      "gates.json"                                 "gates*.json"         "вимірювальний інструмент"
 big hooks      ".claude/hooks/registry.sh"                  ".claude/hooks/**"    "вимірювальний інструмент"
+big guard      "bin/unattended-guard.sh"                    "*-guard.*"           "вимірювальний інструмент"
+big checkpy    "bin/locale-parity-check.py"                 "*-check.* (python)"  "вимірювальний інструмент"
+big gatesdir   "gates/gate-fixtures/0207c8d3.json"          "тека gates"          "вимірювальний інструмент"
+big validate   "scripts/validate-artifact.sh"               "validate-*"          "вимірювальний інструмент"
+big runner     "bin/strw-run.sh"                            "раннер"              "вимірювальний інструмент"
+big settings   ".claude/settings.json"                      "реєстрація хуків"    "вимірювальний інструмент"
+big githooks   ".githooks/pre-commit.sh"                    ".githooks/"          "вимірювальний інструмент"
+big migsing    "App/Migration/v2.swift"                     "тека Migration"      "міграцію"
+big parent     ".."                                         "корінь-предок"       "поза репо"
+big dot        "."                                          "сам корінь"          "не файл"
+big backslash  'scripts\engine\lib\item_fields.py'          "бекслеш"             "не файл"
+big dotdir     "docs/.vitepress"                            "тека з крапкою"      "маску або теку"
 big englib     "scripts/engine/lib/new.py"                  "lib рушія"           "вимірювальний інструмент"
 big ci         ".github/workflows/ci.yml"                   "CI"                  "вимірювальний інструмент"
 big dotdot     "docs/../.github/workflows/build.yml"        "обхід через .."      "вимірювальний інструмент"
@@ -203,12 +235,23 @@ gen f.big-twin "it['plan']['files']=['docs/contracting.md', 'App/Sources/Keypad.
 route "близнюк: contracting.md і Keypad.swift — не контракт і не ключі" f.big-twin 0 "unattended"
 gen f.big-16 "it['plan']['files']=['docs/f%02d.md' % i for i in range(16)]; resha()"; route "6a: 16 файлів"  f.big-16 1 "16 файлів"
 gen f.big-15 "it['plan']['files']=['docs/f%02d.md' % i for i in range(15)]; resha()"; route "близнюк: 15 файлів" f.big-15 0 "unattended"
-gen f.dotslash "it['plan']['files']=['./docs/x.md', '.gitignore']; resha()"; route "близнюк: ./docs/x.md і .gitignore" f.dotslash 0 "unattended"
+gen f.dotslash "it['plan']['files']=['./docs/x.md', 'docs/.eslintrc.json']; resha()"; route "близнюк: ./docs/x.md і docs/.eslintrc.json" f.dotslash 0 "unattended"
 gen f.nonstr "it['plan']['files']=['docs/x.md', 7]; resha()";  route "plan.files з не-рядком"          f.nonstr 1 "списком непорожніх рядків"
 gen f.keyorder "it['plan']=dict(reversed(list(it['plan'].items())))"; route "близнюк: порядок ключів плану не міняє версію" f.keyorder 0 "unattended"
 gen f.mask "it['plan']['files']=['scripts/*.sh']; resha()";    route "план із маскою"                   f.mask 1 "маску або теку"
 gen f.dir "it['plan']['files']=['docs']; resha()";             route "план із текою без слеша"          f.dir 1 "маску або теку"
 gen f.dir2 "it['plan']['files']=['scripts']; resha()";         route "тека-предок lib рушія (scripts)"  f.dir2 1 "теку вимірювального інструмента"
+
+# STALE дизайну — через валідатор (крок 8): маршрут сам дизайн не міряє
+mkdir -p "${S}/products/factory/design"
+printf 'units:\n  - {ref: u1, state: watched, hash: "sha256:bbb"}\n' > "${S}/products/factory/design/index.yaml"
+gen f.design-stale 'it["acceptance_basis"]["design_sources"]=[{"ref":"u1","hash":"sha256:aaa","verified_at":"2026-10-20"}]'
+route "дизайн-одиниця розійшлась → реєстр каже STALE"   f.design-stale 1 "реєстр не приймає елемент (STALE)"
+gen f.design-ok 'it["acceptance_basis"]["design_sources"]=[{"ref":"u1","hash":"sha256:bbb","verified_at":"2026-10-20"}]'
+route "близнюк: дизайн-одиниця збігається"               f.design-ok 0 "unattended"
+rm -rf "${S}/products/factory"
+out="$(bash "${ROUTE}" "${S}/engine/items/f.base.yaml" --state-dir "${TMP}")"; rc=$?
+if [ "${rc}" = 2 ] && printf '%s' "${out}" | /usr/bin/grep -q 'не є батьком'; then ok "--state-dir не батько engine-dir → rc 2"; else bad "розведені теки стану мали б дати rc 2" "rc=${rc} ${out}"; fi
 
 # rc 2 — інструмент сліпий: файл, читач, YAML
 out="$(bash "${ROUTE}" "${S}/engine/items/nope.yaml")"; rc=$?

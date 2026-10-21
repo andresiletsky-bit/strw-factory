@@ -18,6 +18,7 @@
 | `plan_review` | `{verdict: PASS, by: <модель>, at: <дата>, sha: <версія плану>}`; шкала вердикту — `review-policy.md` | `unattended` |
 | `budget` | `{max_cycles: ціле > 0, max_hours: число > 0}` | `unattended` |
 | `acceptance`, `not_in_scope`, `plan` | як для L3 №10 (`plan`: `files · order · risks`/`risks_none_because` · `proof`) | `unattended` — **і для S теж** |
+| `acceptance_basis.decisions_log_entries` | лічильник записів журналу на момент звірки (датовий шлях не бачить рішень того ж дня) | `unattended` |
 
 `plan_review.sha` — версія **рецензованого**: `bash scripts/engine/autonomy-route.sh --plan-sha <елемент>` —
 sha256 hex канонічного JSON полів `acceptance`, `not_in_scope`, `plan`, `tests_spec` (ключі відсортовані;
@@ -27,8 +28,9 @@ sha256 hex канонічного JSON полів `acceptance`, `not_in_scope`, 
 
 Форму тримає `scripts/engine/validate-items.sh` (ERROR реєстру): невідоме `touches`/`autonomy`, покручені поля,
 а для `autonomy: unattended` — кожна прогалина готовності окремим рядком. Код форми і готовності один —
-`scripts/engine/lib/item_fields.py`; свіжість підстави — `lib/decisions_basis.py`. Обидва читачі (валідатор і
-маршрут) імпортують їх, тож розійтися в слові «готово» чи «STALE» вони не можуть.
+`scripts/engine/lib/item_fields.py`; свіжість підстави — `lib/decisions_basis.py`; обидва читачі імпортують їх.
+Межі «одного слова»: маршрут міряє свіжість і для `state: done` (валідатор — ні, рішення №81), і тека стану
+мусить бути батьком `--engine-dir` (інакше rc 2), щоб обидва читали один журнал.
 
 ## Маршрут: `scripts/engine/autonomy-route.sh <елемент> [--engine-dir D] [--state-dir S]`
 
@@ -44,25 +46,31 @@ sha256 hex канонічного JSON полів `acceptance`, `not_in_scope`, 
 
 1. `autonomy: unattended` заявлено (без позначки — B; `with-ceo` — B вручну, завжди поважається).
 2. Поля режиму мають правильну форму (покручене поле не читається як порожнє).
-3. Стадія продукту — `5-build` у frontmatter `products/<id>/state.md`; `product: factory` — без стадії.
+3. Стадія продукту — `5-build` у frontmatter `products/<id>/state.md`; `product: factory` — без стадії;
+   `product` — ім'я, не шлях.
 4. `size` — `S` або `M` (`L` — завжди B).
 5. `touches` порожній.
 6. `blocked_by` порожній (першим називається `ceo:*`).
-7. Жодна картка в `triage/open/` не називає id елемента (межа слова: `x` ≠ `x-two`).
+7. Жодна картка `triage/open/*.md` не називає id елемента (межа слова: `x` ≠ `x-two`).
 8. `acceptance_basis` звірено з журналом і не STALE (той самий вимір, що у валідаторі); журнал рішень без
    помилок (зламаний `affects` чи заголовок вузла — свіжість не доведено).
 9. Готовність до A: `acceptance` · `not_in_scope` · `plan` · `tests_spec` · `plan_review` з `PASS` і `sha`
    поточного плану · `budget`.
-10. Не «великий» за L3 6a — за `plan.files`: контракт (`contract/`), міграції (`migrations/`), крипто й ключі
-    (`crypto`, `keychain`, `key-exchange`, `space-key`, `secret`), вимірювальний інструмент (`*-check.sh`,
-    `*-guard.sh`, `validate-*`, `gates*.json`, `dep-allowlist.txt`, `autonomy-route.sh`, `strw-run.sh`,
+10. Не «великий» за L3 6a — за `plan.files`: контракт (тека `contract`), міграції (`migrations`), крипто й ключі
+    (`crypto`, `keychain`, `key-exchange`, `space-key`, `secret`), вимірювальний інструмент (`*-check.*`,
+    `*-guard.*`, тека `gates`, `validate-*`, `gates*.json`, `dep-allowlist.txt`, `autonomy-route.sh`, `strw-run.sh`,
     `.claude/hooks/`, `hooks/`, `.githooks/`, `.github/workflows/`, `scripts/engine/lib/`,
     `.claude/settings*.json`) або тека-предок такої (`.github`, `scripts`), понад 15 файлів; маска чи тека в
-    `plan.files` — теж B (під маскою нічого не видно, а `plan_drift` раннера розгорне її на будь-що). Шляхи
-    нормалізуються (`docs/../.github/…` = `.github/…`); абсолютний шлях чи вихід за корінь — B.
+    `plan.files` — теж B (під маскою нічого не видно, а `plan_drift` раннера розгорне її на будь-що); текою
+    вважається все без розширення в останньому сегменті (`.vitepress`, `Makefile` — хибно-B дешевше). Шляхи
+    нормалізуються (`docs/../.github/…` = `.github/…`); абсолютний шлях, вихід за корінь, `.`, бекслеш — B.
 11. `validate-items.sh` на `<engine-dir>` не має жодного ERROR/STALE про цей елемент. Маршрут не повторює
     кожне правило реєстру (`sources`, `design_sources`, обов'язкові поля) — він питає валідатор: «unattended»
-    ніколи не кажеться про елемент, якого реєстр не приймає.
+    ніколи не кажеться про елемент, якого реєстр не приймає. Помилки реєстру, що не називають елемент
+    (`lanes.yaml`, глоб смуги, `schema_version`), маршрут не читає — їх зупиняє рівень 0 раннера
+    (validate-items у preflight), бо в контурі без усіх клонів вони червоні завжди.
+
+`--help` — єдиний вихід поза контрактом «один рядок» (rc 0, для людини).
 
 ## Що скрипт НЕ міряє — і де це стережеться
 
