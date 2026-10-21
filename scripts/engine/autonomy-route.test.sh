@@ -238,7 +238,8 @@ shape() { # shape <назва> <python-тіло form_errors>
 shape "«unattended» з кодом 3"     'import sys; print("unattended"); sys.exit(3)'
 shape "«unattended» з кодом 1"     'import sys; print("unattended"); sys.exit(1)'
 shape "«with-ceo» з кодом 0"       'import sys; print("with-ceo: x"); sys.exit(0)'
-shape "два рядки з кодом 1"        'print("зайвий рядок"); return ["x"]'
+shape "зайвий рядок перед відповіддю" 'print("зайвий рядок"); return ["x"]'
+shape "хвіст ПІСЛЯ правильного рядка" 'import atexit; atexit.register(print, "хвіст"); return ["x"]'
 # причина з переносом рядка (значення з YAML) — усе одно ОДИН рядок і rc 1, не «упав»
 gen f.nl-reason 'it["blocked_by"]=["ceo:перший\nдругий"]; it["state"]="blocked"'
 route "перенос рядка в значенні поля → причина одним рядком" f.nl-reason 1 "чекає рішення CEO (ceo:перший другий)"
