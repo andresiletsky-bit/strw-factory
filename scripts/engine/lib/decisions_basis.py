@@ -117,7 +117,7 @@ def freshness(it, dec):
     count = len(dec["dates"])
     stored = ab.get("decisions_log_entries")
     if stored is not None:
-        if not isinstance(stored, int) or stored < 0:
+        if not isinstance(stored, int) or isinstance(stored, bool) or stored < 0:   # true — не лічильник
             return ("bad-counter", stored)
         if count > stored:
             fresh = [(dec["titles"][i], dec["affects"][i]) for i in range(stored, count)]

@@ -63,12 +63,13 @@ it = {
   "autonomy": "unattended", "touches": [],
   "plan": {"files": ["docs/x.md", "scripts/y.sh"], "order": ["тест", "код"], "risks": [],
            "risks_none_because": "фікстура", "proof": "тест зелений"},
-  "tests_spec": [{"name": "x_is_true", "red_when": "X хибне", "negative_control": "X=const"}],
+  "tests_spec": [{"name": "x_is_true", "cmd": "bash tests/x.test.sh", "red_when": "X хибне",
+                  "negative_control": "X=const"}],
   "plan_review": {"verdict": "PASS", "by": "opus", "at": "2026-10-20", "sha": None},
   "budget": {"max_cycles": 2, "max_hours": 3},
 }
-it["plan_review"]["sha"] = plan_sha(it["plan"])
-def resha(): it["plan_review"]["sha"] = plan_sha(it["plan"])
+it["plan_review"]["sha"] = plan_sha(it)
+def resha(): it["plan_review"]["sha"] = plan_sha(it)
 exec(patch)
 with open(os.path.join(d, iid + ".yaml"), "w", encoding="utf-8") as f:
     yaml.safe_dump(it, f, allow_unicode=True, sort_keys=False)
@@ -101,6 +102,8 @@ gen f.stage-build 'it["product"]="pact-x"';                    route "близн
 gen f.stage-Build 'it["product"]="pact-big"';                  route "близнюк: стадія 5-Build (регістр)" f.stage-Build 0 "unattended"
 gen f.no-state 'it["product"]="ghost-x"';                      route "немає state.md продукту"          f.no-state 2 "стадія продукту невідома"
 gen f.no-stage 'it["product"]="nostage-x"';                    route "state.md без stage"               f.no-stage 2 "немає поля stage"
+mkdir -p "${S}/products/open-fm"; printf -- '---\nstage: 5-build\nбез закриття\n' > "${S}/products/open-fm/state.md"
+gen f.open-fm 'it["product"]="open-fm"';                        route "frontmatter без закриття"         f.open-fm 2 "немає закритого frontmatter"
 
 # §2.2 розмір S|M
 gen f.size-l 'it["size"]="L"';                                 route "розмір L"                         f.size-l 1 "розмір L"
@@ -122,12 +125,14 @@ gen f.blocked-empty 'it["blocked_by"]=[]';                     route "близн
 gen f.triaged; gen f.triaged-two
 printf -- '---\nstatus: open\n---\nпро f.triaged-two і f.triaged.\n' > "${S}/triage/open/tri-900.md"
 route "відкрита картка тріажу називає елемент" f.triaged 1 "картка тріажу tri-900.md"
+printf -- '---\nstatus: open\n---\nпро fxtriaged — крапка в id не є «будь-який символ».\n' > "${S}/triage/open/tri-900.md"
+route "близнюк: картка називає fxtriaged (крапка в id екранована)" f.triaged 0 "unattended"
 printf -- '---\nstatus: open\n---\nлише про f.triaged-two.\n' > "${S}/triage/open/tri-900.md"
 route "близнюк: картка називає f.triaged-two (довший id)" f.triaged 0 "unattended"
 rm -f "${S}/triage/open/tri-900.md"; printf -- 'про f.triaged\n' > "${S}/triage/resolved/tri-901.md"
 route "близнюк: картка про елемент закрита (resolved/)"  f.triaged 0 "unattended"
 mv "${S}/triage/open" "${S}/triage/open.off"
-route "немає triage/open — не поміряно, не «вільно»"       f.triaged 2 "triage/open"
+route "немає triage/open — не поміряно, не «вільно»"       f.triaged 2 "відкриті картки тріажу не перевірити"
 mv "${S}/triage/open.off" "${S}/triage/open"
 
 gen f.fresh
@@ -137,6 +142,16 @@ printf -- '---\naffects: [factory]\n---\n## 2026-10-19 · dec-002 · про фа
 route "дописане рішення торкається елемента → STALE"     f.fresh 1 "підстава застаріла"
 printf -- '---\nid: dec-002\n---\n## 2026-10-19 · dec-002 · без affects\n' > "${S}/decisions/2026/dec-002-b.md"
 route "вузол без affects торкається всього (стара семантика) → STALE" f.fresh 1 "підстава застаріла"
+rm -f "${S}/decisions/2026/dec-002-b.md"
+gen f.date-stale 'del it["acceptance_basis"]["decisions_log_entries"]; it["acceptance_basis"]["verified_against_decisions_log_at"]="2026-09-01"'
+route "без лічильника: новіше рішення за датою → STALE" f.date-stale 1 "у журналі є новіші рішення"
+gen f.date-fresh 'del it["acceptance_basis"]["decisions_log_entries"]'
+route "близнюк: без лічильника, звірено після останнього рішення" f.date-fresh 0 "unattended"
+gen f.vanished 'it["acceptance_basis"]["decisions_log_entries"]=5'; route "лічильник більший за журнал"  f.vanished 1 "лічильник звірки"
+gen f.boolcnt 'it["acceptance_basis"]["decisions_log_entries"]=True'; route "лічильник true — не число" f.boolcnt 1 "лічильник звірки"
+printf -- '---\naffects: [facotry]\n---\n## 2026-10-19 · dec-002 · одрук\n' > "${S}/decisions/2026/dec-002-b.md"
+gen f.fresh2 'it["acceptance_basis"]["decisions_log_entries"]=2'
+route "вузол журналу з одруком в affects → свіжість не доведено" f.fresh2 1 "журнал рішень має помилку"
 rm -f "${S}/decisions/2026/dec-002-b.md"
 gen f.no-basis-date 'del it["acceptance_basis"]["verified_against_decisions_log_at"]'
 route "acceptance_basis без дати звірки"                  f.no-basis-date 1 "не звірено з журналом"
@@ -149,12 +164,24 @@ gen f.r-acc 'del it["acceptance"]';                            route "§3 нем
 gen f.r-nis 'del it["not_in_scope"]';                          route "§3 немає not_in_scope"            f.r-nis 1 "немає not_in_scope"
 gen f.r-plan 'del it["plan"]';                                 route "§3 немає plan"                    f.r-plan 1 "немає plan"
 gen f.r-ts 'del it["tests_spec"]';                             route "§3 немає tests_spec"              f.r-ts 1 "немає tests_spec"
-gen f.r-ts-bad 'it["tests_spec"]=[{"name":"t"}]';              route "§3 tests_spec без негативного контролю" f.r-ts-bad 1 "negative_control"
+gen f.r-ts-bad 'del it["tests_spec"][0]["negative_control"]';              route "§3 tests_spec без негативного контролю" f.r-ts-bad 1 "negative_control"
 gen f.r-pr 'del it["plan_review"]';                            route "§3 немає plan_review"             f.r-pr 1 "немає plan_review"
 gen f.r-pwn 'it["plan_review"]["verdict"]="PASS-WITH-NOTES"';  route "§3 план без PASS"                 f.r-pwn 1 "не має PASS"
 gen f.r-sha 'it["plan"]["files"].append("docs/z.md")';         route "§3 план змінено після рев'ю"      f.r-sha 1 "план змінено після рев'ю"
 gen f.r-resha 'it["plan"]["files"].append("docs/z.md"); resha()'; route "близнюк: план змінено і перерецензовано" f.r-resha 0 "unattended"
+gen f.r-acc-chg 'it["acceptance"]+="- ще одна властивість\n"'; route "§3 критерій змінено після рев'ю" f.r-acc-chg 1 "план змінено після рев'ю"
+gen f.r-ts-chg 'it["tests_spec"][0]["cmd"]="true"';           route "§3 команду тесту змінено після рев'ю" f.r-ts-chg 1 "план змінено після рев'ю"
+gen f.r-pfx12 'it["plan_review"]["sha"]=it["plan_review"]["sha"][:12]'; route "близнюк: префікс sha з 12 знаків" f.r-pfx12 0 "unattended"
+gen f.r-pfx11 'it["plan_review"]["sha"]=it["plan_review"]["sha"][:11]'; route "префікс sha з 11 знаків — замало" f.r-pfx11 1 "plan_review.sha"
+gen f.r-cmd 'del it["tests_spec"][0]["cmd"]; resha()';         route "§3 tests_spec без cmd"            f.r-cmd 1 "tests_spec[0].cmd"
+gen f.r-extra 'it["tests_spec"][0]["criterion"]="AC-1"; resha()'; route "близнюк: вільний ключ criterion у tests_spec" f.r-extra 0 "unattended"
 gen f.r-budget 'del it["budget"]';                             route "§3 немає budget"                  f.r-budget 1 "немає budget"
+gen f.r-inf 'it["budget"]["max_hours"]=float("inf")';           route "budget.max_hours = .inf"          f.r-inf 1 "budget.max_hours"
+gen f.r-date 'it["plan_review"]["at"]="2026-99-99"';            route "plan_review.at — неіснуюча дата"   f.r-date 1 "plan_review.at"
+gen f.r-null 'it["acceptance"]=[None]; resha()';               route "acceptance: [null]"               f.r-null 1 "немає acceptance"
+gen f.r-bfalse 'it["blocked_by"]=False';                        route "blocked_by: false — не «порожньо»" f.r-bfalse 1 "blocked_by має бути списком"
+gen f.r-nosrc 'it["acceptance_basis"]["sources"]=[]';           route "реєстр: acceptance_basis.sources порожній" f.r-nosrc 1 "реєстр не приймає елемент"
+gen f.r-noid 'del it["id"]';                                    route "немає id"                         f.r-noid 1 "немає id"
 
 # §2.3 «великий» за 6a — за plan.files
 big() { gen "f.big-$1" "it['plan']['files']=['docs/x.md', '$2']; resha()"; route "6a: $3 ($2)" "f.big-$1" 1 "$4"; }
@@ -164,14 +191,24 @@ big crypto     "App/Sources/Crypto/Provider.swift"          "крипто"      
 big keys       "App/Sources/Spaces/SpaceKeys.swift"         "ключі простору"      "крипто або ключі"
 big check      "scripts/event-coverage-check.sh"            "*-check.sh"          "вимірювальний інструмент"
 big gates      "gates.json"                                 "gates*.json"         "вимірювальний інструмент"
-big hooks      ".claude/hooks/release-guard.sh"             ".claude/hooks/**"    "вимірювальний інструмент"
+big hooks      ".claude/hooks/registry.sh"                  ".claude/hooks/**"    "вимірювальний інструмент"
+big englib     "scripts/engine/lib/new.py"                  "lib рушія"           "вимірювальний інструмент"
+big ci         ".github/workflows/ci.yml"                   "CI"                  "вимірювальний інструмент"
+big dotdot     "docs/../.github/workflows/build.yml"        "обхід через .."      "вимірювальний інструмент"
+big ghdir      ".github"                                    "тека-предок CI"      "теку вимірювального інструмента"
+big outside    "../pact-ios/App/x.swift"                    "поза репо"           "поза репо"
+big absolute   "/etc/hosts.txt"                             "абсолютний шлях"     "поза репо"
 big route      "scripts/engine/autonomy-route.sh"           "сам маршрутизатор"   "вимірювальний інструмент"
 gen f.big-twin "it['plan']['files']=['docs/contracting.md', 'App/Sources/Keypad.swift']; resha()"
 route "близнюк: contracting.md і Keypad.swift — не контракт і не ключі" f.big-twin 0 "unattended"
 gen f.big-16 "it['plan']['files']=['docs/f%02d.md' % i for i in range(16)]; resha()"; route "6a: 16 файлів"  f.big-16 1 "16 файлів"
 gen f.big-15 "it['plan']['files']=['docs/f%02d.md' % i for i in range(15)]; resha()"; route "близнюк: 15 файлів" f.big-15 0 "unattended"
+gen f.dotslash "it['plan']['files']=['./docs/x.md', '.gitignore']; resha()"; route "близнюк: ./docs/x.md і .gitignore" f.dotslash 0 "unattended"
+gen f.nonstr "it['plan']['files']=['docs/x.md', 7]; resha()";  route "plan.files з не-рядком"          f.nonstr 1 "списком непорожніх рядків"
+gen f.keyorder "it['plan']=dict(reversed(list(it['plan'].items())))"; route "близнюк: порядок ключів плану не міняє версію" f.keyorder 0 "unattended"
 gen f.mask "it['plan']['files']=['scripts/*.sh']; resha()";    route "план із маскою"                   f.mask 1 "маску або теку"
-gen f.dir "it['plan']['files']=['scripts']; resha()";          route "план із текою без слеша"          f.dir 1 "маску або теку"
+gen f.dir "it['plan']['files']=['docs']; resha()";             route "план із текою без слеша"          f.dir 1 "маску або теку"
+gen f.dir2 "it['plan']['files']=['scripts']; resha()";         route "тека-предок lib рушія (scripts)"  f.dir2 1 "теку вимірювального інструмента"
 
 # rc 2 — інструмент сліпий: файл, читач, YAML
 out="$(bash "${ROUTE}" "${S}/engine/items/nope.yaml")"; rc=$?
@@ -190,6 +227,22 @@ printf '\ndef form_errors(it):\n    raise RuntimeError("проба")\n' >> "${FA
 out="$(STRW_ENGINE_LIB="${FAKE}" bash "${ROUTE}" "${S}/engine/items/f.base.yaml")"; rc=$?
 n="$(printf '%s\n' "${out}" | /usr/bin/grep -c .)"
 if [ "${rc}" = 2 ] && [ "${n}" = 1 ] && printf '%s' "${out}" | /usr/bin/grep -q 'маршрутизатор упав'; then ok "трейсбек читача → rc 2, один рядок"; else bad "трейсбек мав би дати rc 2 одним рядком" "rc=${rc} рядків=${n} ${out}"; fi
+
+# обгортка: рядок не відповідає коду, або код поза 0/1/2 — rc 2, а не прохід
+shape() { # shape <назва> <python-тіло form_errors>
+    local FK="${TMP}/shape-$1"; mkdir -p "${FK}"; cp "${HERE}/lib/"*.py "${FK}/"
+    printf '\ndef form_errors(it):\n    %s\n' "$2" >> "${FK}/item_fields.py"
+    local o r; o="$(STRW_ENGINE_LIB="${FK}" bash "${ROUTE}" "${S}/engine/items/f.base.yaml")"; r=$?
+    if [ "${r}" = 2 ] && printf '%s' "${o}" | /usr/bin/grep -q 'маршрутизатор упав'; then ok "обгортка: $1 → rc 2"; else bad "обгортка: $1 мала б дати rc 2" "rc=${r} ${o}"; fi
+}
+shape "«unattended» з кодом 3"     'import sys; print("unattended"); sys.exit(3)'
+shape "«unattended» з кодом 1"     'import sys; print("unattended"); sys.exit(1)'
+shape "«with-ceo» з кодом 0"       'import sys; print("with-ceo: x"); sys.exit(0)'
+out="$(bash "${ROUTE}" "$(printf 'a\nb.yaml')")"; rc=$?; n="$(printf '%s\n' "${out}" | /usr/bin/grep -c .)"
+if [ "${rc}" = 2 ] && [ "${n}" = 1 ]; then ok "аргумент із переносом рядка → rc 2 одним рядком"; else bad "перенос рядка в аргументі зламав контракт" "rc=${rc} рядків=${n} ${out}"; fi
+OUTSIDE="${TMP}/outside"; mkdir -p "${OUTSIDE}"; cp "${S}/engine/items/f.base.yaml" "${OUTSIDE}/"
+out="$(bash "${ROUTE}" "${OUTSIDE}/f.base.yaml" --engine-dir "${S}/engine")"; rc=$?
+if [ "${rc}" = 2 ] && printf '%s' "${out}" | /usr/bin/grep -q 'не лежить у реєстрі'; then ok "елемент поза <engine-dir>/items → rc 2"; else bad "елемент поза реєстром мав би дати rc 2" "rc=${rc} ${out}"; fi
 
 # --plan-sha: той самий хеш, що в plan_review базового; зміна плану — інший хеш
 want="$(python3 -c 'import yaml,sys; print(yaml.safe_load(open(sys.argv[1]))["plan_review"]["sha"])' "${S}/engine/items/f.base.yaml")"
@@ -221,8 +274,9 @@ else
     vcase "близнюк: план змінено і перерецензовано"      v.sha-b  'it["plan"]["order"].append("ще"); resha()' clean
     vcase "unattended без budget"                        v.bud    'del it["budget"]'                      "немає budget"
     vcase "budget.max_cycles = 0"                        v.bud0   'it["budget"]["max_cycles"]=0'          "budget.max_cycles"
-    vcase "tests_spec із чужим ключем"                   v.tsk    'it["tests_spec"][0]["why"]="x"'        "непізнані ключі ['why']"
-    vcase "plan_review.sha не sha256"                    v.shaf   'it["plan_review"]["sha"]="abc"'        "plan_review.sha = 'abc'"
+    vcase "tests_spec без cmd"                           v.tsk    'del it["tests_spec"][0]["cmd"]; resha()' "tests_spec[0].cmd"
+    vcase "unattended: критерій змінено після рев'ю"     v.acc    'it["acceptance"]+="- ще\n"'             "plan_review.sha не дорівнює"
+    vcase "plan_review.sha не hex"                       v.shaf   'it["plan_review"]["sha"]="abc"'        "plan_review.sha = 'abc'"
 fi
 
 printf '\n%d passed, %d failed\n' "${PASS}" "${FAIL}"

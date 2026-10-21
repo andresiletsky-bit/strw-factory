@@ -14,14 +14,16 @@
 |---|---|---|
 | `autonomy` | `unattended` \| `with-ceo`; поля немає = `with-ceo` | — |
 | `touches` | список із `money · release · prod · data-deletion · third-party-data · privacy-behavior · milestone-scope`; невідоме значення — ERROR | — (порожній = нічого з принципу 5) |
-| `tests_spec` | непорожній список `{name, red_when, negative_control}`: назва тесту до коду · що робить його червоним зараз · на якій підробці він мусить упасти | `unattended` |
+| `tests_spec` | непорожній список мап; обов'язкові `name` · `cmd` (запускається в корені робочого дерева; rc≠0 = червоний) · `red_when` (чому зараз червоний) · `negative_control` (на якій підробці мусить упасти); решта ключів (`criterion` …) вільні. Раннер після коміту тестів вимагає rc≠0 кожного `cmd`, після коду — rc=0 | `unattended` |
 | `plan_review` | `{verdict: PASS, by: <модель>, at: <дата>, sha: <версія плану>}`; шкала вердикту — `review-policy.md` | `unattended` |
 | `budget` | `{max_cycles: ціле > 0, max_hours: число > 0}` | `unattended` |
 | `acceptance`, `not_in_scope`, `plan` | як для L3 №10 (`plan`: `files · order · risks`/`risks_none_because` · `proof`) | `unattended` — **і для S теж** |
 
-`plan_review.sha` — версія **поточного** плану: `bash scripts/engine/autonomy-route.sh --plan-sha <елемент>`
-(sha256 канонічного JSON `plan`, ключі відсортовані; коментарі й порядок ключів у YAML версію не міняють).
-Змінили план після рев'ю — хеш розійшовся, і елемент знову потребує вердикту по плану.
+`plan_review.sha` — версія **рецензованого**: `bash scripts/engine/autonomy-route.sh --plan-sha <елемент>` —
+sha256 hex канонічного JSON полів `acceptance`, `not_in_scope`, `plan`, `tests_spec` (ключі відсортовані;
+коментарі й порядок ключів у YAML версію не міняють); приймається повний hex або префікс ≥12. Змінили план,
+критерій чи тест після рев'ю — хеш розійшовся, і елемент знову потребує вердикту по плану. Ту саму функцію
+кличе раннер strw-ops — другої реалізації немає.
 
 Форму тримає `scripts/engine/validate-items.sh` (ERROR реєстру): невідоме `touches`/`autonomy`, покручені поля,
 а для `autonomy: unattended` — кожна прогалина готовності окремим рядком. Код форми і готовності один —
@@ -34,8 +36,9 @@
 
 - `unattended` — rc 0;
 - `with-ceo: <причина>` — rc 1, причина — перша невиконана умова простими словами;
-- `не поміряно: <що>` — rc 2: немає файла, читача (`lib/` неповна), стадії продукту, журналу рішень чи
-  `triage/open/`. Це не «B», а сліпий інструмент: раннер зупиняється, а не гадає.
+- `не поміряно: <що>` — rc 2: немає файла, читача (`lib/` неповна), стадії продукту (чи закритого frontmatter),
+  журналу рішень, `triage/open/`; елемент не лежить у `<engine-dir>/items/`; валідатор не доміряв; рядок не
+  збігся з кодом. Це не «B», а сліпий інструмент: раннер зупиняється, а не гадає.
 
 Умови перевіряються в такому порядку (перша невиконана = причина):
 
@@ -46,15 +49,20 @@
 5. `touches` порожній.
 6. `blocked_by` порожній (першим називається `ceo:*`).
 7. Жодна картка в `triage/open/` не називає id елемента (межа слова: `x` ≠ `x-two`).
-8. `acceptance_basis` звірено з журналом і не STALE (той самий вимір, що у валідаторі).
+8. `acceptance_basis` звірено з журналом і не STALE (той самий вимір, що у валідаторі); журнал рішень без
+   помилок (зламаний `affects` чи заголовок вузла — свіжість не доведено).
 9. Готовність до A: `acceptance` · `not_in_scope` · `plan` · `tests_spec` · `plan_review` з `PASS` і `sha`
    поточного плану · `budget`.
 10. Не «великий» за L3 6a — за `plan.files`: контракт (`contract/`), міграції (`migrations/`), крипто й ключі
     (`crypto`, `keychain`, `key-exchange`, `space-key`, `secret`), вимірювальний інструмент (`*-check.sh`,
     `*-guard.sh`, `validate-*`, `gates*.json`, `dep-allowlist.txt`, `autonomy-route.sh`, `strw-run.sh`,
     `.claude/hooks/`, `hooks/`, `.githooks/`, `.github/workflows/`, `scripts/engine/lib/`,
-    `.claude/settings*.json`), понад 15 файлів; маска чи тека в `plan.files` — теж B (під маскою нічого
-    не видно, а `plan_drift` раннера розгорне її на будь-що).
+    `.claude/settings*.json`) або тека-предок такої (`.github`, `scripts`), понад 15 файлів; маска чи тека в
+    `plan.files` — теж B (під маскою нічого не видно, а `plan_drift` раннера розгорне її на будь-що). Шляхи
+    нормалізуються (`docs/../.github/…` = `.github/…`); абсолютний шлях чи вихід за корінь — B.
+11. `validate-items.sh` на `<engine-dir>` не має жодного ERROR/STALE про цей елемент. Маршрут не повторює
+    кожне правило реєстру (`sources`, `design_sources`, обов'язкові поля) — він питає валідатор: «unattended»
+    ніколи не кажеться про елемент, якого реєстр не приймає.
 
 ## Що скрипт НЕ міряє — і де це стережеться
 

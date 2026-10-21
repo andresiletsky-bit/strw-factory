@@ -4,7 +4,8 @@
 # §3 («готовність до A»); правило 11 паспорта L3; пояснення — references/autonomy-modes.md.
 #
 # Usage: bash autonomy-route.sh <item-file> [--engine-dir D] [--state-dir S]
-#        bash autonomy-route.sh --plan-sha <item-file>   # версія поточного plan для plan_review.sha
+#        bash autonomy-route.sh --plan-sha <item-file>   # hex-версія acceptance/not_in_scope/plan/tests_spec
+#                                                         # для plan_review.sha (її ж рахує раннер strw-ops)
 #   --engine-dir — тека реєстру (strw-state/engine); за замовчуванням — батько теки items/,
 #                  де лежить елемент, інакше $STRW_ROOT/strw-state/engine.
 #   --state-dir  — корінь strw-state (products/, decisions/, triage/); за замовчуванням — батько engine-dir.
@@ -12,17 +13,19 @@
 # Вихід — РІВНО ОДИН рядок у stdout (його читає раннер strw-ops bin/strw-run.sh):
 #   unattended                 rc 0 — усі умови §2 і §3 виконані
 #   with-ceo: <перша причина>  rc 1 — простими словами, яка умова перевела елемент у B
-#   не поміряно: <що саме>     rc 2 — немає файла, читача або стадії продукту: це НЕ «B», це
+#   не поміряно: <що саме>     rc 2 — немає файла, читача, стадії продукту, журналу рішень, triage/open/
+#                                     або валідатор не доміряв: це НЕ «B», це
 #                                     «інструмент сліпий», і раннер мусить зупинитись, а не гадати
 # Порядок умов фіксований (перша, що не виконана, — і є причина): autonomy · форма полів ·
 # стадія · розмір · touches · blocked_by/ceo · відкрита картка тріажу · свіжість підстави ·
-# готовність §3 · «великий» за 6a (за plan.files — тому після готовності, де plan уже є).
+# готовність §3 · «великий» за 6a (за plan.files — тому після готовності, де plan уже є) ·
+# validate-items.sh без ERROR/STALE про цей елемент (елемент мусить лежати в <engine-dir>/items/).
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STRW_ROOT="${STRW_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 
-unmeasured() { printf 'не поміряно: %s\n' "$1"; exit 2; }
+unmeasured() { printf 'не поміряно: %s\n' "$(printf '%s' "$1" | tr '\n\r' '  ')"; exit 2; }
 
 ITEM=""; ENGINE_DIR=""; STATE_DIR=""; MODE=route
 while [ "$#" -gt 0 ]; do
@@ -55,9 +58,11 @@ done
 [ -n "${ENGINE_LIB}" ] || unmeasured "немає повної lib/ (yaml_nodup.py · decisions_basis.py · item_fields.py) — ні поруч, ні в STRW_ENGINE_LIB, ні в ${STRW_ROOT}/strw-factory"
 
 # Вихід python — ОДИН рядок; код — його. Трейсбек замість рядка — теж «не поміряно» (нижче).
-OUT="$(STRW_ENGINE_LIB="${ENGINE_LIB}" python3 - "${MODE}" "${ITEM}" "${STATE_DIR}" <<'PY' 2>&1
-import os, re, sys, fnmatch
-mode, item_path, state_dir = sys.argv[1:4]
+VALIDATOR="${SCRIPT_DIR}/validate-items.sh"
+[ -f "${VALIDATOR}" ] || unmeasured "немає ${VALIDATOR} поруч — реєстр нічим перевірити"
+OUT="$(STRW_ENGINE_LIB="${ENGINE_LIB}" STRW_ROOT="${STRW_ROOT}" python3 - "${MODE}" "${ITEM}" "${STATE_DIR}" "${ENGINE_DIR}" "${VALIDATOR}" <<'PY' 2>&1
+import math, os, posixpath, re, subprocess, sys, fnmatch
+mode, item_path, state_dir, engine_dir, validator = sys.argv[1:6]
 sys.path.insert(0, os.environ["STRW_ENGINE_LIB"])
 try:
     import yaml  # noqa: F401  (yaml_nodup на ньому)
@@ -67,8 +72,9 @@ try:
 except ImportError as e:
     print(f"не поміряно: читач не імпортується ({e})"); sys.exit(2)
 
-def b(reason):   print(f"with-ceo: {reason}"); sys.exit(1)
-def na(reason):  print(f"не поміряно: {reason}"); sys.exit(2)
+def _one(s):     return " ".join(str(s).split())   # причина — завжди ОДИН рядок (контракт виходу)
+def b(reason):   print(f"with-ceo: {_one(reason)}"); sys.exit(1)
+def na(reason):  print(f"не поміряно: {_one(reason)}"); sys.exit(2)
 
 try:
     it = load_nodup(open(item_path, encoding="utf-8"))
@@ -80,7 +86,7 @@ if not isinstance(it, dict):
 if mode == "plan-sha":
     if it.get("plan") is None:
         na("в елементі немає plan — версії нема з чого рахувати")
-    print(plan_sha(it["plan"])); sys.exit(0)
+    print(plan_sha(it)); sys.exit(0)
 
 # 0. Режим заявлено. Поля немає = with-ceo (спека §1); з B в A — лише заявою + цим скриптом.
 if it.get("autonomy") == "with-ceo":
@@ -103,14 +109,17 @@ if product != "factory":
     sp = os.path.join(state_dir, "products", str(product), "state.md")
     if not os.path.isfile(sp):
         na(f"немає {sp} — стадія продукту невідома")
-    head = []
+    head, closed = [], False
     with open(sp, encoding="utf-8") as f:
         first = f.readline()
         if first.strip() == "---":
             for line in f:
                 if line.strip() == "---":
+                    closed = True
                     break
                 head.append(line)
+    if not closed:
+        na(f"у {sp} немає закритого frontmatter (--- … ---) — стадія продукту невідома")
     try:
         fm = load_nodup("".join(head)) if head else None
     except Exception as e:
@@ -140,6 +149,8 @@ if ceo:
 if blocked:
     b(f"заблоковано іншим ({blocked[0]})")
 iid = str(it.get("id") or "")
+if not iid:
+    b("в елементі немає id — картки тріажу й рішення до нього не прив'язати")
 open_dir = os.path.join(state_dir, "triage", "open")
 if not os.path.isdir(open_dir):
     na(f"немає {open_dir} — відкриті картки тріажу не перевірити")
@@ -158,6 +169,10 @@ if not ver or not re.match(r"^\d{4}-\d{2}-\d{2}$", str(ver)[:10]):
 dec = load_decisions(os.path.join(state_dir, "decisions-log.md"), load_nodup)
 if not dec["found"]:
     na(dec["errors"][0])
+if dec["errors"]:
+    # Зламаний вузол (одрук в affects, немає заголовка) — свіжість будь-якого елемента міряна
+    # неповним журналом. Валідатор каже ERROR; маршрут не може казати «свіжо».
+    b(f"журнал рішень має помилку — свіжість не доведено: {dec['errors'][0]}")
 kind, detail = freshness(it, dec)
 if kind == "stale-count":
     b(f"підстава застаріла: після звірки дописано {len(detail[2])} рішень, що стосуються елемента")
@@ -184,27 +199,59 @@ SENSITIVE = [
         or p.startswith((".claude/hooks/", "hooks/", ".githooks/", ".github/workflows/", "scripts/engine/lib/"))
         or fnmatch.fnmatch(p, ".claude/settings*.json"))),
 ]
+# Теки чутливих префіксів: запис-предок (`.github`, `.claude`) накриває їх — теж «великий».
+SENSITIVE_DIRS = (".claude/hooks/", "hooks/", ".githooks/", ".github/workflows/", "scripts/engine/lib/")
 files = it["plan"]["files"]
 for raw in files:
-    f = str(raw).strip()
-    p = (f[2:] if f.startswith("./") else f).lower()
+    if not isinstance(raw, str) or not raw.strip():
+        b(f"plan.files має бути переліком шляхів-рядків, а не {raw!r}")
+    f = raw.strip()
+    # normpath: `docs/../.github/workflows/x.yml` — це `.github/workflows/x.yml`; вихід за корінь
+    # репо або абсолютний шлях — не файл цього репо.
+    p = posixpath.normpath(f).lower()
+    if p.startswith(("/", "../")) or p == "..":
+        b(f"plan.files містить шлях поза репо ({f})")
     segs = set(p.split("/")[:-1])
     name = p.rsplit("/", 1)[-1]
     for label, hit in SENSITIVE:
         if hit(p, segs, name):
             b(f"великий за правилом 6a: план чіпає {label} ({f})")
+    if any(d.startswith(p + "/") for d in SENSITIVE_DIRS):
+        b(f"великий за правилом 6a: план чіпає теку вимірювального інструмента ({f})")
     if re.search(r"[*?\[]", f) or f.endswith("/") or "." not in name:
         b(f"plan.files містить маску або теку ({f}) — для режиму A потрібен перелік файлів")
 if len(files) > 15:
     b(f"великий за правилом 6a: у плані {len(files)} файлів (межа 15)")
+
+# 8. Реєстр сам не має претензій до елемента. Маршрут не повторює кожне правило валідатора
+# (sources, design_sources, REQUIRED, …) — він питає валідатор. Властивість, а не перелік:
+# «unattended» ніколи не кажеться про елемент, якого реєстр не приймає (чекер 6a #31, Codex).
+items_copy = os.path.join(engine_dir, "items", os.path.basename(item_path))
+if not (os.path.isfile(items_copy) and os.path.samefile(items_copy, item_path)):
+    na(f"елемент не лежить у реєстрі {engine_dir}/items — валідатором не перевірити")
+vr = subprocess.run(["bash", validator, engine_dir], capture_output=True, text=True,
+                    stdin=subprocess.DEVNULL, env=dict(os.environ))
+if vr.returncode not in (0, 1) or "\nсмуг: " not in "\n" + vr.stdout:
+    na(f"validate-items.sh не доміряв (rc={vr.returncode}): {(vr.stderr or vr.stdout).strip()[-200:]}")
+subjects = {os.path.basename(item_path), iid, iid + ".yaml"}
+for line in vr.stdout.splitlines():
+    m = re.match(r"^(ERROR|STALE): ([^:]+): (.*)$", line)
+    if m and m.group(2) in subjects:
+        b(f"реєстр не приймає елемент ({m.group(1)}): {m.group(3)}")
 
 print("unattended"); sys.exit(0)
 PY
 )"
 RC=$?
 LINES="$(printf '%s\n' "${OUT}" | /usr/bin/grep -c .)"
-# Контракт — один рядок і код 0/1/2. Трейсбек чи інший код — сліпий інструмент, не «B».
-if [ "${RC}" -gt 2 ] || [ "${LINES}" -ne 1 ]; then
+# Контракт — один рядок, і його префікс відповідає коду 0/1/2. Трейсбек, інший код чи рядок, що
+# не збігається з кодом, — сліпий інструмент, не «B» і тим більше не «unattended».
+case "${MODE}:${RC}:${OUT}" in
+  route:0:unattended|route:1:"with-ceo: "?*|*:2:"не поміряно: "?*) SHAPE=ok ;;
+  plan-sha:0:*) printf '%s' "${OUT}" | /usr/bin/grep -Eqx '[0-9a-f]{64}' && SHAPE=ok || SHAPE=bad ;;
+  *) SHAPE=bad ;;
+esac
+if [ "${SHAPE}" != ok ] || [ "${LINES}" -ne 1 ]; then
   printf 'не поміряно: маршрутизатор упав (rc=%s): %s\n' "${RC}" "$(printf '%s' "${OUT}" | tail -1)"
   exit 2
 fi

@@ -12,10 +12,15 @@
   готовність до A (і для S) · не «великий» за 6a за `plan.files` (маска/тека в плані — теж B).
   `validate-items.sh` знає `autonomy` / `touches` / `tests_spec` / `plan_review` / `budget`: невідоме значення
   чи покручена форма — ERROR; для `autonomy: unattended` — ERROR на кожну прогалину готовності, зокрема
-  `plan_review.sha` ≠ версії поточного `plan` (`autonomy-route.sh --plan-sha`). Форма, готовність і свіжість
+  `plan_review.sha` ≠ версії поточних `acceptance`/`not_in_scope`/`plan`/`tests_spec` (`autonomy-route.sh --plan-sha`:
+  sha256 hex, повний або префікс ≥12; `tests_spec` — `name` · `cmd` · `red_when` · `negative_control` обов'язкові,
+  решта вільні — інтерфейс узгоджено з раннером strw-ops, шматок 3). Форма, готовність і свіжість
   підстави винесені в `lib/item_fields.py` і `lib/decisions_basis.py` — валідатор і маршрут читають один код
   (вивід валідатора на живому реєстрі до/після винесення — побайтно однаковий). Повна `lib/` (усі три модулі)
-  тепер умова пошуку читача: стара тека без нових модулів дає код 2, не трейсбек. Довідка —
+  тепер умова пошуку читача: стара тека без нових модулів дає код 2, не трейсбек. Остання умова маршруту — `validate-items.sh` без
+  жодного ERROR/STALE про елемент (раунд 1 чекера 6a, Codex: маршрут казав `unattended` про елементи без
+  `sources`, зі зламаним вузлом журналу, протухлим дизайном, без `id`); шляхи плану нормалізуються, тека-предок
+  чутливої теки — B. Довідка —
   `references/autonomy-modes.md`; тести — `scripts/engine/autonomy-route.test.sh` (червоний + близнюк на кожну
   умову), пін на досяжність — strw-ops `tests/unit/autonomy-route.test.sh`.
 
