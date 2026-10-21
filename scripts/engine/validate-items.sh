@@ -47,11 +47,13 @@ trap 'rm -rf "$WORK"' EXIT
 # Читач YAML — lib/yaml_nodup.py: поруч зі скриптом, або STRW_ENGINE_LIB, або зі strw-factory
 # парасольки (копії скрипта у фікстурах тестів strw-ops лежать без lib/). Ніде немає — код 2 з
 # названою передумовою, не трейсбек ModuleNotFoundError.
+# Тека береться лише ПОВНА (усі три модулі): стара lib/ без decisions_basis.py/item_fields.py
+# (спільна копія до мержу, кеш плагіна старшої версії) дала б трейсбек імпорту, а не код 2.
 ENGINE_LIB=""
 for c in "${STRW_ENGINE_LIB:-}" "$SCRIPT_DIR/lib" "${STRW_ROOT:-$HOME/Developer/STRW}/strw-factory/scripts/engine/lib"; do   # явна змінна → поруч → парасолька
-  [ -n "$c" ] && [ -f "$c/yaml_nodup.py" ] && { ENGINE_LIB="$c"; break; }
+  [ -n "$c" ] && [ -f "$c/yaml_nodup.py" ] && [ -f "$c/decisions_basis.py" ] && [ -f "$c/item_fields.py" ] && { ENGINE_LIB="$c"; break; }
 done
-[ -n "$ENGINE_LIB" ] || { echo "ERROR: немає lib/yaml_nodup.py — читач YAML рушія (strw-factory: scripts/engine/lib/; ні поруч зі скриптом, ні в STRW_ENGINE_LIB, ні в STRW_ROOT/strw-factory); валідатор без нього не міряє (код 2)" >&2; exit 2; }
+[ -n "$ENGINE_LIB" ] || { echo "ERROR: немає повної lib/ (yaml_nodup.py · decisions_basis.py · item_fields.py) — читач YAML рушія (strw-factory: scripts/engine/lib/; ні поруч зі скриптом, ні в STRW_ENGINE_LIB, ні в STRW_ROOT/strw-factory); валідатор без нього не міряє (код 2)" >&2; exit 2; }
 STRW_ENGINE_LIB="$ENGINE_LIB" python3 - "$ENGINE_DIR" "$DECISIONS_LOG" "$STRW_ROOT" "$WORK" "$STRW_REPO_DIRS" <<'PY'
 import os, re, sys, subprocess, glob as globmod
 
@@ -74,6 +76,10 @@ def err(m):   errors.append(m)
 # читають ним же; bin/strw-run.sh (strw-ops) — парним PR strw-ops #19.
 sys.path.insert(0, os.environ["STRW_ENGINE_LIB"])
 from yaml_nodup import load_nodup
+# Журнал рішень і свіжість підстави; форма полів елемента й «готовність до A» — спільні з
+# autonomy-route.sh: обидва мусять казати те саме про той самий елемент (клас tri-070).
+from decisions_basis import load_decisions, freshness
+from item_fields import plan_errors, form_errors, readiness_gaps
 def stale(m): stales.append(m)
 def warn(m):  warns.append(m)
 
@@ -235,91 +241,15 @@ for lid, (repo, owned) in lane_paths.items():
 # і оголошував, що 53 елементи посилаються на зниклі записи — на здоровому
 # реєстрі. Порядок вузлів = порядок дописування (`dec-NNN`), бо саме він, а не
 # дата, є семантикою лічильника `decisions_log_entries`.
-def _entry(line):
-    m = re.match(r"^##\s+(\d{4}-\d{2}-\d{2})\b", line)
-    return (m.group(1), line[3:].strip()) if m else None
-
-# ПОЛЕ `affects:` (аудит 2026-09-03, П1.5) — і чому воно не може бути
-# необовʼязковою прикрасою. До нього протухання було ТОТАЛЬНИМ: +1 будь-яке
-# рішення робило STALE кожен `ready`-елемент, отже кожен ставав `blocked`
-# (спека §3.3), отже черга спинялась цілком. Вимір 03.09: 18 елементів
-# протухли, з них 8 — через `dec-093`, яке стосується трьох.
-#
-# СТАРА СЕМАНТИКА ЗБЕРЕЖЕНА ДОСЛІВНО: **вузол без `affects` торкається
-# ВСЬОГО**. Це не поблажка до 93 історичних вузлів, а єдиний безпечний
-# дефолт: «поля немає» означає «ніхто не звужував», а не «нікого не
-# стосується». Звуження без свідка — це те саме fail-open, проти якого весь
-# цей валідатор. Нові вузли без поля не проходять pre-commit strw-state
-# (блок «П1.5 affects»), тож борг не росте.
-FM_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
-
-def _affects(path, rel):
-    """Список `affects` вузла, або None — «торкається всього» (стара семантика)."""
-    raw = open(path, encoding="utf-8").read()
-    m = FM_RE.match(raw)
-    if not m:
-        return None
-    try:
-        fm = load_nodup(m.group(1)) or {}   # affects: дублем → протухання не на ті елементи (6a #27)
-    except Exception as e:
-        err(f"{rel}: frontmatter вузла рішення не читається: {e}")
-        return None
-    if not isinstance(fm, dict) or "affects" not in fm:
-        return None
-    a = fm.get("affects")
-    if not isinstance(a, list) or not a:
-        # Порожній список — не «нікого не стосується», а недописаний рядок.
-        # Прийняти його означало б дати найтихіший спосіб вимкнути протухання:
-        # `affects: []` у вузлі, і жоден елемент більше не протухає ніколи.
-        err(f"{rel}: `affects` мусить бути НЕПОРОЖНІМ списком "
-            f"(відсутність поля = «торкається всього»; порожній список — недописаний рядок)")
-        return None
-    bad = [x for x in a if not (str(x) == "factory" or
-           str(x).startswith(("product:", "lane:", "item:")))]
-    if bad:
-        # Одрук у префіксі звузив би вплив рішення до НУЛЯ мовчки — тобто
-        # зробив би реєстр зеленим саме тоді, коли підстава протухла.
-        err(f"{rel}: `affects` містить непізнані записи {bad} — "
-            f"очікується factory | product:<id> | lane:<id> | item:<id>")
-    return [str(x) for x in a]
-
-def touches(affects, it):
-    if affects is None:
-        return True
-    for a in affects:
-        if a == "factory" and it.get("product") == "factory":
-            return True
-        if a.startswith("item:") and a[5:] == it.get("id"):
-            return True
-        if a.startswith("product:") and a[8:] == it.get("product"):
-            return True
-        if a.startswith("lane:") and a[5:] == it.get("lane"):
-            return True
-    return False
-
-decision_dates, decision_titles, decision_affects = [], [], []
-decisions_dir = os.path.join(os.path.dirname(decisions_log), "decisions")
-node_files = sorted(globmod.glob(os.path.join(decisions_dir, "*", "*.md")))
-if node_files:
-    for path in node_files:
-        rel = os.path.relpath(path, decisions_dir)
-        for line in open(path):
-            e = _entry(line)
-            if e:
-                decision_dates.append(e[0]); decision_titles.append(e[1])
-                decision_affects.append(_affects(path, rel))
-                break
-        else:
-            err(f"{rel}: вузол рішення без заголовка "
-                f"`## YYYY-MM-DD · …` — його не видно лічильнику")
-elif os.path.isfile(decisions_log):
-    for line in open(decisions_log):
-        e = _entry(line)
-        if e:
-            decision_dates.append(e[0]); decision_titles.append(e[1])
-            decision_affects.append(None)   # моноліт полів не має — стара семантика
-else:
-    err(f"немає ні {decisions_dir}/, ні {decisions_log}")
+# Розбір вузлів, поле `affects:` і звуження протухання — scripts/engine/lib/decisions_basis.py
+# (аудит 2026-09-03, П1.5). СТАРА СЕМАНТИКА ЗБЕРЕЖЕНА ДОСЛІВНО: **вузол без `affects`
+# торкається ВСЬОГО** — «поля немає» означає «ніхто не звужував», а не «нікого не стосується».
+# До поля протухання було ТОТАЛЬНИМ: вимір 03.09 — 18 елементів протухли, 8 з них через
+# `dec-093`, яке стосується трьох. Нові вузли без поля не проходять pre-commit strw-state.
+_dec = load_decisions(decisions_log, load_nodup)
+for m in _dec["errors"]:
+    err(m)
+decision_dates = _dec["dates"]
 newest_decision = max(decision_dates) if decision_dates else None
 decisions_count = len(decision_dates)
 
@@ -445,38 +375,12 @@ for path in item_files:
     # Місце вибране, як і для `design_sources`: ДО `done`-виходу. Форма поля не
     # залежить від стану елемента — покручений `plan` у закритому елементі
     # лишається помилкою реєстру, а не історією.
-    PLAN_KEYS = {"files", "order", "risks", "proof", "risks_none_because"}
+    # Форма — lib/item_fields.py: plan_errors (закритий словник ключів; files/order непорожні;
+    # risks або risks_none_because; proof). Той самий код читає autonomy-route.sh.
     plan = it.get("plan")
     if plan is not None:
-        if not isinstance(plan, dict):
-            err(f"{name}: `plan` має бути мапою з `files`, `order`, `risks`, `proof`, "
-                f"а не {type(plan).__name__}")
-        else:
-            unknown = sorted(set(plan) - PLAN_KEYS)
-            if unknown:
-                # Закритий словник, а не відкритий: одрук у назві ключа інакше
-                # мовчки викидає половину плану з-під перевірки.
-                err(f"{name}: plan має непізнані ключі {unknown} — "
-                    f"дозволені {sorted(PLAN_KEYS)}")
-            for f_ in ("files", "order"):
-                v = plan.get(f_)
-                if not isinstance(v, list) or not v:
-                    err(f"{name}: plan.{f_} мусить бути НЕПОРОЖНІМ списком "
-                        f"(отримано {v!r})")
-            r = plan.get("risks")
-            if not isinstance(r, list):
-                err(f"{name}: plan.risks мусить бути списком (порожній — лише разом "
-                    f"із рядком plan.risks_none_because)")
-            elif not r:
-                why = plan.get("risks_none_because")
-                if not (isinstance(why, str) and why.strip()):
-                    # «Ризиків немає» без причини — це не вимір, а пропуск поля.
-                    err(f"{name}: plan.risks порожній без plan.risks_none_because — "
-                        f"«ризиків немає» мусить бути ТВЕРДЖЕННЯМ, а не мовчанням")
-            pr = plan.get("proof")
-            if not (isinstance(pr, str) and pr.strip()):
-                err(f"{name}: plan.proof мусить бути непорожнім рядком — чим саме "
-                    f"буде доведено, що план виконано")
+        for m in plan_errors(plan):
+            err(f"{name}: {m}")
     elif st == "ready" and str(it.get("size")) in ("M", "L"):
         # WARN, а не ERROR — свідомо. ERROR зробив би елемент `blocked`, тобто
         # черга спинилась би на кожному елементі M/L разом, а це рівно та шкода,
@@ -485,6 +389,18 @@ for path in item_files:
         warn(f"{name}: size={it.get('size')} і state=ready, а `plan` немає — "
              f"maker мусить подати plan (files/order/risks/proof) ДО першого коміту "
              f"(L3 правило 10)")
+
+    # ---------- режими A/B (спека strw-ops reports/2026-10-20-hybrid-autonomy-spec.md §2–§3) ----------
+    # Форма полів autonomy/touches/tests_spec/plan_review/budget — завжди, як і `plan`: від стану
+    # не залежить. Для `autonomy: unattended` — ще й «готовність до A» (§3), і для S теж: елемент,
+    # який будильник може взяти без людини, без плану, тестів-до-коду і вердикту по ПОТОЧНОМУ плану —
+    # ERROR реєстру, а не тихий «with-ceo» у маршруті. Маршрут (autonomy-route.sh) читає ті самі
+    # функції й додає умови, яких форма не бачить (стадія продукту, «великий» за 6a, тріаж).
+    for m in form_errors(it):
+        err(f"{name}: {m}")
+    if it.get("autonomy") == "unattended":
+        for g in readiness_gaps(it):
+            err(f"{name}: autonomy: unattended, а готовність до A неповна — {g}")
 
     # `done` НЕ перевіряється на свіжість — рішення CEO 2026-08-19 №81, після
     # питання, яке цикл `factory.validate-items-owner` виніс замість вирішити
@@ -556,54 +472,40 @@ for path in item_files:
                               f"       Переглянути макет, звірити з ним `acceptance`, "
                               f"і лише потім оновлювати hash.")
 
-    stored = ab.get("decisions_log_entries")
-    if stored is not None:
-        # ТОЧНИЙ шлях: лічильник записів. Ловить дописи в межах тієї самої доби,
-        # яких порівняння дат не бачить у принципі.
-        if not isinstance(stored, int) or stored < 0:
-            err(f"{name}: decisions_log_entries = {stored!r} — має бути невід'ємне ціле")
-        elif decisions_count > stored:
-            # ТОЧКОВО, а не тотально: із дописаних беруться лише ті, чий `affects`
-            # перетинається з цим елементом. Вузол без `affects` торкається всього —
-            # стара семантика, збережена дослівно.
-            fresh = [(decision_titles[i], decision_affects[i])
-                     for i in range(stored, decisions_count)]
-            hits = [t for t, a in fresh if touches(a, it)]
-            if hits:
-                # Називаємо, ЩО САМЕ дописали. Без цього людина мусить сама шукати
-                # різницю і в спішці «оновлює» лічильник, не перечитавши підставу, —
-                # тобто робить рівно те, проти чого acceptance_basis і придуманий.
-                listed = "".join(f"\n         · {t}" for t in hits[:5])
-                more = f"\n         … ще {len(hits) - 5}" if len(hits) > 5 else ""
-                skipped = len(fresh) - len(hits)
-                aside = (f" ({skipped} дописаних елемента не стосуються)"
-                         if skipped else "")
-                stale(f"{name}: звірено проти {stored} записів decisions-log, зараз їх "
-                      f"{decisions_count}; ТОРКАЮТЬСЯ ЦЬОГО ЕЛЕМЕНТА: {len(hits)}{aside} "
-                      f"→ ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ "
-                      f"(спека §3.3: такий елемент не 'ready', а 'blocked')."
-                      f"\n       Прочитати ці записи, звірити з ними `acceptance`, і лише потім "
-                      f"піднімати лічильник:{listed}{more}")
-        elif decisions_count < stored:
-            err(f"{name}: decisions_log_entries = {stored}, а в decisions-log лише "
-                f"{decisions_count} записів. Лог append-only — зменшення означає, що "
-                f"записи ЗНИКЛИ (клас інциденту dcd6a6c) або лічильник вигаданий")
-        continue
-
-    # ЗАПАСНИЙ шлях для елементів без лічильника: порівняння дат. Свідомо грубіше —
-    # у межах доби нічого не розрізняє. Не додавай нових елементів без лічильника.
-    # Датова гілка — ТА САМА логіка звуження, інакше елемент без лічильника
-    # лишився б під тотальним протуханням, і «точкове» було б неправдою для
-    # частини реєстру.
-    newer = sorted({decision_dates[i] for i in range(len(decision_dates))
-                    if decision_dates[i] > vdate and touches(decision_affects[i], it)})
-    if newer:
-        stale(f"{name}: acceptance_basis звірено на {vdate}, а в decisions-log є новіші "
+    # Свіжість — lib/decisions_basis.py:freshness (той самий вимір читає autonomy-route.sh).
+    # ТОЧНИЙ шлях — лічильник записів: ловить дописи в межах доби, яких дати не бачать.
+    # Звуження ТОЧКОВЕ: із дописаних беруться лише ті, чий `affects` торкається елемента.
+    kind, detail = freshness(it, _dec)
+    if kind == "bad-counter":
+        err(f"{name}: decisions_log_entries = {detail!r} — має бути невід'ємне ціле")
+    elif kind == "stale-count":
+        stored, count, hits, skipped = detail
+        # Називаємо, ЩО САМЕ дописали. Без цього людина в спішці «оновлює» лічильник,
+        # не перечитавши підставу, — рівно те, проти чого acceptance_basis придуманий.
+        listed = "".join(f"\n         · {t_}" for t_ in hits[:5])
+        more = f"\n         … ще {len(hits) - 5}" if len(hits) > 5 else ""
+        aside = (f" ({skipped} дописаних елемента не стосуються)" if skipped else "")
+        stale(f"{name}: звірено проти {stored} записів decisions-log, зараз їх "
+              f"{count}; ТОРКАЮТЬСЯ ЦЬОГО ЕЛЕМЕНТА: {len(hits)}{aside} "
+              f"→ ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ "
+              f"(спека §3.3: такий елемент не 'ready', а 'blocked')."
+              f"\n       Прочитати ці записи, звірити з ними `acceptance`, і лише потім "
+              f"піднімати лічильник:{listed}{more}")
+    elif kind == "vanished":
+        stored, count = detail
+        err(f"{name}: decisions_log_entries = {stored}, а в decisions-log лише "
+            f"{count} записів. Лог append-only — зменшення означає, що "
+            f"записи ЗНИКЛИ (клас інциденту dcd6a6c) або лічильник вигаданий")
+    elif kind == "stale-date":
+        # ЗАПАСНИЙ шлях для елементів без лічильника — свідомо грубіший: у межах доби
+        # нічого не розрізняє. Не додавай нових елементів без лічильника.
+        vd, newer = detail
+        stale(f"{name}: acceptance_basis звірено на {vd}, а в decisions-log є новіші "
               f"записи ({', '.join(newer[-3:])}) → ПОТРЕБУЄ ПЕРЕПЕРЕВІРКИ "
               f"(спека §3.3: такий елемент не 'ready', а 'blocked')")
-    else:
+    elif kind == "no-counter":
         warn(f"{name}: немає `decisions_log_entries` — свіжість перевірено лише за датою, "
-             f"тобто дописи в межах {vdate} не виявляються")
+             f"тобто дописи в межах {detail} не виявляються")
 
 # ---------- 6. blocked_by: посилання і цикли ----------
 graph = {}
