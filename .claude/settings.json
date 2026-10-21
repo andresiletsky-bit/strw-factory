@@ -37,6 +37,10 @@
           {
             "type": "command",
             "command": "/Users/Andrew/Developer/STRW/.claude/hooks/release-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "/Users/Andrew/Developer/STRW/.claude/hooks/unattended-guard.sh"
           }
         ]
       },
@@ -46,6 +50,33 @@
           {
             "type": "command",
             "command": "/Users/Andrew/Developer/STRW/.claude/hooks/verify-gate.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/Andrew/Developer/STRW/.claude/hooks/unattended-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/Andrew/Developer/STRW/.claude/hooks/unattended-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "RemoteTrigger|CronCreate|CronDelete",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/Andrew/Developer/STRW/.claude/hooks/unattended-guard.sh"
           }
         ]
       },
