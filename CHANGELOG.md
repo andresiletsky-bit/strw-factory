@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-10-21
+
 ### Added
 - **Режими A/B (рішення CEO 20.10): `scripts/engine/autonomy-route.sh` + нові поля елемента + L3 правило 11.**
   Спека strw-ops `reports/2026-10-20-hybrid-autonomy-spec.md` §2–§3, шматок 2 з §7. Маршрут друкує рівно один
