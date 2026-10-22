@@ -195,15 +195,19 @@ def _no_dup(pairs):
     return dict(pairs)
 
 
-def as_json(text):
-    """JSON без дублів ключів; JSON-рядок із JSON усередині розбирається ще раз (р.11, K1s)."""
+def as_json(text, nested=True):
+    """JSON без дублів ключів; JSON-рядок із JSON усередині розбирається, доки це JSON-рядок
+    (р.11 K1s, р.12 Kt3). Аргументи виклику — `nested=False`: один розбір, бо контракт вимагає
+    JSON-об'єкт, а не рядок (р.12, Astr)."""
     if isinstance(text, (dict, list)):
         return text
     try:
         v = json.loads(text, object_pairs_hook=_no_dup)
     except (TypeError, ValueError):
         return None
-    if isinstance(v, str) and v.lstrip()[:1] in "{[":
+    for _ in range(8):
+        if not (nested and isinstance(v, str) and v.lstrip()[:1] in '{["'):
+            break
         try:
             v = json.loads(v, object_pairs_hook=_no_dup)
         except ValueError:
@@ -273,6 +277,13 @@ def matches(tok, vals):
             if Decimal(repr(x)).quantize(q, rounding=ROUND_HALF_UP) == Decimal(repr(v)).quantize(q, rounding=ROUND_HALF_UP):
                 return True
     return False
+
+
+def args_of(c):
+    """Аргументи виклику як словник; не-об'єкт (рядок, список) — порожній словник, а FAIL про
+    форму дає основна перевірка (р.12, Astr: `.get` на рядку валив скрипт traceback'ом)."""
+    a = as_json(c["args_raw"], nested=False) if c["args_raw"] else None
+    return a if isinstance(a, dict) else {}
 
 
 def arg_value_errors(tool, args):
@@ -355,7 +366,7 @@ def check(lines):
     calls, other = parse_calls(trace)
     text = [ln for _, ln in other]
     fields = frozenset(f for c in calls if c["tool"] == "getAnalyticsDataByMetrics"
-                       for f in ((as_json(c["args_raw"]) or {}).get("metrics") or [] if c["args_raw"] else [])
+                       for f in (args_of(c).get("metrics") or [] if c["args_raw"] else [])
                        if isinstance(f, str))
 
     # Виклик поза trace (додаток, підсекція) скрипт не розібрав би — тому FAIL (р.1, Blocker 1).
@@ -409,7 +420,7 @@ def check(lines):
         elif as_json(" ".join(c["resp"])) is None and not PLAIN_ERROR.search(" ".join(c["resp"])):
             # Відповідь — JSON або текст помилки сервера; вільний текст тут не перевірявся б (р.5, B09).
             errs.append("%s: відповідь не JSON і не текст помилки — дослівність не звірити" % tag)
-        args = as_json(c["args_raw"]) if c["args_raw"] else {}
+        args = as_json(c["args_raw"], nested=False) if c["args_raw"] else {}
         if not isinstance(args, dict):
             errs.append("%s: аргументи не JSON-об'єкт в одному рядку — передумову не перевірити" % tag)
             continue
@@ -486,8 +497,8 @@ def check(lines):
                 errs.append("%s: наступний запис — не sendScheduledPostForReview (правка скидає review, паспорт 4b)" % tag)
             else:
                 # Надіслати треба ТОЙ САМИЙ пост: uuid не змінюється між викликами (р.6, S02).
-                ua = (as_json(c["args_raw"]) or {}).get("uuid") if c["args_raw"] else None
-                sa = (as_json(later[0]["args_raw"]) or {}).get("uuid") if later[0]["args_raw"] else None
+                ua = args_of(c).get("uuid") if c["args_raw"] else None
+                sa = args_of(later[0]).get("uuid") if later[0]["args_raw"] else None
                 if not ua or ua != sa:
                     errs.append("%s: send після правки — інший пост (uuid %s ≠ %s); правку не перенадіслано (паспорт 4b)"
                                 % (tag, sa, ua))
@@ -495,7 +506,7 @@ def check(lines):
                 ur = as_json(" ".join(c["resp"]))
                 if isinstance(ur, dict) and isinstance(ur.get("data"), dict):
                     ur = ur["data"]
-                sid = (as_json(later[0]["args_raw"]) or {}).get("id") if later[0]["args_raw"] else None
+                sid = args_of(later[0]).get("id") if later[0]["args_raw"] else None
                 if isinstance(ur, dict) and ur.get("id") is not None and str(sid) != str(ur.get("id")):
                     errs.append("%s: send після правки з id %s, а правка повернула id %s (паспорт 4b)" % (tag, sid, ur.get("id")))
         resp = " ".join(c["resp"])
@@ -529,7 +540,7 @@ def check(lines):
                 continue
             # Справжня помилка ForReview — текст без id (live-check §4.8): пост шукається за текстом
             # виклику; якщо він таки в черзі з autoPublish ≠ «ні» — публікація без людини (р.6, S01).
-            info = (as_json(c["args_raw"]) or {}).get("info") if c["args_raw"] else None
+            info = args_of(c).get("info") if c["args_raw"] else None
             info = as_json(info) if isinstance(info, str) else info
             text_ = info.get("text") if isinstance(info, dict) else None
             nj = as_json(" ".join(nxt["resp"]))
@@ -626,7 +637,7 @@ def check(lines):
         c = calls[n - 1] if 1 <= n <= len(calls) else None
         if c is None or c["tool"] != "getAnalyticsDataByMetrics":
             return "%s: тег [#%d %s] — виклик #%d не getAnalyticsDataByMetrics (паспорт п. 5)" % (ln_no, n, field, n)
-        args = as_json(c["args_raw"]) if c["args_raw"] else None
+        args = as_json(c["args_raw"], nested=False) if c["args_raw"] else None
         if not (isinstance(args, dict) and isinstance(args.get("metrics"), list) and field in args["metrics"]):
             return "%s: поля %s немає в `metrics` виклику #%d" % (ln_no, field, n)
         if field[:4] not in MEASURED_CONNECTORS:
@@ -673,6 +684,14 @@ def check(lines):
         for tm in SOURCE_TAG.finditer(body):
             seg = strip_not_numbers(body[last:tm.start()], fields)
             nums = list(NUM.finditer(seg))
+            if nums and re.search(r"[.!?;]\s", seg[nums[-1].end():]):
+                # Тег — у реченні СВОГО числа: межа речення між числом і тегом розриває зв'язок
+                # (р.12, P7d «TikTok 48 000 переглядів. Instagram [не метрика].»).
+                out.append("%s: тег %s не в реченні числа «%s»" % (loc, tm.group(0), nums[-1].group(0).strip()))
+                for t in nums:
+                    out.append("%s: число «%s» без тегу джерела" % (loc, t.group(0).strip()))
+                last = tm.end()
+                continue
             if not nums:
                 out.append("%s: тег %s без числа перед ним" % (loc, tm.group(0)))
             else:
