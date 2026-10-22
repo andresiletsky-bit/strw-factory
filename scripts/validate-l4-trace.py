@@ -212,6 +212,9 @@ def as_json(text, nested=True):
             v = json.loads(v, object_pairs_hook=_no_dup)
         except ValueError:
             return None
+    else:
+        if nested and isinstance(v, str) and v.lstrip()[:1] in '{["':
+            return None                   # кодування глибше за 8 шарів — не JSON (р.13, Kn9)
     return v
 
 
@@ -684,10 +687,12 @@ def check(lines):
         for tm in SOURCE_TAG.finditer(body):
             seg = strip_not_numbers(body[last:tm.start()], fields)
             nums = list(NUM.finditer(seg))
-            if nums and re.search(r"[.!?;]\s", seg[nums[-1].end():]):
-                # Тег — у реченні СВОГО числа: межа речення між числом і тегом розриває зв'язок
-                # (р.12, P7d «TikTok 48 000 переглядів. Instagram [не метрика].»).
-                out.append("%s: тег %s не в реченні числа «%s»" % (loc, tm.group(0), nums[-1].group(0).strip()))
+            if nums and not re.fullmatch(r"[\w\s'’ʼ-]*", seg[nums[-1].end():]):
+                # Між числом і тегом — ЛИШЕ слова й пробіли (закритий дозвіл): будь-який розділовий
+                # знак — «.», «;», «**», «<br>», «。», «.)» — розриває зв'язок (р.12 P7d; р.13 B1–B20:
+                # перелік меж речення був відкритим, як і всі переліки форм до нього).
+                out.append("%s: тег %s не одразу після числа «%s» — між ними лише слова й пробіли"
+                           % (loc, tm.group(0), nums[-1].group(0).strip()))
                 for t in nums:
                     out.append("%s: число «%s» без тегу джерела" % (loc, t.group(0).strip()))
                 last = tm.end()
