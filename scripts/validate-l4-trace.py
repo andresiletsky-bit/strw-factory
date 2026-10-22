@@ -52,8 +52,11 @@ ARG_KEYS = {
 # Згадка шукається в рядку, зведеному до малих літер без `_`: «create_scheduled_post»
 # і «CreateScheduledPost» — той самий інструмент (р.1, C3/C4). Межа слова вручну:
 # «createscheduledpost» — підрядок «createscheduledpostforreview».
-WRITE_MENTION = re.compile(r"(?<![a-z])(createscheduledpostforreview|sendscheduledpostforreview"
-                           r"|updatescheduledpost|createscheduledpost)(?![a-z])")
+# Роздільник між частинами назви — `_`, `-` чи пробіл (р.5 B18 «create-scheduled-post»); між
+# назвою і наступним словом — ні (р.6 S04: «createScheduledPost done» не злипається в одне слово).
+_S = r"[\s_-]*"
+WRITE_MENTION = re.compile(r"(?<![a-z])((?:create|send)" + _S + "scheduled" + _S + "post" + _S + "for" + _S + "review"
+                           r"|update" + _S + "scheduled" + _S + "post|create" + _S + "scheduled" + _S + "post)(?![a-z])")
 CALL_LINE = re.compile(r"^\s*-\s*call\s*:", re.I)
 ERROR_TEXT = re.compile(r"error|does not allow|not allowed|forbidden|denied|unauthori|помилк", re.I)
 MCP_LINE = re.compile(r"^- mcp: `claude mcp get metricool` → «[^»]*»\s*$")
@@ -70,27 +73,37 @@ MEASURED_CONNECTORS = {"IGRE"}
 REPOS = r"(?:strw-factory|strw-ops|strw-state|pact-ios|pact-backend)"
 NOT_A_NUMBER = [
     re.compile(r"https?://\S+"),
-    # дата ISO, з часом через «T» або пробіл; кінець речення «.»/«,» — не продовження числа
-    re.compile(r"(?<![\w.,])\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:[+-]\d{2}:\d{2}|Z)?)?(?!\d|[.,]\d)"),
+    # шлях до файла з «/» і розширенням: loops/L4-growth.md (р.6, F02)
+    re.compile(r"(?<![\w.-])[\w-]+(?:/[\w.-]+)+\.(?:md|sh|py|yaml|json)\b"),
+    # дата ISO з реальним місяцем/днем, з часом через «T» або пробіл (р.6, N07: «4800-00-00»)
+    re.compile(r"(?<![\w.,])20\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])"
+               r"(?:[T ](?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?(?:[+-]\d{2}:\d{2}|Z)?)?(?!\d|[.,]\d)"),
     re.compile(r"\bv\d+\.\d+\.\d+\b"),
-    re.compile(r"(?<![\w.,-])[a-z]+-\d{3}(?![\w%-]|[.,]\d)"),     # pact-001, tri-138, dec-105
+    # id — лише відомі префікси реєстру (р.6, N04/N06: «top-100», «views-480»)
+    re.compile(r"(?<![\w.,-])(?:pact|tea|aqua|tri|dec)-\d{3}(?![\w%-]|[.,]\d)"),
     re.compile(r"(?<![\w.,-])[A-Z]{4}\d{2}(?![\w%-]|[.,]\d)"),     # поле Data Studio: IGRE11
-    re.compile(r"(?<![\w.,-])[LGWM]\d{1,2}(?![\w%-]|[.,]\d)"),     # L4, G1, W43, M3
+    # L1–L8, G1–G4, M1–M9, W1–W53 (р.6, N17: «M48»)
+    re.compile(r"(?<![\w.,-])(?:L[1-8]|G[1-4]|M[1-9]|W(?:[1-9]|[1-4]\d|5[0-3]))(?![\w%-]|[.,]\d)"),
     re.compile(r"\bl4-trace\b"),
-    re.compile(r"(?:\bPR\s*|\b" + REPOS + r"\s*|\bandresiletsky-bit/[\w.-]+)#\d+\b"),
-    re.compile(r"\bвиклик\w*\s+#\d+\b"),
-    re.compile(r"(?<!\w)п\.\s*\d+[a-h]?(?:\s*[–-]\s*\d+[a-h]?)?(?!\w|[.,]\d|%)"),
-    re.compile(r"§\s*\d+(?!\w|[.,]\d|%)"),
+    # номер PR — лише з назвою репо (р.6, N08: «PR #1 тижня»)
+    re.compile(r"(?:\b" + REPOS + r"\s*|\bandresiletsky-bit/[\w.-]+)#\d+\b"),
+    # пункт паспорта: 1–2 цифри (р.6, N19/N20: «§48000», «п. 48»… — п. ≤ 19 у паспортах)
+    re.compile(r"(?<!\w)п\.\s*(?:1?\d)[a-h]?(?:\s*[–-]\s*(?:1?\d)[a-h]?)?(?!\w|[.,]\d|%)"),
+    re.compile(r"§\s*(?:1?\d)(?!\w|[.,]\d|%)"),
 ]
-# Час — лише після прийменника («о 09:00», «до 18:30»); інакше «0:45» — тривалість, тобто число.
-TIME_AFTER_PREP = re.compile(r"(\b(?:о|об|до|з|із|після|на)\s+)\d{2}:\d{2}(?!\d|[.,]\d)")
+# Час — лише «о/об HH:MM» з реальною годиною (р.6, Blocker: «до 00:45», «з 00:30», «на 00:12» —
+# тривалість, тобто число). «До 18:00» — з тегом `[не метрика]`: хибний червоний на безпечному боці.
+TIME_AFTER_PREP = re.compile(r"(\b(?:о|об)\s+)(?:[01]?\d|2[0-3]):[0-5]\d(?!\d|[.,]\d)")
+# Посилання на виклик — лише в рядку `- inbox:` і `стан:`, і лише на існуючий номер (р.6, N05).
+CALL_REF = re.compile(r"\bвиклик\w*\s+#(\d+)\b")
 # Токен числа: складений «9:16», «1080×1920» (один тег на токен), групи тисяч, десяткові.
-NUM = re.compile(r"(?<![\d.,])(\d+(?:[:×]\d+)+|\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)(?![\d])"
+NUM = re.compile(r"(?<![\d.,])(\d+(?:[:×–]\d+)+|\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)(?![\d])"
                  r"(\s*(?:k|к|тис|млн|m|м)(?![a-zа-яіїєґ]))?(\s*%)?", re.I)
 # Одиниця після тегу Metricool — FAIL до виміру одиниць (р.5: «45,2 [#1 IGRE08]%», «…відсотка»).
 UNIT_AFTER_TAG = re.compile(r"^\s*(?:%|‰|відсот|percent|per\s*cent)", re.I)
 # Відповідь, що не JSON, — лише текст помилки сервера (live-check §1.2: «The result exceeds…»).
-PLAIN_ERROR = re.compile(r"error|exceed|not allowed|does not allow|denied|forbidden|unauthori|limit|помилк", re.I)
+PLAIN_ERROR = re.compile(r"^\s*(?:error\b|the result exceeds|\w+ error\b)", re.I)   # р.6, N12b: «(limit)» не перепустка
+PCT_ANY = re.compile(r"%|‰|відсот|percent", re.I)
 SOCIAL_NETWORKS = {"twitter", "facebook", "instagram", "linkedin", "youtube", "tiktok"}          # §4.5
 NETWORKS = {"bluesky", "googleBusinessProfile", "metaAds", "googleAds", "threads", "facebookAds", "facebook",
             "instagram", "linkedin", "pinterest", "tiktok", "tiktokAds", "twitter", "twitch", "youtube",
@@ -212,7 +225,7 @@ def shown_values(tok):
     t = re.sub(r"[   ]", "", tok)
     cands = set()
     if re.fullmatch(r"\d{1,3}(?:,\d{3})+", t):
-        cands.add((float(t.replace(",", "")), 0))
+        return {(float(t.replace(",", "")), 0)}   # «48,000» — лише роздільник тисяч (р.6, N16)
     dec = t.replace(",", ".")
     places = len(dec.split(".")[1]) if "." in dec else 0
     cands.add((float(dec), places))
@@ -278,10 +291,11 @@ def company_context_path():
 def write_mentions(where, lines):
     out = []
     for i, ln in lines:
-        m = WRITE_MENTION.search(re.sub(r"[\s_-]", "", ln).lower())
+        m = WRITE_MENTION.search(ln.lower())
         if m:
+            name = re.sub(r"[\s_-]", "", m.group(1))
             out.append("%s рядок %d: згадка інструмента запису `%s` поза рядком `- call:` trace — виклик запису"
-                       " фіксується лише як `- call: <інструмент> {…}` у «Trace (L4)»" % (where, i + 1, m.group(1)))
+                       " фіксується лише як `- call: <інструмент> {…}` у «Trace (L4)»" % (where, i + 1, name))
     return out
 
 
@@ -310,7 +324,8 @@ def check(lines):
         if CALL_LINE.match(ln):
             errs.append("звіт рядок %d: `- call:` поза «Trace (L4)» — виклики Metricool живуть лише в trace" % (i + 1))
     errs += write_mentions("звіт", [(i, ln) for i, ln in enumerate(report) if not CALL_LINE.match(ln)])
-    errs += write_mentions("trace", other)
+    # Усі рядки trace, крім самого `- call:`: і відповіді `  > …`, і `  стан: …` (р.6, S04/S05).
+    errs += write_mentions("trace", [(i, ln) for i, ln in enumerate(trace) if not CALL_LINE.match(ln)])
 
     mcp_lines = [ln for ln in text if re.match(r"^- mcp:", ln)]
     mcp = " ".join(mcp_lines)
@@ -423,6 +438,13 @@ def check(lines):
             later = [x for x in calls[k + 1:] if x["tool"] != "getScheduledPosts"]
             if not later or later[0]["tool"] != "sendScheduledPostForReview":
                 errs.append("%s: наступний запис — не sendScheduledPostForReview (правка скидає review, паспорт 4b)" % tag)
+            else:
+                # Надіслати треба ТОЙ САМИЙ пост: uuid не змінюється між викликами (р.6, S02).
+                ua = (as_json(c["args_raw"]) or {}).get("uuid") if c["args_raw"] else None
+                sa = (as_json(later[0]["args_raw"]) or {}).get("uuid") if later[0]["args_raw"] else None
+                if not ua or ua != sa:
+                    errs.append("%s: send після правки — інший пост (uuid %s ≠ %s); правку не перенадіслано (паспорт 4b)"
+                                % (tag, sa, ua))
         resp = " ".join(c["resp"])
         failed = c["tool"] in FOR_REVIEW and is_error(resp)
         if failed:
@@ -448,6 +470,21 @@ def check(lines):
         if key is None:
             if not failed:
                 errs.append("%s: у відповіді немає uuid/id поста — getScheduledPosts не звірити (паспорт 4b)" % tag)
+                continue
+            # Справжня помилка ForReview — текст без id (live-check §4.8): пост шукається за текстом
+            # виклику; якщо він таки в черзі з autoPublish ≠ «ні» — публікація без людини (р.6, S01).
+            info = (as_json(c["args_raw"]) or {}).get("info") if c["args_raw"] else None
+            info = as_json(info) if isinstance(info, str) else info
+            text_ = info.get("text") if isinstance(info, dict) else None
+            nj = as_json(" ".join(nxt["resp"]))
+            if isinstance(nj, dict) and isinstance(nj.get("data"), list):
+                nj = nj["data"]
+            for it in (nj if isinstance(nj, list) else []):
+                if text_ and any(d.get("text") == text_ for d in walk(it)) and any(
+                        "autoPublish" in d and d["autoPublish"] not in (False, 0, "false", "0") for d in walk(it)):
+                    errs.append("%s: після помилки в getScheduledPosts пост із тим самим текстом і autoPublish ≠ «ні»"
+                                " — Metricool опублікує сам (паспорт 4b–4c)" % tag)
+                    break
             continue
         # Пост — ЕЛЕМЕНТ списку відповіді (зокрема в {"data": […]}), у якому є цей uuid/id; прапори
         # шукаються в усьому елементі, разом з обгорткою (р.5, B17 `{"post": {…}, "autoPublish": true}`).
@@ -541,11 +578,17 @@ def check(lines):
                 ln_no, shown, field, n, ", ".join("%g" % x for x in sorted(vals)))
         return None
 
-    def number_errors(where, ln_no, line):
+    def number_errors(where, ln_no, line, call_refs=False):
         # Тег у бектиках — назва тегу в тексті, не тег; цифри в бектиках при цьому лишаються.
         line = re.sub(r"`[^`]*`", lambda m: SOURCE_TAG.sub(" ", m.group(0)), line)
+        if call_refs:   # «виклик #N» — лише в inbox/стан і лише на існуючий виклик (р.6, N05)
+            line = CALL_REF.sub(lambda m: " " if 1 <= int(m.group(1)) <= len(calls) else m.group(0), line)
         out, body = [], []
         for snt in sentences(line):
+            # «%»/«‰»/«відсот…» будь-де в реченні з тегом Metricool — одиниць не виміряно (р.6, N09–N11).
+            if any(t.group(1) for t in SOURCE_TAG.finditer(snt)) and PCT_ANY.search(SOURCE_TAG.sub(" ", snt)):
+                out.append("%s рядок %d: «%%»/«відсот…» у реченні з тегом Metricool — одиниць полів не виміряно, пиши як"
+                           " у відповіді: %s" % (where, ln_no, snt.strip()))
             if "н/д" in snt.lower():
                 if numbers_in(SOURCE_TAG.sub(" ", snt)):
                     out.append("«н/д» з числом у тому ж реченні — пропуск цифр не має (паспорт п. 5): %s" % snt.strip())
@@ -581,10 +624,10 @@ def check(lines):
             ln = re.sub(r"«[^»]*»", " ", ln)       # дослівний вивід команди — у «…» (формат — вище)
         elif re.match(r"^- reviewer:", ln):
             ln = EMAIL.sub(" ", ln)                 # email — не число; хвіст рядка — вільний текст
-        errs += number_errors("trace", i + 1, ln)
+        errs += number_errors("trace", i + 1, ln, call_refs=bool(re.match(r"^- inbox:", ln)))
     for c in calls:
         if c["state"] is not None:                  # хвіст `стан:` — теж вільний текст (р.4, A03)
-            errs += number_errors("trace стан виклику #%d" % c["n"], 0, c["state"])
+            errs += number_errors("trace стан виклику #%d" % c["n"], 0, c["state"], call_refs=True)
 
     return errs, len(calls), sum(1 for c in calls if c["tool"] in WRITES)
 
