@@ -79,9 +79,9 @@ MEASURED_CONNECTORS = {"IGRE"}
 # «48. Стільки…»). Усе поза переліком — число, і новий синонім дає хибний червоний, не обхід.
 REPOS = r"(?:strw-factory|strw-ops|strw-state|pact-ios|pact-backend)"
 NOT_A_NUMBER = [
-    # URL — без кінцевого розділового знака (як автопосилання GFM): інакше крапка речення
-    # зникала разом з URL, і тег наступного речення чіплявся до числа (р.14, U1).
-    re.compile(r"https?://\S*[^\s.,;:!?*_~)\]}>»\"'’]"),
+    # URL — закінчується лише літерою, цифрою чи `/#=&%+-` (закритий дозвіл): інакше «.», «…»,
+    # «|» речення зникали разом з URL, і тег наступного речення чіплявся до числа (р.14 U1, р.15 U6).
+    re.compile(r"https?://\S*[A-Za-z0-9/#=&%+-]"),
     # шлях до файла з «/» і розширенням: loops/L4-growth.md (р.6, F02)
     re.compile(r"(?<![\w.-])[\w-]+(?:/[\w.-]+)+\.(?:md|sh|py|yaml|json)\b"),
     # дата ISO з реальним місяцем/днем, з часом через «T» або пробіл (р.6, N07: «4800-00-00»)
@@ -108,6 +108,10 @@ CALL_REF = re.compile(r"\bвиклик\w*\s+#(\d+)\b")
 NUM = re.compile(r"(?<![\d.,])(\d+(?:[:×–]\d+)+|\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)(?![\d])"
                  r"(\s*(?:k|к|тис|млн|m|м)(?![a-zа-яіїєґ]))?(\s*%)?", re.I)
 # Одиниця після тегу Metricool — FAIL до виміру одиниць (р.5: «45,2 [#1 IGRE08]%», «…відсотка»).
+# Дозвіл між числом і тегом: літери, цифри, пробіл, апостроф; дефіс — лише всередині слова
+# («email-підписників»), « - » з пробілами — як тире, тобто FAIL (р.15, Hy1).
+_L = "A-Za-zА-Яа-яЁёІіЇїЄєҐґ0-9_"
+GAP_OK = re.compile(r"(?:[" + _L + r"\s'’ʼ]|(?<=[" + _L + r"])-(?=[" + _L + r"]))*")
 UNIT_AFTER_TAG = re.compile(r"^\s*(?:%|％|﹪|‰|відсот|процент|percent|per\s*cent|pct|тис|тисяч|млн|мільйон|млрд|мільярд"
                             r"|thousand|million|billion|k(?![a-zа-яіїєґ])|к(?![a-zа-яіїєґ])|m(?![a-zа-яіїєґ])|м(?![a-zа-яіїєґ])|bn\b)", re.I)
 # Відповідь, що не JSON, — лише текст помилки сервера (live-check §1.2: «The result exceeds…»).
@@ -233,6 +237,17 @@ def walk(node):
     elif isinstance(node, list):
         for v in node:
             yield from walk(v)
+
+
+def undecodable(node):
+    """Чи є в JSON рядок, схожий на закодований JSON, що не розбирається (р.15, W3_10)."""
+    if isinstance(node, str):
+        return node.lstrip()[:1] in '{["' and as_json(node) is None
+    if isinstance(node, dict):
+        return any(undecodable(v) for v in node.values())
+    if isinstance(node, list):
+        return any(undecodable(v) for v in node)
+    return False
 
 
 def is_num(v):
@@ -447,6 +462,9 @@ def check(lines):
         if not isinstance(info, dict) or info.get("autoPublish") is not False:
             errs.append("%s: немає `info.autoPublish: false` (за замовчуванням True — Metricool публікує сам; паспорт 4b)"
                         % tag)
+        elif any("autoPublish" in d and d["autoPublish"] is not False for d in walk(info)):
+            # `autoPublish` ≠ false будь-де в `info`, зокрема в `providers[]` (р.15, P_prov).
+            errs.append("%s: `autoPublish` ≠ false усередині `info` (вкладено) — паспорт 4b" % tag)
         if c["tool"] in FOR_REVIEW:
             if args.get("approvalSystem") != "all":
                 errs.append("%s: approvalSystem=%s, дозволено лише \"all\" (паспорт 4a)"
@@ -563,6 +581,8 @@ def check(lines):
         if isinstance(nj, dict) and isinstance(nj.get("data"), list):
             nj = nj["data"]
         items = nj if isinstance(nj, list) else ([nj] if isinstance(nj, dict) else [])
+        if undecodable(items):
+            errs.append("%s: у відповіді getScheduledPosts закодований рядок, що не розбирається — не JSON (паспорт 4b)" % tag)
         def has(it, k, v):
             return any(d.get(k) is not None and str(d.get(k)) == v for d in walk(it))
         # Пост — за uuid АБО id відповіді запису; збіг лише за одним ключем, коли відповідь мала обидва,
@@ -689,7 +709,7 @@ def check(lines):
         for tm in SOURCE_TAG.finditer(body):
             seg = strip_not_numbers(body[last:tm.start()], fields)
             nums = list(NUM.finditer(seg))
-            if nums and not re.fullmatch(r"[A-Za-zА-Яа-яЁёІіЇїЄєҐґ\d_\s'’ʼ-]*", seg[nums[-1].end():]):
+            if nums and not re.fullmatch(GAP_OK, seg[nums[-1].end():]):
                 # Між числом і тегом — ЛИШЕ слова й пробіли (закритий дозвіл): будь-який розділовий
                 # знак — «.», «;», «**», «<br>», «。», «.)» — розриває зв'язок (р.12 P7d; р.13 B1–B20:
                 # перелік меж речення був відкритим, як і всі переліки форм до нього).
