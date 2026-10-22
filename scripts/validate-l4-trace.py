@@ -81,7 +81,6 @@ NOT_A_NUMBER = [
     re.compile(r"\bv\d+\.\d+\.\d+\b"),
     # id — лише відомі префікси реєстру (р.6, N04/N06: «top-100», «views-480»)
     re.compile(r"(?<![\w.,-])(?:pact|tea|aqua|tri|dec)-\d{3}(?![\w%-]|[.,]\d)"),
-    re.compile(r"(?<![\w.,-])[A-Z]{4}\d{2}(?![\w%-]|[.,]\d)"),     # поле Data Studio: IGRE11
     # L1–L8, G1–G4, M1–M9, W1–W53 (р.6, N17: «M48»)
     re.compile(r"(?<![\w.,-])(?:L[1-8]|G[1-4]|M[1-9]|W(?:[1-9]|[1-4]\d|5[0-3]))(?![\w%-]|[.,]\d)"),
     re.compile(r"\bl4-trace\b"),
@@ -93,17 +92,18 @@ NOT_A_NUMBER = [
 ]
 # Час — лише «о/об HH:MM» з реальною годиною (р.6, Blocker: «до 00:45», «з 00:30», «на 00:12» —
 # тривалість, тобто число). «До 18:00» — з тегом `[не метрика]`: хибний червоний на безпечному боці.
-TIME_AFTER_PREP = re.compile(r"(\b(?:о|об)\s+)(?:[01]?\d|2[0-3]):[0-5]\d(?!\d|[.,]\d)")
+TIME_AFTER_PREP = re.compile(r"(?i)(\b(?:о|об)\s+)(?:[01]?\d|2[0-3]):[0-5]\d(?!\d|[.,]\d)")
 # Посилання на виклик — лише в рядку `- inbox:` і `стан:`, і лише на існуючий номер (р.6, N05).
 CALL_REF = re.compile(r"\bвиклик\w*\s+#(\d+)\b")
 # Токен числа: складений «9:16», «1080×1920» (один тег на токен), групи тисяч, десяткові.
 NUM = re.compile(r"(?<![\d.,])(\d+(?:[:×–]\d+)+|\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)(?![\d])"
                  r"(\s*(?:k|к|тис|млн|m|м)(?![a-zа-яіїєґ]))?(\s*%)?", re.I)
 # Одиниця після тегу Metricool — FAIL до виміру одиниць (р.5: «45,2 [#1 IGRE08]%», «…відсотка»).
-UNIT_AFTER_TAG = re.compile(r"^\s*(?:%|‰|відсот|percent|per\s*cent)", re.I)
+UNIT_AFTER_TAG = re.compile(r"^\s*(?:%|％|﹪|‰|відсот|процент|percent|per\s*cent|pct|тис|тисяч|млн|мільйон|млрд|мільярд"
+                            r"|thousand|million|billion|k(?![a-zа-яіїєґ])|к(?![a-zа-яіїєґ])|m(?![a-zа-яіїєґ])|м(?![a-zа-яіїєґ])|bn\b)", re.I)
 # Відповідь, що не JSON, — лише текст помилки сервера (live-check §1.2: «The result exceeds…»).
 PLAIN_ERROR = re.compile(r"^\s*(?:error\b|the result exceeds|\w+ error\b)", re.I)   # р.6, N12b: «(limit)» не перепустка
-PCT_ANY = re.compile(r"%|‰|відсот|percent", re.I)
+PCT_ANY = re.compile(r"%|％|﹪|‰|відсот|процент|percent|pct", re.I)
 SOCIAL_NETWORKS = {"twitter", "facebook", "instagram", "linkedin", "youtube", "tiktok"}          # §4.5
 NETWORKS = {"bluesky", "googleBusinessProfile", "metaAds", "googleAds", "threads", "facebookAds", "facebook",
             "instagram", "linkedin", "pinterest", "tiktok", "tiktokAds", "twitter", "twitch", "youtube",
@@ -115,14 +115,19 @@ EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 PENDING_VALUE = re.compile(r"(?i)^(?:pending(?:[_ ](?:review|approval))?|in[_ ]review|waiting[_ ]for[_ ]approval)$")
 
 
-def strip_not_numbers(text):
+FIELD_TOKEN = re.compile(r"(?<![\w.,-])[A-Z]{4}\d{2}(?![\w%-]|[.,]\d)")
+
+
+def strip_not_numbers(text, fields=frozenset()):
     for rx in NOT_A_NUMBER:
         text = rx.sub(" ", text)
+    # Поле Data Studio — «не число» лише якщо його справді запитали в `metrics` (р.7, FLD «VIEW48»).
+    text = FIELD_TOKEN.sub(lambda m: " " if m.group(0) in fields else m.group(0), text)
     return TIME_AFTER_PREP.sub(lambda m: m.group(1) + " ", text)
 
 
-def numbers_in(text):
-    return re.findall(r"\d", strip_not_numbers(text))
+def numbers_in(text, fields=frozenset()):
+    return re.findall(r"\d", strip_not_numbers(text, fields))
 
 
 def sentences(line):
@@ -318,6 +323,9 @@ def check(lines):
     errs = []
     calls, other = parse_calls(trace)
     text = [ln for _, ln in other]
+    fields = frozenset(f for c in calls if c["tool"] == "getAnalyticsDataByMetrics"
+                       for f in ((as_json(c["args_raw"]) or {}).get("metrics") or [] if c["args_raw"] else [])
+                       if isinstance(f, str))
 
     # Виклик поза trace (додаток, підсекція) скрипт не розібрав би — тому FAIL (р.1, Blocker 1).
     for i, ln in enumerate(report):
@@ -325,7 +333,14 @@ def check(lines):
             errs.append("звіт рядок %d: `- call:` поза «Trace (L4)» — виклики Metricool живуть лише в trace" % (i + 1))
     errs += write_mentions("звіт", [(i, ln) for i, ln in enumerate(report) if not CALL_LINE.match(ln)])
     # Усі рядки trace, крім самого `- call:`: і відповіді `  > …`, і `  стан: …` (р.6, S04/S05).
-    errs += write_mentions("trace", [(i, ln) for i, ln in enumerate(trace) if not CALL_LINE.match(ln)])
+    # Рядок, схожий на виклик, але не канонічний `- call:` (регістр, пробіли, відступ), parse_calls
+    # не розбирає — і він не мусить ставати невидимим (р.7, Blocker: `- Call: createScheduledPost…`).
+    parsed = {c["idx"] for c in calls}
+    for i, ln in enumerate(trace):
+        if i not in parsed and re.search(r"(?i)^\s*-\s*call\s*:", ln):
+            errs.append("trace рядок %d: неканонічний рядок виклику — лише «- call: <інструмент> {…}»: %s" % (i + 1, ln.strip()[:60]))
+    # Усі рядки trace, крім розібраних викликів: і `  > …`, і `  стан: …` (р.6, S04/S05).
+    errs += write_mentions("trace", [(i, ln) for i, ln in enumerate(trace) if i not in parsed])
 
     mcp_lines = [ln for ln in text if re.match(r"^- mcp:", ln)]
     mcp = " ".join(mcp_lines)
@@ -445,6 +460,13 @@ def check(lines):
                 if not ua or ua != sa:
                     errs.append("%s: send після правки — інший пост (uuid %s ≠ %s); правку не перенадіслано (паспорт 4b)"
                                 % (tag, sa, ua))
+                # id після правки змінюється (live-check §4.7): send — з НОВИМ id з відповіді update (р.7, S02id).
+                ur = as_json(" ".join(c["resp"]))
+                if isinstance(ur, dict) and isinstance(ur.get("data"), dict):
+                    ur = ur["data"]
+                sid = (as_json(later[0]["args_raw"]) or {}).get("id") if later[0]["args_raw"] else None
+                if isinstance(ur, dict) and ur.get("id") is not None and str(sid) != str(ur.get("id")):
+                    errs.append("%s: send після правки з id %s, а правка повернула id %s (паспорт 4b)" % (tag, sid, ur.get("id")))
         resp = " ".join(c["resp"])
         failed = c["tool"] in FOR_REVIEW and is_error(resp)
         if failed:
@@ -479,12 +501,11 @@ def check(lines):
             nj = as_json(" ".join(nxt["resp"]))
             if isinstance(nj, dict) and isinstance(nj.get("data"), list):
                 nj = nj["data"]
-            for it in (nj if isinstance(nj, list) else []):
-                if text_ and any(d.get("text") == text_ for d in walk(it)) and any(
-                        "autoPublish" in d and d["autoPublish"] not in (False, 0, "false", "0") for d in walk(it)):
-                    errs.append("%s: після помилки в getScheduledPosts пост із тим самим текстом і autoPublish ≠ «ні»"
-                                " — Metricool опублікує сам (паспорт 4b–4c)" % tag)
-                    break
+            # Будь-який пост у черзі з autoPublish ≠ «ні» після помилки — FAIL, незалежно від тексту
+            # (р.7: пост без тексту, текст з іншим пробілом, інша обгортка).
+            if any("autoPublish" in d and d["autoPublish"] not in (False, 0, "false", "0") for d in walk(nj)):
+                errs.append("%s: після помилки в getScheduledPosts є пост з autoPublish ≠ «ні»%s — Metricool опублікує"
+                            " сам (паспорт 4b–4c)" % (tag, " (той самий текст)" if text_ else ""))
             continue
         # Пост — ЕЛЕМЕНТ списку відповіді (зокрема в {"data": […]}), у якому є цей uuid/id; прапори
         # шукаються в усьому елементі, разом з обгорткою (р.5, B17 `{"post": {…}, "autoPublish": true}`).
@@ -540,9 +561,9 @@ def check(lines):
 
     # Числа (паспорт п. 3, 5): кожне число звіту І вільного тексту trace несе тег джерела
     # одразу після себе — один тег на одне число; «н/д» — без жодної цифри в реченні.
-    def verify_metricool(t, n, field, ln_no, gap, after):
+    def verify_metricool(t, n, field, ln_no, gap, after, neg=False):
         shown = t.group(0).strip()
-        if re.search(r"[:×]", t.group(1)):
+        if re.search(r"[:×–]", t.group(1)):
             return "%s: «%s» — складене число біля тегу Metricool, у відповіді такого немає" % (ln_no, shown)
         if gap.strip():
             # Між числом і тегом Metricool — лише пробіл (р.5, B12: «45,2 відсотка [#1 IGRE08]»).
@@ -573,6 +594,9 @@ def check(lines):
             # «%» біля тегу Metricool не звірити — пиши число як у відповіді.
             return "%s: «%s» з «%%» біля тегу Metricool — одиницю поля %s не виміряно, пиши як у відповіді" % (
                 ln_no, shown, field)
+        if neg and all(x >= 0 for x in vals):
+            # «−1 240» біля невід'ємного значення — знак читач бачить (р.7, NEG).
+            return "%s: «−%s» зі знаком мінус, а значення %s у відповіді #%d невід'ємне" % (ln_no, shown, field, n)
         if not matches(t.group(1), vals):
             return "%s: «%s» ≠ значенню %s у відповіді #%d (%s)" % (
                 ln_no, shown, field, n, ", ".join("%g" % x for x in sorted(vals)))
@@ -584,13 +608,14 @@ def check(lines):
         if call_refs:   # «виклик #N» — лише в inbox/стан і лише на існуючий виклик (р.6, N05)
             line = CALL_REF.sub(lambda m: " " if 1 <= int(m.group(1)) <= len(calls) else m.group(0), line)
         out, body = [], []
+        # «%»/«відсот…»/«процент» будь-де в РЯДКУ з тегом Metricool — одиниць не виміряно (р.6 N09–N11;
+        # р.7 P1–P3: синоніми, повноширинний знак, друге речення того ж рядка).
+        if any(t.group(1) for t in SOURCE_TAG.finditer(line)) and PCT_ANY.search(SOURCE_TAG.sub(" ", line)):
+            out.append("%s рядок %d: «%%»/«відсот…» у рядку з тегом Metricool — одиниць полів не виміряно, пиши як"
+                       " у відповіді: %s" % (where, ln_no, line.strip()[:120]))
         for snt in sentences(line):
-            # «%»/«‰»/«відсот…» будь-де в реченні з тегом Metricool — одиниць не виміряно (р.6, N09–N11).
-            if any(t.group(1) for t in SOURCE_TAG.finditer(snt)) and PCT_ANY.search(SOURCE_TAG.sub(" ", snt)):
-                out.append("%s рядок %d: «%%»/«відсот…» у реченні з тегом Metricool — одиниць полів не виміряно, пиши як"
-                           " у відповіді: %s" % (where, ln_no, snt.strip()))
             if "н/д" in snt.lower():
-                if numbers_in(SOURCE_TAG.sub(" ", snt)):
+                if numbers_in(SOURCE_TAG.sub(" ", snt), fields):
                     out.append("«н/д» з числом у тому ж реченні — пропуск цифр не має (паспорт п. 5): %s" % snt.strip())
             else:
                 body.append(snt)
@@ -598,7 +623,7 @@ def check(lines):
         loc = "%s рядок %d" % (where, ln_no)
         last = 0
         for tm in SOURCE_TAG.finditer(body):
-            seg = strip_not_numbers(body[last:tm.start()])
+            seg = strip_not_numbers(body[last:tm.start()], fields)
             nums = list(NUM.finditer(seg))
             if not nums:
                 out.append("%s: тег %s без числа перед ним" % (loc, tm.group(0)))
@@ -607,11 +632,12 @@ def check(lines):
                     out.append("%s: число «%s» без тегу джерела (один тег — одне число)" % (loc, t.group(0).strip()))
                 if tm.group(1):
                     e = verify_metricool(nums[-1], int(tm.group(1)), tm.group(2), loc,
-                                         seg[nums[-1].end():], body[tm.end():])
+                                         seg[nums[-1].end():], body[tm.end():],
+                                         neg=bool(re.search(r"[−-]$", seg[:nums[-1].start()])))
                     if e:
                         out.append(e)
             last = tm.end()
-        for t in NUM.finditer(strip_not_numbers(body[last:])):
+        for t in NUM.finditer(strip_not_numbers(body[last:], fields)):
             out.append("%s: число «%s» без тегу джерела ([#N ПОЛЕ] · [metrics.md] · [PRD] · [план] · [не метрика])"
                        % (loc, t.group(0).strip()))
         return out
