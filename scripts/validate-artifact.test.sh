@@ -237,7 +237,7 @@ l4 "ForReview відповів помилкою, картка є, але про 
 l4 "ForReview відповів помилкою і повторений → FAIL" 1 "після нього є запис" "$ERR; $CARD2; $STOP; $REPEAT"
 l4 "після помилки ForReview — update і send того ж поста → FAIL (р.4 A12)" 1 "після нього є запис" "$ERR; $CARD2"
 l4 "ForReview відповів помилкою, картки в inbox немає → FAIL" 1 "inbox" "$ERR; $STOP; s/- inbox: [^\n]*\n//"
-l4 "«Forbidden» у message без ключа error — не помилка, але й поста немає → FAIL (р.1 I)" 1 "немає uuid/id" 's/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "[^"]+"\}/  > {"message": "Forbidden"}/'
+l4 "«Forbidden» у message — поза формою успіху, тобто помилка → FAIL (р.1 I, р.10)" 1 "відповів помилкою" 's/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "[^"]+"\}/  > {"message": "Forbidden"}/'
 l4 "«without errors» у message — не помилка; пост з autoPublish true → FAIL (р.4 A11)" 1 "autoPublish: true" 's/  > \{"id": 503, "uuid": "u-501", "plannerUrl": "[^"]+"\}/  > {"id": 503, "uuid": "u-501", "plannerUrl": "https:\/\/app.metricool.com\/planner\/u-501", "message": "Sent for review without errors"}/; s/  > \[\{"id": 503, "uuid": "u-501", /  > [{"id": 503, "uuid": "u-501", "autoPublish": true, /'
 l4 "«Помилки…» в ехо тексту поста — не помилка → PASS (р.3 F19)" 0 "" 's/"id": 501, "uuid": "u-501", "plannerUrl": "([^"]+)"\}/"id": 501, "uuid": "u-501", "plannerUrl": "$1", "text": "Помилки новачків у звичках"}/'
 # Стан і пост у getScheduledPosts (паспорт 4b–4c).
@@ -400,6 +400,11 @@ l4 "success: false — помилка → FAIL (р.9 A3)" 1 "після ньог
 l4 "status: error — помилка → FAIL (р.9 A3s)" 1 "після нього є запис" 's/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "([^"]+)"\}/  > {"status": "error", "id": 501, "uuid": "u-501", "plannerUrl": "$1"}/'
 l4 "пост з тим самим id, але іншим uuid → FAIL (р.9 A1)" 1 "ключі розходяться" 's/  > \[\{"id": 501, "uuid": "u-501", /  > [{"id": 501, "uuid": "u-5O1", /'
 l4 "пост лише з id (без uuid) і autoPublish true, картка є → FAIL (р.9 A1i)" 1 "ключі розходяться" 's/  > \[\{"id": 501, "uuid": "u-501", "text": "([^"]+)"\}\]/  > [{"id": 501, "text": "$1", "autoPublish": true}]/; s/- inbox: tri-NNN — TikTok/- inbox: tri-NNN — виклик #2: пост не знайдено за uuid; TikTok/'
+# Раунд 10: успіх ForReview — закрита форма; пост не знайдено за ключем — autoPublish усе одно.
+l4 "status 500 у {\"data\": …} — не форма успіху → FAIL (р.10 E500)" 1 "після нього є запис" 's/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "([^"]+)"\}/  > {"data": {"status": 500, "message": "Internal error", "id": 501, "uuid": "u-501", "plannerUrl": "$1"}}/'
+l4 "isError: true — не форма успіху → FAIL (р.10 EisE)" 1 "після нього є запис" 's/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "([^"]+)"\}/  > {"isError": true, "id": 501, "uuid": "u-501", "plannerUrl": "$1"}/'
+l4 "ok: false — не форма успіху → FAIL (р.10 Eok)" 1 "після нього є запис" 's/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "([^"]+)"\}/  > {"ok": false, "id": 501, "uuid": "u-501", "plannerUrl": "$1"}/'
+l4 "відповідь запису лише з uuid, пост за ним не знайдено, але в черзі autoPublish true, картка є → FAIL (р.10 K1)" 1 "поста за ключем не знайдено" 's/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "([^"]+)"\}/  > {"uuid": "u-501", "plannerUrl": "$1"}/; s/  > \[\{"id": 501, "uuid": "u-501", "text": "([^"]+)"\}\]/  > [{"id": 501, "text": "$1", "autoPublish": true}]/; s/- inbox: tri-NNN — TikTok/- inbox: tri-NNN — виклик #2: пост не знайдено; TikTok/'
 # Межа рівня 0 (рішення CEO: мережу рядка не вгадувати): тег поля Instagram у рядку
 # TikTok звіряє LLM-чекер (brand-reviewer, п. 5), не скрипт. Пін на те, що межа ця, а не інша.
 l4 "межа: тег Instagram у рядку TikTok — рівень 0 мережу рядка не звіряє → PASS" 0 "" 's/(## Контент\n)/$1- TikTok: перегляди — 1 240 [#1 IGRE11].\n/'

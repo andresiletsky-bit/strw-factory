@@ -65,7 +65,6 @@ _S = r"[\s_-]*"
 WRITE_MENTION = re.compile(r"(?<![a-z])((?:create|send)" + _S + "scheduled" + _S + "post" + _S + "for" + _S + "review"
                            r"|update" + _S + "scheduled" + _S + "post|create" + _S + "scheduled" + _S + "post)(?![a-z])")
 CALL_LINE = re.compile(r"^\s*-\s*call\s*:", re.I)
-ERROR_TEXT = re.compile(r"error|does not allow|not allowed|forbidden|denied|unauthori|помилк", re.I)
 MCP_LINE = re.compile(r"^- mcp: `claude mcp get metricool` → «[^»]*»\s*$")
 # Тег джерела числа. Metricool: `[#N ПОЛЕ]`, ПОЛЕ — Data Studio field ID
 # (network+connector+index, live-check 19.10 §4.3). Інші — оголошення без звірки.
@@ -313,22 +312,20 @@ def write_mentions(where, lines):
     return out
 
 
+# Успіх ForReview — ЗАКРИТА форма: JSON з ключами лише з цього набору (golden; live-check §4.8
+# форми не встановлює). Усе інше — помилка, тобто безпечний бік: без запису після, з карткою
+# (р.10, Blocker: відкритий перелік ознак помилки пропускав `status: 500`, `ok: false`, `isError`…).
+FOR_REVIEW_OK_KEYS = {"id", "uuid", "plannerUrl", "text"}
+
+
 def is_error(resp_text):
-    """Помилка — за ВЕРХНІМ рівнем відповіді, не за ехом тексту поста (р.3, F19)."""
+    """Помилка ForReview — усе, що не має закритої форми успіху (FOR_REVIEW_OK_KEYS)."""
     rj = as_json(resp_text)
-    if isinstance(rj, dict):
-        # Лише ознаки помилки, не текст `message` («Sent for review without errors» — не помилка,
-        # р.4). Верхній рівень І обгортка {"data": …}, у якій приходять живі відповіді (р.9, A3d).
-        for d in (rj, rj.get("data")):
-            if not isinstance(d, dict):
-                continue
-            if d.get("error") or d.get("errors") or d.get("success") is False:
-                return True
-            st = str(d.get("status") if d.get("status") is not None else d.get("statusCode") or "")
-            if re.match(r"4\d\d$", st) or re.fullmatch(r"(?i)error|failed|failure|rejected|denied", st):
-                return True
-        return False
-    return bool(ERROR_TEXT.search(resp_text))
+    if isinstance(rj, dict) and set(rj) == {"data"} and isinstance(rj["data"], dict):
+        rj = rj["data"]                          # живі відповіді загорнуто в {"data": …}
+    if not isinstance(rj, dict) or not rj:
+        return True
+    return not set(rj) <= FOR_REVIEW_OK_KEYS
 
 
 def check(lines):
@@ -543,6 +540,11 @@ def check(lines):
                             " розходяться, це не той самий пост (паспорт 4b)" % (tag, keys["uuid"], keys["id"]))
                 continue
         if not posts:
+            # Пост за ключем не знайдено — але будь-який пост у черзі з autoPublish ≠ «ні» — FAIL
+            # навіть із карткою, як і на гілці помилки (р.10, K1/K2).
+            if any("autoPublish" in d and d["autoPublish"] not in (False, 0, "false", "0") for d in walk(items)):
+                errs.append("%s: поста за ключем не знайдено, а в getScheduledPosts є пост з autoPublish ≠ «ні» —"
+                            " Metricool опублікує сам (паспорт 4b–4c)" % tag)
             if not failed and not card_for(c["n"]):
                 errs.append("%s: поста немає у відповіді getScheduledPosts, а рядка `- inbox: … #%d …` немає (паспорт 4c)"
                             % (tag, c["n"]))
