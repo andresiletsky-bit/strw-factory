@@ -79,7 +79,9 @@ MEASURED_CONNECTORS = {"IGRE"}
 # «48. Стільки…»). Усе поза переліком — число, і новий синонім дає хибний червоний, не обхід.
 REPOS = r"(?:strw-factory|strw-ops|strw-state|pact-ios|pact-backend)"
 NOT_A_NUMBER = [
-    re.compile(r"https?://\S+"),
+    # URL — без кінцевого розділового знака (як автопосилання GFM): інакше крапка речення
+    # зникала разом з URL, і тег наступного речення чіплявся до числа (р.14, U1).
+    re.compile(r"https?://\S*[^\s.,;:!?*_~)\]}>»\"'’]"),
     # шлях до файла з «/» і розширенням: loops/L4-growth.md (р.6, F02)
     re.compile(r"(?<![\w.-])[\w-]+(?:/[\w.-]+)+\.(?:md|sh|py|yaml|json)\b"),
     # дата ISO з реальним місяцем/днем, з часом через «T» або пробіл (р.6, N07: «4800-00-00»)
@@ -220,7 +222,7 @@ def as_json(text, nested=True):
 
 def walk(node):
     """Обхід JSON, включно з `info`, записаним рядком із JSON (live-check §4)."""
-    if isinstance(node, str) and node.lstrip()[:1] in "{[":
+    if isinstance(node, str) and node.lstrip()[:1] in '{["':     # і двічі закодований рядок (р.14, W1)
         inner = as_json(node)
         if inner is not None:
             node = inner
@@ -687,7 +689,7 @@ def check(lines):
         for tm in SOURCE_TAG.finditer(body):
             seg = strip_not_numbers(body[last:tm.start()], fields)
             nums = list(NUM.finditer(seg))
-            if nums and not re.fullmatch(r"[\w\s'’ʼ-]*", seg[nums[-1].end():]):
+            if nums and not re.fullmatch(r"[A-Za-zА-Яа-яЁёІіЇїЄєҐґ\d_\s'’ʼ-]*", seg[nums[-1].end():]):
                 # Між числом і тегом — ЛИШЕ слова й пробіли (закритий дозвіл): будь-який розділовий
                 # знак — «.», «;», «**», «<br>», «。», «.)» — розриває зв'язок (р.12 P7d; р.13 B1–B20:
                 # перелік меж речення був відкритим, як і всі переліки форм до нього).
