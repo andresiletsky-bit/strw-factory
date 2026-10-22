@@ -165,7 +165,7 @@ def parse_calls(trace):
         m = re.match(r"^- call:\s*`?([A-Za-z_.]+)`?\s*(.*)$", ln)
         if m:
             cur = {"n": len(calls) + 1, "tool": m.group(1), "args_raw": m.group(2).strip(),
-                   "resp": [], "state": None, "idx": i}
+                   "resp": [], "state": None, "states": [], "idx": i}
             calls.append(cur)
             continue
         if cur is not None and re.match(r"^\s+>", ln):
@@ -173,7 +173,9 @@ def parse_calls(trace):
             continue
         ms = re.match(r"^\s+стан:\s*(.*)$", ln)
         if cur is not None and ms:
-            cur["state"] = ms.group(1).strip()
+            # Кожен рядок `стан:` зберігається: перезапис ховав попередні від перевірки (р.9, D1).
+            cur["states"].append(ms.group(1).strip())
+            cur["state"] = cur["states"][0]
             continue
         if ln.strip():
             if not re.match(r"^\s", ln):
@@ -315,11 +317,17 @@ def is_error(resp_text):
     """Помилка — за ВЕРХНІМ рівнем відповіді, не за ехом тексту поста (р.3, F19)."""
     rj = as_json(resp_text)
     if isinstance(rj, dict):
-        # Лише ключі помилки і 4xx: «Sent for review without errors» у `message` — не помилка
-        # (р.4, Blocker 2: такий текст вимикав перевірку поста з autoPublish: true).
-        if rj.get("error") or rj.get("errors"):
-            return True
-        return bool(re.match(r"4\d\d$", str(rj.get("status") or rj.get("statusCode") or "")))
+        # Лише ознаки помилки, не текст `message` («Sent for review without errors» — не помилка,
+        # р.4). Верхній рівень І обгортка {"data": …}, у якій приходять живі відповіді (р.9, A3d).
+        for d in (rj, rj.get("data")):
+            if not isinstance(d, dict):
+                continue
+            if d.get("error") or d.get("errors") or d.get("success") is False:
+                return True
+            st = str(d.get("status") if d.get("status") is not None else d.get("statusCode") or "")
+            if re.match(r"4\d\d$", st) or re.fullmatch(r"(?i)error|failed|failure|rejected|denied", st):
+                return True
+        return False
     return bool(ERROR_TEXT.search(resp_text))
 
 
@@ -491,11 +499,14 @@ def check(lines):
         if isinstance(rj, dict) and isinstance(rj.get("data"), dict):
             rj = rj["data"]                          # живі відповіді загорнуто в {"data": …} (live-check §1.3–§1.4)
         key = None
+        keys = {}
         if isinstance(rj, dict):
             if isinstance(rj.get("uuid"), str) and rj["uuid"]:
-                key = ("uuid", rj["uuid"])
-            elif isinstance(rj.get("id"), (int, str)) and not isinstance(rj.get("id"), bool) and str(rj["id"]):
-                key = ("id", str(rj["id"]))
+                keys["uuid"] = rj["uuid"]
+            if isinstance(rj.get("id"), (int, str)) and not isinstance(rj.get("id"), bool) and str(rj["id"]):
+                keys["id"] = str(rj["id"])
+            if keys:
+                key = ("uuid", keys["uuid"]) if "uuid" in keys else ("id", keys["id"])
         if key is None:
             if not failed:
                 errs.append("%s: у відповіді немає uuid/id поста — getScheduledPosts не звірити (паспорт 4b)" % tag)
@@ -520,8 +531,17 @@ def check(lines):
         if isinstance(nj, dict) and isinstance(nj.get("data"), list):
             nj = nj["data"]
         items = nj if isinstance(nj, list) else ([nj] if isinstance(nj, dict) else [])
-        posts = [it for it in items
-                 if any(key[1] == (str(d.get(key[0])) if d.get(key[0]) is not None else None) for d in walk(it))]
+        def has(it, k, v):
+            return any(d.get(k) is not None and str(d.get(k)) == v for d in walk(it))
+        # Пост — за uuid АБО id відповіді запису; збіг лише за одним ключем, коли відповідь мала обидва,
+        # — FAIL «ключі розходяться», а не тихе «не знайдено» (р.9, A1/A1i).
+        posts = [it for it in items if any(has(it, k, v) for k, v in keys.items())]
+        if len(keys) == 2:
+            half = [it for it in posts if not all(has(it, k, v) for k, v in keys.items())]
+            if half:
+                errs.append("%s: у getScheduledPosts пост збігається лише за одним із ключів uuid=%s/id=%s — ключі"
+                            " розходяться, це не той самий пост (паспорт 4b)" % (tag, keys["uuid"], keys["id"]))
+                continue
         if not posts:
             if not failed and not card_for(c["n"]):
                 errs.append("%s: поста немає у відповіді getScheduledPosts, а рядка `- inbox: … #%d …` немає (паспорт 4c)"
@@ -659,8 +679,11 @@ def check(lines):
             ln = EMAIL.sub(" ", ln)                 # email — не число; хвіст рядка — вільний текст
         errs += number_errors("trace", i + 1, ln, call_refs=bool(re.match(r"^- inbox:", ln)))
     for c in calls:
-        if c["state"] is not None:                  # хвіст `стан:` — теж вільний текст (р.4, A03)
-            errs += number_errors("trace стан виклику #%d" % c["n"], 0, c["state"], call_refs=True)
+        if len(c["states"]) > 1:
+            errs.append("виклик #%d %s: %d рядки `стан:` — один рядок стану на виклик (р.9, D1/D4)"
+                        % (c["n"], c["tool"], len(c["states"])))
+        for st in c["states"]:                      # хвіст `стан:` — теж вільний текст (р.4, A03)
+            errs += number_errors("trace стан виклику #%d" % c["n"], 0, st, call_refs=True)
 
     return errs, len(calls), sum(1 for c in calls if c["tool"] in WRITES)
 

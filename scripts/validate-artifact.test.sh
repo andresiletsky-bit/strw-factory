@@ -250,7 +250,7 @@ l4 "«не встановлено», plannerUrl немає → FAIL" 1 "plannerU
 l4 "plannerUrl: null → FAIL (р.1 D2)" 1 "plannerUrl" 's/"id": 503, "uuid": "u-501", "plannerUrl": "[^"]+"/"id": 503, "uuid": "u-501", "plannerUrl": null/'
 l4 "plannerUrl «n/a» — не посилання → FAIL (р.2 M09)" 1 "plannerUrl" 's/"id": 503, "uuid": "u-501", "plannerUrl": "[^"]+"/"id": 503, "uuid": "u-501", "plannerUrl": "n\/a"/'
 l4 "поста немає в getScheduledPosts, картки немає → FAIL (р.1 D)" 1 "поста немає у відповіді" 's/  > \[\{"id": 503[^\n]*/  > []/'
-l4 "два пости з тим самим uuid → FAIL (р.3 S4)" 1 "постів із" 's/  > \[\{"id": 503, "uuid": "u-501", ([^\n]*)\]/  > [{"id": 503, "uuid": "u-501", $1, {"id": 504, "uuid": "u-501", "status": "SCHEDULED"}]/'
+l4 "два пости з тим самим uuid → FAIL (р.3 S4)" 1 "постів із" 's/  > \[\{"id": 503, "uuid": "u-501", ([^\n]*)\]/  > [{"id": 503, "uuid": "u-501", $1, {"id": 503, "uuid": "u-501", "status": "SCHEDULED"}]/'
 l4 "«не встановлено», а у відповіді status PUBLISHED → FAIL (р.2 S1)" 1 "поле є" 's/  > \[\{"id": 503, "uuid": "u-501", /  > [{"id": 503, "uuid": "u-501", "status": "PUBLISHED", /'
 l4 "status лише у вкладеному providers → теж поле → FAIL (р.3 S3)" 1 "поле є" 's/  > \[\{"id": 503, "uuid": "u-501", /  > [{"id": 503, "uuid": "u-501", "providers": [{"network": "instagram", "status": "PUBLISHED"}], /'
 l4 "autoPublish true усередині info-рядка поста → FAIL (р.3 S3)" 1 "autoPublish: true" 's/  > \[\{"id": 503, "uuid": "u-501", /  > [{"id": 503, "uuid": "u-501", "info": "{\\"autoPublish\\": true}", /'
@@ -371,7 +371,7 @@ l4 "send після правки — інший пост → FAIL (р.6 S02)" 1 
 l4 "помилка ForReview без id, але пост із тим текстом і autoPublish true у черзі → FAIL (р.6 S01)" 1 "Metricool опублікує сам" "$ERR; $CARD2; $STOP; s/  > \[\{\"id\": 501, \"uuid\": \"u-501\", \"text\": \"Як не зірвати звичку на вихідних\"\}\]/  > [{\"id\": 777, \"uuid\": \"u-777\", \"text\": \"Як не зірвати звичку на вихідних\", \"autoPublish\": true}]/"
 l4 "поле двічі без дати — ряд → FAIL (р.6 M07)" 1 "ряд" 's/  > \{"IGRE11": 1240, /  > {"a": {"IGRE11": 1240}, "b": {"IGRE11": 1240}, /'
 l4 "одне входження поля поруч із date — ряд → FAIL (р.6 M18)" 1 "ряд" 's/  > \{"IGRE11": 1240, /  > {"day1": {"date": "2026-10-20", "IGRE11": 1240}, /'
-l4 "два пости з одним uuid у {\"data\": […]} → FAIL (р.6 M24)" 1 "постів із" 's/  > (\[\{"id": 503, "uuid": "u-501", "text": "[^"]+"\})\]/  > {"data": $1, {"id": 504, "uuid": "u-501", "status": "SCHEDULED"}]}/'
+l4 "два пости з одним uuid у {\"data\": […]} → FAIL (р.6 M24)" 1 "постів із" 's/  > (\[\{"id": 503, "uuid": "u-501", "text": "[^"]+"\})\]/  > {"data": $1, {"id": 503, "uuid": "u-501", "status": "SCHEDULED"}]}/'
 # Раунд 7: неканонічний рядок виклику; множник і синоніми відсотка; ще звужений перелік.
 l4 "«- Call: createScheduledPost» з великої — неканонічний виклик → FAIL (р.7 C2)" 1 "неканонічний рядок виклику" 's/(- inbox: )/- Call: createScheduledPost {"info": {"text": "Привіт", "autoPublish": true}}\n  > {"uuid": "u-x"}\n$1/'
 l4 "«- call :» з пробілом → FAIL (р.7 C3)" 1 "неканонічний рядок виклику" 's/(- inbox: )/- call : createScheduledPost {"info": {"autoPublish": true}}\n$1/'
@@ -391,6 +391,15 @@ l4 "«−1 240» біля невід'ємного значення → FAIL (р.
 l4 "update відповідає {\"data\": …}, send зі старим id → FAIL (р.8 R13)" 1 "правка повернула id" 's/  > \{"id": 502, "uuid": "u-501"\}/  > {"data": {"id": 502, "uuid": "u-501"}}/; s/(- call: sendScheduledPostForReview \{"id": )502/${1}501/'
 l4 "«млн» після тегу Metricool → FAIL (р.8 U4)" 1 "одиниця після тегу" 's/охоплення — 1 240 \[#1 IGRE11\]/охоплення — 1 240 [#1 IGRE11] млн/'
 l4 "повноширинний «％» у рядку з тегом Metricool → FAIL (р.8)" 1 "у рядку з тегом Metricool" 's/engagement — 45,2 \[#1 IGRE08\] взаємодії на тисячу охоплених/ER, ％: 45,2 [#1 IGRE08]/'
+# Раунд 9: кілька рядків стан; помилка всередині data; пост за uuid АБО id.
+l4 "два рядки стан під викликом — число в першому → FAIL (р.9 D1)" 1 "один рядок стану на виклик" 's/(  стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #6)/  стан: TikTok за тиждень — 48 000 переглядів\n$1/'
+l4 "число в першому з двох рядків стан теж перевіряється → FAIL (р.9 D1)" 1 "без тегу" 's/(  стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #6)/  стан: TikTok за тиждень — 48 000 переглядів\n$1/'
+l4 "суперечливі рядки стан (pending, потім не встановлено) → FAIL (р.9 D4)" 1 "один рядок стану на виклик" 's/(  стан: поле стану не встановлено — доказ «на затвердження» — plannerUrl у відповіді виклику #6)/  стан: pending review\n$1/'
+l4 "помилка всередині {\"data\": …} з id — далі записи → FAIL (р.9 A3d)" 1 "після нього є запис" 's/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "([^"]+)"\}/  > {"data": {"error": "plan does not allow it", "id": 501, "uuid": "u-501", "plannerUrl": "$1"}}/'
+l4 "success: false — помилка → FAIL (р.9 A3)" 1 "після нього є запис" 's/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "([^"]+)"\}/  > {"success": false, "message": "Error: plan does not allow it", "id": 501, "uuid": "u-501", "plannerUrl": "$1"}/'
+l4 "status: error — помилка → FAIL (р.9 A3s)" 1 "після нього є запис" 's/  > \{"id": 501, "uuid": "u-501", "plannerUrl": "([^"]+)"\}/  > {"status": "error", "id": 501, "uuid": "u-501", "plannerUrl": "$1"}/'
+l4 "пост з тим самим id, але іншим uuid → FAIL (р.9 A1)" 1 "ключі розходяться" 's/  > \[\{"id": 501, "uuid": "u-501", /  > [{"id": 501, "uuid": "u-5O1", /'
+l4 "пост лише з id (без uuid) і autoPublish true, картка є → FAIL (р.9 A1i)" 1 "ключі розходяться" 's/  > \[\{"id": 501, "uuid": "u-501", "text": "([^"]+)"\}\]/  > [{"id": 501, "text": "$1", "autoPublish": true}]/; s/- inbox: tri-NNN — TikTok/- inbox: tri-NNN — виклик #2: пост не знайдено за uuid; TikTok/'
 # Межа рівня 0 (рішення CEO: мережу рядка не вгадувати): тег поля Instagram у рядку
 # TikTok звіряє LLM-чекер (brand-reviewer, п. 5), не скрипт. Пін на те, що межа ця, а не інша.
 l4 "межа: тег Instagram у рядку TikTok — рівень 0 мережу рядка не звіряє → PASS" 0 "" 's/(## Контент\n)/$1- TikTok: перегляди — 1 240 [#1 IGRE11].\n/'
