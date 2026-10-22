@@ -106,6 +106,35 @@ else
   PASS=$((PASS+1)); echo "PASS · --no-results не створює теки звітів"
 fi
 
+echo "── 7. Рівень 0: FAIL з чужої причини — не доказ ──"
+# Seeded рівня 0 зеленів на будь-якому rc=1. Фікстура, що «падає», але не на своєму
+# дефекті, прикривала б мертве правило — тепер причина звіряється з defect_keywords.
+D="$(fresh wrong-reason)"
+perl -pi -e 's/^defect_keywords: .*$/defect_keywords: [ключа-якого-у-виводі-немає]/' "$D/seeded/l4-trace/publish-direct.md"
+probe "seeded падає, але ключів дефекту у виводі немає → червоно" 1 \
+  env STRW_EVALS_DIR="$D" bash "$RUN" --offline --no-results --type l4-trace
+# Контроль до проби вище: без звірки причини та сама фікстура зеленіє — тобто
+# червоне вище дає саме звірка, а не інша поломка набору.
+MUTR="$TMP/run.noreason.sh"
+cp "$RUN" "$MUTR"
+perl -pi -e 's/\[ -n "\$kws" \] && ! mentions_defect "\$TMP\/out" "\$kws"/false/' "$MUTR"
+if grep -q '! mentions_defect "$TMP/out"' "$MUTR"; then
+  FAIL=$((FAIL+1)); echo "FAIL · мутація «без звірки причини» НЕ наклалась"
+else
+  PASS=$((PASS+1)); echo "PASS · мутація «без звірки причини» наклалась"
+  probe "контроль: без звірки причини та сама фікстура → зелено" 0 \
+    env STRW_EVALS_DIR="$D" STRW_VALIDATE_ARTIFACT="$REPO/scripts/validate-artifact.sh" bash "$MUTR" --offline --no-results --type l4-trace
+fi
+
+echo "── 8. l4-trace звіряє рев'юера з company-context ──"
+# Golden зелений лише тому, що раннер підставляє фікстуру company-context. Без неї
+# (файла немає) — червоно: передумова 4a паспорта L4 не мовчить, коли її не перевірити.
+probe "company-context не читається → golden l4-trace червоний" 1 \
+  env STRW_COMPANY_CONTEXT="$TMP/no-such-company-context.md" bash "$RUN" --offline --no-results --type l4-trace
+printf -- '- Andrii: someone-else@strw.example\n' > "$TMP/cc-other.md"
+probe "у company-context інший email → golden l4-trace червоний" 1 \
+  env STRW_COMPANY_CONTEXT="$TMP/cc-other.md" bash "$RUN" --offline --no-results --type l4-trace
+
 echo
 echo "Разом: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

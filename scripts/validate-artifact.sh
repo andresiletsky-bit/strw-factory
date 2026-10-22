@@ -2,13 +2,21 @@
 # validate-artifact.sh — детермінована перевірка обов'язкових секцій артефакту.
 # Рівень 0 checker-фази (loop-passport §4): структуру перевіряє скрипт, зміст — LLM.
 # Usage: validate-artifact.sh <type> <file>
-# Types: idea-card | validation-report | prd | design-delta | regression-report | build-report | launch-checklist | growth-report | portfolio-brief | retro-note | persona-card | copy-guide | design-research | design-options | checker-verdict
+# Types: idea-card | validation-report | prd | design-delta | regression-report | build-report | launch-checklist | growth-report | portfolio-brief | retro-note | persona-card | copy-guide | design-research | design-options | checker-verdict | l4-trace
 set -euo pipefail
 
 usage() { echo "Usage: $0 <type> <file>" >&2; exit 2; }
 [[ $# -eq 2 ]] || usage
 TYPE="$1"; FILE="$2"
 [[ -f "$FILE" ]] || { echo "FAIL: file not found: $FILE"; exit 1; }
+
+# l4-trace: не секції, а виклики Metricool у «Trace (L4)» growth-report'а (паспорт L4
+# п. 4a–4c, 5). Логіка — у validate-l4-trace.py: JSON аргументів bash 3.2 не розбере, а
+# `autoPublish: false` регуляркою — знову пін на форму (#29/#23, шість раундів чекера).
+if [[ "$TYPE" == "l4-trace" ]]; then
+  command -v python3 >/dev/null 2>&1 || { echo "FAIL: l4-trace потребує python3 — його немає в PATH"; exit 2; }
+  exec python3 "$(dirname "${BASH_SOURCE[0]}")/validate-l4-trace.py" "$FILE"
+fi
 
 # persona-card: перевірки по YAML-блоках (```yaml … ```), не по заголовках —
 # контракт у artifact-contracts.md, схема — концепт Persona Layer розд. 3.
