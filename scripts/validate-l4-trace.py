@@ -68,7 +68,8 @@ CALL_LINE = re.compile(r"^\s*-\s*call\s*:", re.I)
 MCP_LINE = re.compile(r"^- mcp: `claude mcp get metricool` → «[^»]*»\s*$")
 # Тег джерела числа. Metricool: `[#N ПОЛЕ]`, ПОЛЕ — Data Studio field ID
 # (network+connector+index, live-check 19.10 §4.3). Інші — оголошення без звірки.
-SOURCE_TAG = re.compile(r"\[(?:#(\d+)\s+([A-Z]{4}\d{2})|(metrics\.md|PRD)(?::[^\]]*)?|(план|не метрика))\]")
+# Уточнення `[metrics.md: …]` — БЕЗ цифр: інакше тег ковтав би числа всередині (р.11, Z1r).
+SOURCE_TAG = re.compile(r"\[(?:#(\d+)\s+([A-Z]{4}\d{2})|(metrics\.md|PRD)(?::[^\]\d]*)?|(план|не метрика))\]")
 # Конектори, чиї поля ВИМІРЯНО (live-check 19.10 §1.2: IGRE01–IGRE29 = Instagram Reels).
 # Поле іншого конектора — FAIL «не виміряно», а не здогад про його зміст.
 MEASURED_CONNECTORS = {"IGRE"}
@@ -183,13 +184,31 @@ def parse_calls(trace):
     return calls, other
 
 
+class DupKey(ValueError):
+    pass
+
+
+def _no_dup(pairs):
+    keys = [k for k, _ in pairs]
+    if len(keys) != len(set(keys)):
+        raise DupKey("дубль ключа")       # json.loads лишав би останній (р.11, Tdup)
+    return dict(pairs)
+
+
 def as_json(text):
+    """JSON без дублів ключів; JSON-рядок із JSON усередині розбирається ще раз (р.11, K1s)."""
     if isinstance(text, (dict, list)):
         return text
     try:
-        return json.loads(text)
+        v = json.loads(text, object_pairs_hook=_no_dup)
     except (TypeError, ValueError):
         return None
+    if isinstance(v, str) and v.lstrip()[:1] in "{[":
+        try:
+            v = json.loads(v, object_pairs_hook=_no_dup)
+        except ValueError:
+            return None
+    return v
 
 
 def walk(node):
