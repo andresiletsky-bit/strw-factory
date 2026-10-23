@@ -21,6 +21,7 @@
 //   split-monoliths.mjs --verify  [--state <dir>]   # обидві перевірки над тим, що на диску
 //   split-monoliths.mjs --check-facade [<file>]     # фасад ≡ вивід генератора з вузлів (pre-commit)
 //   split-monoliths.mjs --regen [--state <dir>]     # перегенерувати фасади з вузлів
+//   Без --state: поточна тека, якщо це checkout strw-state; інакше --regen/--apply відмовляють (tri-194).
 //
 // Фасадів inbox два шари: загальний `triage-inbox.md` і зрізи за продуктом `triage-inbox.<ключ>.md`
 // (D4 розведення STRW і продуктів) — див. `triageKey` і `facadeTriageKey`.
@@ -34,11 +35,35 @@ const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
 const valOf = (f) => { const i = argv.indexOf(f); return i === -1 ? null : argv[i + 1]; };
 
-const STATE = path.resolve(
-  valOf("--state") ?? path.join(process.env.HOME ?? "", "Developer/STRW/strw-state"),
-);
 const MODE = has("--apply") ? "apply" : has("--verify") ? "verify"
   : has("--regen") ? "regen" : has("--check-facade") ? "check-facade" : "dry-run";
+
+// КУДИ ПИСАТИ (клас tri-194 «запис у спільну копію заморожує її»). До 23.10 без `--state` генератор брав
+// спільну копію ~/Developer/STRW/strw-state, а підказки в помилках радили просто «--regen». Сесія у worktree
+// strw-state, що виконала підказку, перегенеровувала ЧУЖУ теку: 23.10 там лишились 10 untracked
+// triage-inbox.*.md, і вони заблокували `pull --ff-only` інтегратора. Тепер без `--state`: поточна тека —
+// checkout strw-state → вона (і для читання теж: з worktree читається worktree, не спільна копія); інакше режими,
+// що ПИШУТЬ (--regen, --apply), відмовляють з причиною, а читання (--check-facade, --verify, --dry-run) — спільна
+// копія, як було. Явний `--state` для запису мусить бути текою з triage-inbox.md — інакше та сама відмова, а не
+// ENOENT зі стеком (підказка `--state "$(pwd)"`, виконана не з тієї теки).
+const isStateCheckout = (d) =>
+  fs.existsSync(path.join(d, "triage-inbox.md")) && fs.existsSync(path.join(d, "engine", "items"));
+const stateArg = (() => { const v = valOf("--state"); return v && !v.startsWith("--") ? v : null; })();
+if (!stateArg && !isStateCheckout(process.cwd()) && (MODE === "regen" || MODE === "apply")) {
+  console.error(`ВІДМОВА: --${MODE} без --state, а поточна тека (${process.cwd()}) — не checkout strw-state.`);
+  console.error("  Без --state генератор писав би у спільну копію ~/Developer/STRW/strw-state — і її заморозили б");
+  console.error("  незакомічені фасади (tri-194). Запусти з теки strw-state, яку комітиш (worktree), або назви її явно:");
+  console.error(`  <strw-factory>/scripts/brain/split-monoliths.mjs --${MODE} --state "$(pwd)"`);
+  process.exit(2);
+}
+if (stateArg && (MODE === "regen" || MODE === "apply") && !fs.existsSync(path.join(path.resolve(stateArg), "triage-inbox.md"))) {
+  console.error(`ВІДМОВА: --${MODE} --state ${stateArg} — у цій теці немає triage-inbox.md, це не strw-state.`);
+  console.error('  Запусти з теки strw-state, яку комітиш (worktree): <strw-factory>/scripts/brain/split-monoliths.mjs --' + MODE + ' --state "$(pwd)"');
+  process.exit(2);
+}
+const STATE = path.resolve(
+  stateArg ?? (isStateCheckout(process.cwd()) ? process.cwd() : path.join(process.env.HOME ?? "", "Developer/STRW/strw-state")),
+);
 
 // Маркер межі: усе НАД ним — людський текст, збережений побайтово; усе під ним
 // генерується. Фасад без маркера — фасад, який хтось правив рукою.
@@ -599,7 +624,7 @@ if (MODE === "dry-run") {
     const abs = path.join(STATE, f.rel);
     if (!fs.existsSync(abs)) {
       if (MODE === "regen" && f.key) { fs.writeFileSync(abs, f.text); console.log(`створено ${f.rel}`); continue; }
-      console.error(`FAIL: ${f.rel} — фасаду набору немає на диску. Далі: scripts/brain/split-monoliths.mjs --regen`);
+      console.error(`FAIL: ${f.rel} — фасаду набору немає на диску. Далі, з теки strw-state, яку комітиш: <strw-factory>/scripts/brain/split-monoliths.mjs --regen --state "$(pwd)"`);
       bad++; continue;
     }
     const onDisk = fs.readFileSync(abs, "utf8");
@@ -608,7 +633,7 @@ if (MODE === "dry-run") {
     } else if (onDisk !== f.text) {
       console.error(`FAIL: ${f.rel} розійшовся з виводом генератора — фасад правили рукою.`);
       console.error("  Правити треба вузол (decisions/, triage/, budget/ledger/), далі:");
-      console.error("  scripts/brain/split-monoliths.mjs --regen");
+      console.error('  з теки strw-state, яку комітиш: <strw-factory>/scripts/brain/split-monoliths.mjs --regen --state "$(pwd)"');
       bad++;
     }
   }

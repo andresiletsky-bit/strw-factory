@@ -107,10 +107,13 @@ check "фасад за продуктом — згенерований (марк
 check "набір стабільний: фасад є і в продукту без відкритих карток (carlog-001: «Порожньо»)" \
       '[ -f "$S/triage-inbox.carlog-001.md" ] && [ "$(opens "$S/triage-inbox.carlog-001.md")" = 0 ] && grep -q "_Порожньо._" "$S/triage-inbox.carlog-001.md"'
 
-# ── 2. Негативний контроль: старий генератор (origin/main) фасадів за продуктом не дає ─
-if git cat-file -e origin/main:scripts/brain/split-monoliths.mjs 2>/dev/null; then
+# ── 2. Негативний контроль: генератор ДО D4 фасадів за продуктом не дає ─────
+# «До D4» — за властивістю, не за гілкою: батько першого коміту, де з'явився triageKey. Перша редакція брала
+# origin/main і стала хибною, щойно D4 злили (передумова контролю зникла — чекер не потрібен, щоб це побачити).
+PRE_D4="$(git log --format=%H --reverse -S 'function triageKey' -- scripts/brain/split-monoliths.mjs 2>/dev/null | head -1)"
+if [ -n "$PRE_D4" ] && git cat-file -e "${PRE_D4}^:scripts/brain/split-monoliths.mjs" 2>/dev/null; then
     OLD="$PWD/scripts/brain/.old-split-monoliths.mjs"   # поруч із lib.mjs — без нього старий не стартує
-    git show origin/main:scripts/brain/split-monoliths.mjs > "$OLD"
+    git show "${PRE_D4}^:scripts/brain/split-monoliths.mjs" > "$OLD"
     fixture; card open 902 open 'pact-001'
     node "$OLD" --regen --state "$S" >/dev/null 2>"$TMP/err"; echo $? > "$TMP/rc"
     cp "$S/triage-inbox.md" "$TMP/main.old"
@@ -119,6 +122,9 @@ if git cat-file -e origin/main:scripts/brain/split-monoliths.mjs 2>/dev/null; th
     regen
     check "загальний фасад побайтово той самий, що дає старий генератор" 'cmp -s "$S/triage-inbox.md" "$TMP/main.old"'
     rm -f "$OLD"
+else
+    echo "⬜ коміту до D4 в історії не знайдено — негативний контроль старим генератором НЕ виконано"
+    fail=$((fail+1))
 fi
 
 # ── 3. Набір рухається лише з теками products/ ──────────────────────────────
