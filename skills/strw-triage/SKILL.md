@@ -11,7 +11,7 @@ description: Triage the STRW inbox — rank open escalations, present decisions 
 ## Workflow
 
 ### Step 1 — Read
-Спершу `brain query`, читай лише повернуті секції. Відкриті ескалації живуть у `strw-state/triage/open/` (по файлу на запис); `triage-inbox.md` — ГЕНЕРОВАНИЙ зріз, рішення вписується у вузол, далі `split-monoliths.mjs --regen`. Далі `portfolio.md` + `decisions-log.md` (останні рішення — щоб не показати CEO картку, яку рішення вже закрило: `tri-015` 03.09) + `budget.md` (факт місяця). Кожен вузол з 04.09 (П1.6) несе `summary`, `options`, `default_if_silent`, `decide_by` — читай спершу їх, тіло під `## Доказ` — лише якщо CEO попросить.
+Спершу `brain query`, читай лише повернуті секції. Відкриті ескалації живуть у `strw-state/triage/open/` (по файлу на запис); `triage-inbox.md` — ГЕНЕРОВАНИЙ зріз, рішення вписується у вузол, далі `split-monoliths.mjs --regen --state <worktree strw-state>` (без `--state` — лише з теки strw-state; спільна копія — не місце для регенерації, tri-194). Далі `portfolio.md` + `decisions-log.md` (останні рішення — щоб не показати CEO картку, яку рішення вже закрило: `tri-015` 03.09) + `budget.md` (факт місяця). Кожен вузол з 04.09 (П1.6) несе `summary`, `options`, `default_if_silent`, `decide_by` — читай спершу їх, тіло під `## Доказ` — лише якщо CEO попросить.
 
 ### Step 2 — Rank (детермінований порядок)
 1. `budget-alert` та `error` (фабрика зупинена/зламана);
