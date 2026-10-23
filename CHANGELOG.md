@@ -3,6 +3,8 @@
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-10-23
+
 ### Added
 - **Рівень 0 для trace L4: тип `l4-trace` у `validate-artifact.sh` (логіка — `scripts/validate-l4-trace.py`).**
   Безпека черги Metricool переїхала з прози в механізм: шість раундів чекера 6a на #29 (strw-ops #23) щоразу
