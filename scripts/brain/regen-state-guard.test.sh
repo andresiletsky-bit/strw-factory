@@ -40,7 +40,9 @@ check "…у спільній копії ні байта змін (фасаді�
 gen "$ELSE" --apply
 check "--apply без --state поза strw-state → 2" '[ "$(cat "$TMP/rc")" = 2 ] && [ "$(snap "$SHARED")" = "$SHARED0" ]'
 gen "$ELSE" --regen --state
-check "--state без значення (наступний токен відсутній) — те саме, що без --state → 2" '[ "$(cat "$TMP/rc")" = 2 ]'
+check "--state без значення (останній аргумент) — те саме, що без --state → 2" '[ "$(cat "$TMP/rc")" = 2 ]'
+gen "$ELSE" --state --regen
+check "--state, за яким іде прапорець, — не значення → 2" '[ "$(cat "$TMP/rc")" = 2 ] && [ "$(snap "$SHARED")" = "$SHARED0" ]'
 
 gen "$WT" --regen
 check "з теки strw-state без --state → пише в неї" '[ "$(cat "$TMP/rc")" = 0 ] && [ -f "$WT/triage-inbox.factory.md" ]'
