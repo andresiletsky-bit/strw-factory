@@ -21,6 +21,9 @@
 //   split-monoliths.mjs --verify  [--state <dir>]   # обидві перевірки над тим, що на диску
 //   split-monoliths.mjs --check-facade [<file>]     # фасад ≡ вивід генератора з вузлів (pre-commit)
 //   split-monoliths.mjs --regen [--state <dir>]     # перегенерувати фасади з вузлів
+//
+// Фасадів inbox два шари: загальний `triage-inbox.md` і зрізи за продуктом `triage-inbox.<ключ>.md`
+// (D4 розведення STRW і продуктів) — див. `triageKey` і `facadeTriageKey`.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -336,12 +339,14 @@ function facadeDecisions(preamble, nodes) {
 }
 
 function facadeTriage(preamble, nodes) {
+  return [preamble.replace(/\n+$/, ""), "", ...triageBodyLines(nodes)].join("\n");
+}
+
+function triageBodyLines(nodes) {
   const open = nodes.filter((n) => n.status === "open");
   const resolved = nodes.filter((n) => n.status === "resolved");
   const lastResolved = resolved.slice(0, 10);
   return [
-    preamble.replace(/\n+$/, ""),
-    "",
     MARK.replace("%SRC%", "triage/"),
     "",
     `**Чекає рішення: ${open.length}.** Джерело правди — \`triage/open/\`; закриті — \`triage/resolved/YYYY-Www/\` (${resolved.length}).`,
@@ -356,7 +361,55 @@ function facadeTriage(preamble, nodes) {
     "|------|-------|-----|",
     ...lastResolved.map((n) => `| [${n.date}](${encodeURI(n.rel)}) | ${n.loop} | ${n.kind} |`),
     "",
+  ];
+}
+
+// ── Фасади inbox за продуктом (D4, рішення CEO 20.10, tri-199 ★ п. 4 і 6) ─────────
+// Сесія Pact бачить свій зріз, сесія фабрики — свій. РОЗБИТТЯ, не вибірка: кожна картка — рівно в одному
+// фасаді за ключем, тож сума «Чекає рішення» по них = загальному (це міряє CI strw-state без генератора).
+//
+// Ключ — за властивістю, не за переліком форм: `product:` — вільний текст («pact-001», «"[[pact-001]]"»,
+// «factory (наслідки — pact-001)», «homeinspect-001 (не заведено в портфель)», «—»). Знімаються лапки,
+// `[[`, регістр; провідний id `xxx-NNN` — продукт, ЯКЩО в strw-state є тека `products/<id>/`; усе інше
+// (`factory …`, `—`, порожнє, id без теки) — `factory`: картка не губиться, вона йде власнику-фабриці.
+function triageKey(raw) {
+  const v = String(raw ?? "").trim().replace(/^["']|["']$/g, "").replace(/^\[\[/, "").trim().toLowerCase();
+  const id = (v.match(/^([a-z][a-z0-9]*-\d{3})(?![0-9])/) ?? [])[1];
+  if (!id) return "factory";
+  const dir = path.join(STATE, "products", id);
+  return fs.existsSync(dir) && fs.statSync(dir).isDirectory() ? id : "factory";
+}
+
+// Повністю генерований файл: людської шапки немає (схема й правила — у загальному фасаді, на нього посилання).
+function facadeTriageKey(key, nodes) {
+  const scope = key === "factory"
+    ? "картки фабрики — `product:` factory, «—», порожнє або продукт без теки в `products/`"
+    : `картки з \`product: ${key}\``;
+  return [
+    "---",
+    "type: triage",
+    `title: "Triage Inbox · ${key}"`,
+    `product: ${key}`,
+    'up: "[[triage-inbox]]"',
+    `tags: [type/triage, ${key === "factory" ? "scope/company" : `product/${key}`}]`,
+    "---",
+    "",
+    `# Triage Inbox · ${key}`,
+    `> Зріз [[triage-inbox|Triage Inbox]] (\`triage-inbox.md\`): ${scope}. Схема картки й правила — там.`,
+    "> Файл генерується цілком (`scripts/brain/split-monoliths.mjs --regen` у strw-factory); рукою не правити.",
+    "",
+    ...triageBodyLines(nodes),
   ].join("\n");
+}
+function productIds() {
+  const dir = path.join(STATE, "products");
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && /^[a-z][a-z0-9]*-\d{3}$/.test(e.name)).map((e) => e.name).sort();
+}
+const KEY_FACADE = /^triage-inbox\.([^/]+)\.md$/;
+function keyFacadesOnDisk() {
+  return fs.readdirSync(STATE).filter((f) => KEY_FACADE.test(f)).sort();
 }
 
 // Фасад бюджету несе ПОРАХОВАНИЙ підсумок — і це не косметика.
@@ -523,8 +576,32 @@ if (MODE === "dry-run") {
   const wanted = target ? built.filter((f) => f.rel === target) : built;
   if (target && wanted.length === 0) { console.error(`невідомий фасад: ${target}`); process.exit(2); }
   let bad = 0;
+  // Фасади за продуктом — набір рухається (D4): відсутній фасад набору створюється (regen) або є
+  // розбіжністю (check); згенерований фасад поза набором прибирається (regen) або є розбіжністю (check);
+  // файл `triage-inbox.*.md` без маркера генерації — не фасад, його не чіпаємо й кажемо вголос.
+  if (!target) {
+    const inSet = new Set(built.map((f) => f.rel));
+    const markHead = MARK.slice(0, MARK.indexOf("%SRC%"));
+    for (const rel of keyFacadesOnDisk().filter((r) => !inSet.has(r))) {
+      const abs = path.join(STATE, rel);
+      if (!fs.readFileSync(abs, "utf8").includes(markHead)) {
+        console.error(`FAIL: ${rel} — не фасад (без маркера генерації); не чіпаю. Перейменуй або прибери руками.`);
+        bad++;
+      } else if (MODE === "regen") {
+        fs.unlinkSync(abs); console.log(`прибрано ${rel} — теки продукту в products/ немає`);
+      } else {
+        console.error(`FAIL: ${rel} — зайвий фасад: теки його продукту в products/ немає. Далі: --regen`);
+        bad++;
+      }
+    }
+  }
   for (const f of wanted) {
     const abs = path.join(STATE, f.rel);
+    if (!fs.existsSync(abs)) {
+      if (MODE === "regen" && f.key) { fs.writeFileSync(abs, f.text); console.log(`створено ${f.rel}`); continue; }
+      console.error(`FAIL: ${f.rel} — фасаду набору немає на диску. Далі: scripts/brain/split-monoliths.mjs --regen`);
+      bad++; continue;
+    }
     const onDisk = fs.readFileSync(abs, "utf8");
     if (MODE === "regen") {
       if (onDisk !== f.text) { fs.writeFileSync(abs, f.text); console.log(`перегенеровано ${f.rel}`); }
@@ -621,11 +698,18 @@ function facadesFromNodes() {
 
   const tri = lsRec("triage").map((rel) => {
     const t = fs.readFileSync(path.join(STATE, rel), "utf8");
+    // product — лише з frontmatter: рядок «product: …» у ТІЛІ картки не має переводити її в інший фасад.
+    const fm = (t.match(/^---\n([\s\S]*?)\n---\n/) ?? [null, ""])[1];
     return {
       rel, seq: seqOf(t), status: triageStatus(fmVal(t, "status"), rel), date: fmVal(t, "date"),
-      loop: fmVal(t, "loop"), kind: fmVal(t, "kind"), body: stripFm(t),
+      loop: fmVal(t, "loop"), kind: fmVal(t, "kind"), body: stripFm(t), key: triageKey(fmVal(fm, "product")),
     };
   }).sort(byKeyThenPath((x) => x.seq));
+  // Набір СТАБІЛЬНИЙ: factory + кожна тека `products/<id>/` — і з нулем відкритих карток. Тоді відсутній
+  // фасад продукту означає «не згенеровано» (стара копія генератора, гілка до D4), а не «0 відкритих» —
+  // SessionStart Pact каже ⬜, а не хибне «0» (чекер плану D4 р.1, I4). Фасад продукту, чию теку прибрали,
+  // --regen видаляє.
+  const keys = ["factory", ...productIds()];
 
   // Вузол журналу — це МІСЯЦЬ, і пізнається він полем `month:`, а не тим, що
   // файл лежить у теці. `budget/ledger/README.md` полем не володіє, і без
@@ -653,5 +737,6 @@ function facadesFromNodes() {
     { rel: "decisions-log.md", text: facadeDecisions(preambleOf("decisions-log.md"), dec) },
     { rel: "triage-inbox.md", text: facadeTriage(preambleOf("triage-inbox.md"), tri) },
     { rel: "budget.md", text: facadeBudget(preambleOf("budget.md"), led) },
+    ...keys.map((k) => ({ rel: `triage-inbox.${k}.md`, text: facadeTriageKey(k, tri.filter((n) => n.key === k)), key: true })),
   ];
 }
