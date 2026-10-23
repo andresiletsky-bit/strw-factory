@@ -42,8 +42,10 @@ const MODE = has("--apply") ? "apply" : has("--verify") ? "verify"
 // спільну копію ~/Developer/STRW/strw-state, а підказки в помилках радили просто «--regen». Сесія у worktree
 // strw-state, що виконала підказку, перегенеровувала ЧУЖУ теку: 23.10 там лишились 10 untracked
 // triage-inbox.*.md, і вони заблокували `pull --ff-only` інтегратора. Тепер без `--state`: поточна тека —
-// checkout strw-state → вона; інакше режими, що ПИШУТЬ (--regen, --apply), відмовляють з причиною, а режими
-// читання (--check-facade, --verify, --dry-run) — як були, спільна копія.
+// checkout strw-state → вона (і для читання теж: з worktree читається worktree, не спільна копія); інакше режими,
+// що ПИШУТЬ (--regen, --apply), відмовляють з причиною, а читання (--check-facade, --verify, --dry-run) — спільна
+// копія, як було. Явний `--state` для запису мусить бути текою з triage-inbox.md — інакше та сама відмова, а не
+// ENOENT зі стеком (підказка `--state "$(pwd)"`, виконана не з тієї теки).
 const isStateCheckout = (d) =>
   fs.existsSync(path.join(d, "triage-inbox.md")) && fs.existsSync(path.join(d, "engine", "items"));
 const stateArg = (() => { const v = valOf("--state"); return v && !v.startsWith("--") ? v : null; })();
@@ -52,6 +54,11 @@ if (!stateArg && !isStateCheckout(process.cwd()) && (MODE === "regen" || MODE ==
   console.error("  Без --state генератор писав би у спільну копію ~/Developer/STRW/strw-state — і її заморозили б");
   console.error("  незакомічені фасади (tri-194). Запусти з теки strw-state, яку комітиш (worktree), або назви її явно:");
   console.error(`  <strw-factory>/scripts/brain/split-monoliths.mjs --${MODE} --state "$(pwd)"`);
+  process.exit(2);
+}
+if (stateArg && (MODE === "regen" || MODE === "apply") && !fs.existsSync(path.join(path.resolve(stateArg), "triage-inbox.md"))) {
+  console.error(`ВІДМОВА: --${MODE} --state ${stateArg} — у цій теці немає triage-inbox.md, це не strw-state.`);
+  console.error('  Запусти з теки strw-state, яку комітиш (worktree): <strw-factory>/scripts/brain/split-monoliths.mjs --' + MODE + ' --state "$(pwd)"');
   process.exit(2);
 }
 const STATE = path.resolve(

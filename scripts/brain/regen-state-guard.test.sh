@@ -44,6 +44,10 @@ check "--state без значення (останній аргумент) — �
 gen "$ELSE" --state --regen
 check "--state, за яким іде прапорець, — не значення → 2" '[ "$(cat "$TMP/rc")" = 2 ] && [ "$(snap "$SHARED")" = "$SHARED0" ]'
 
+gen "$ELSE" --regen --state "$ELSE"
+check "явний --state у теку не-strw-state → 2 з причиною, не ENOENT зі стеком" \
+      '[ "$(cat "$TMP/rc")" = 2 ] && grep -q "немає triage-inbox.md" "$TMP/err" && ! grep -q "ENOENT" "$TMP/err"'
+
 gen "$WT" --regen
 check "з теки strw-state без --state → пише в неї" '[ "$(cat "$TMP/rc")" = 0 ] && [ -f "$WT/triage-inbox.factory.md" ]'
 check "…і лише в неї: спільна копія без змін" '[ "$(snap "$SHARED")" = "$SHARED0" ]'
