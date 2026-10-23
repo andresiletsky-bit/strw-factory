@@ -80,6 +80,7 @@ card open 909 open '"Pact-001"'
 card resolved/2099-W01 910 resolved 'pact-001'
 card open 912 open 'factory (наслідки — pact-001, бета)'
 card open 913 open '"[[tea-001]]"'
+card open 915 open "'pact-001'"
 # product: лише з frontmatter — рядок «product:» у ТІЛІ картки без поля в frontmatter нічого не переводить
 mkdir -p "$S/triage/open"; printf -- '---\ntype: triage-item\nid: tri-914\nstatus: open\nkind: question\ndate: 2099-01-01\nloop: L3-build\n---\n## [OPEN] 2099-01-01 · L3-build · question\n\nproduct: pact-001\n- ПРОБА-914: поле лише в тілі.\n' > "$S/triage/open/2099-01-01-914-question.md"
 regen
@@ -98,6 +99,7 @@ check "Pact-001 (регістр) → pact-001"               '[ "$(in_facades 90
 check "factory (наслідки — pact-001, бета) → factory" '[ "$(in_facades 912)" = "factory" ]'
 check "[[tea-001]] у лапках → tea-001"              '[ "$(in_facades 913)" = "tea-001" ]'
 check "product: лише в тілі картки → factory"       '[ "$(in_facades 914)" = "factory" ]'
+check "'pact-001' в одинарних лапках → pact-001"    '[ "$(in_facades 915)" = "pact-001" ]'
 check "закрита картка pact-001 — у «Останніх закритих» фасаду pact-001, не у відкритих" \
       'grep -q "2099-01-01" "$S/triage-inbox.pact-001.md" && [ "$(in_facades 910)" = "" ]'
 check "фасад за продуктом — згенерований (маркер) і посилається на загальний" \
