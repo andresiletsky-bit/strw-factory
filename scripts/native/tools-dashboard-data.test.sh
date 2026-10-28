@@ -31,18 +31,18 @@ else bad "фікстура мала дати rc 0 і три файли" "rc=${RC
 
 if [ "${RC}" -eq 0 ]; then
     s="$(jget "${G}/summary.json" '"%(tools)s %(active)s %(candidate)s %(forbidden)s %(available)s %(needs_auth)s %(unavailable)s %(unmeasured)s %(stale)s %(task_types)s %(task_types_without_active)s %(schema_version)s" % d[0]')"
-    [ "${s}" = "9 6 2 1 6 1 0 2 1 44 37 1" ] && ok "summary: точні числа фікстури" || bad "summary розійшовся" "got: ${s}"
+    [ "${s}" = "10 7 2 1 7 1 0 2 1 44 37 1" ] && ok "summary: точні числа фікстури" || bad "summary розійшовся" "got: ${s}"
     [ "$(jget "${G}/summary.json" 'len(d)')" = "1" ] && ok "summary — рівно один рядок" || bad "summary не один рядок"
     [ "$(jget "${G}/summary.json" 'd[0]["generated_at"]')" = "${NOW}" ] && ok "generated_at = --now" || bad "generated_at не --now"
     want_sha="$(shasum -a 256 "${FIX}" | awk '{print $1}')"
     [ "$(jget "${G}/summary.json" 'd[0]["registry_sha256"]')" = "${want_sha}" ] && ok "registry_sha256 = sha256 вхідного файлу" || bad "registry_sha256 не того файлу"
-    [ "$(jget "${G}/tools.json" 'len(d)')" = "9" ] && ok "tools.json: рядків = інструментів (9)" || bad "tools.json загубив рядки"
-    [ "$(jget "${G}/tools.json" '",".join(r["id"] for r in d)')" = "codex-cli,claude-cli,pptx-skill,artifact-slides,artifact-dashboard,artifact-docs,figma-mcp,metricool-mcp,simulator" ] \
+    [ "$(jget "${G}/tools.json" 'len(d)')" = "10" ] && ok "tools.json: рядків = інструментів (10)" || bad "tools.json загубив рядки"
+    [ "$(jget "${G}/tools.json" '",".join(r["id"] for r in d)')" = "codex-cli,claude-cli,pptx-skill,artifact-slides,artifact-dashboard,artifact-docs,figma-mcp,metricool-mcp,simulator,strw-code-reviewer" ] \
         && ok "tools.json — порядок реєстру" || bad "tools.json переставив рядки"
     [ "$(jget "${G}/tasks.json" 'len(d)')" = "44" ] && ok "tasks.json: рядок на кожен task_type (44)" || bad "tasks.json не 44"
     [ "$(jget "${G}/tasks.json" 'd[0]["task"]+"|"+d[-1]["task"]')" = "code-build|automation" ] && ok "tasks.json — порядок словника" || bad "tasks.json не в порядку словника"
     r="$(jget "${G}/tasks.json" '[x for x in d if x["task"]=="code-review-6a"][0]["active_by_rank"]')"
-    [ "${r}" = "claude-cli, codex-cli" ] && ok "active_by_rank: rank 10 перед 20 (у файлі навпаки)" || bad "порядок за rank зламано" "got: ${r}"
+    [ "${r}" = "strw-code-reviewer, claude-cli, codex-cli" ] && ok "active_by_rank: за rank 5·10·20 — не за файлом і не за id" || bad "порядок за rank зламано" "got: ${r}"
     r="$(jget "${G}/tasks.json" '[x for x in d if x["task"]=="deck"][0]["active_by_rank"]')"
     [ "${r}" = "artifact-slides, pptx-skill" ] && ok "рівний rank — за id (у файлі навпаки)" || bad "рівний rank не за id" "got: ${r}"
     r="$(jget "${G}/tasks.json" '"%(active)s %(candidate)s %(forbidden)s" % [x for x in d if x["task"]=="design-system"][0]')"
