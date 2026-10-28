@@ -1,0 +1,201 @@
+# Фікстура реєстру інструментів за схемою v1.1 (нотатка майстра tool-registry-plan-2026-10-28.md, § v1 і § v1.1).
+# Живе джерело — strw-state/engine/tools.yaml (factory.tool-registry); ця копія — для тестів
+# scripts/native/tools-dashboard-data.py і native-outputs-map.test.sh. Записи підібрані під межі, які стереже тест:
+#   · code-review-6a: rank (strw-code-reviewer 5, claude-cli 10, codex-cli 20) ≠ порядку у файлі ≠ порядку id;
+#   · рівний rank — за id (pptx-skill стоїть перед artifact-slides);
+#   · при --now 2026-10-28T09:00Z pptx-skill виміряно рівно 14 днів тому (свіжий), figma-mcp — 15 (застарілий);
+#   · claude-cli — lanes-tool без measured (не виміряно);
+#   · у cmd/how/by/source — маркер NOEXPORT: ці поля не мають потрапити у вихід генератора.
+schema_version: 1
+vocab:
+  kinds: [app, cli, skill, plugin, mcp, artifact-type, agent, scheduled-task, resource]
+  task_types:
+    code-build: "збірка коду в L3"
+    code-review-6a: "незалежне рев'ю PR за правилом 6/6a"
+    code-rescue: "другий прохід діагностики чи реалізації"
+    ci-gate: "перевірки CI"
+    ios-build: "збірка й тести iOS"
+    backend-ops: "операції бекенду"
+    vcs-pr: "гілки, PR, мерж"
+    qa-release: "передрелізна перевірка"
+    regression: "тижнева регресія"
+    report-doc: "звіт або документ для читання людиною"
+    report-dashboard: "сторінка чисел і таблиць"
+    deck: "презентація для CEO"
+    design-mockup: "макет екрана продукту"
+    design-system: "токени й компоненти бренду"
+    design-critique: "чекер дизайну"
+    brand-review: "чекер бренду"
+    research-web: "пошук і читання вебу"
+    discovery: "пошук ідей"
+    validation: "валідація ідеї"
+    prd: "PRD"
+    gate-decision: "рішення гейта"
+    growth-queue: "черга контенту на погодження"
+    product-analytics: "аналітика продукту"
+    portfolio: "огляд портфеля"
+    retro: "ретро"
+    triage: "розбір inbox"
+    schedule: "запуск за розкладом"
+    session-orchestration: "сесії й дочірні сесії"
+    office-files: "docx/xlsx/pptx/pdf"
+    desktop-control: "керування застосунками"
+    comms: "листи й повідомлення"
+    docs-storage: "сховище документів"
+    pm-tracker: "трекер задач"
+    crm-sales: "CRM"
+    support-desk: "підтримка"
+    finance-ops: "фінанси"
+    legal: "юридичне"
+    commerce: "торгівля"
+    seo-research: "SEO"
+    email-marketing: "email-маркетинг"
+    meeting-notes: "нотатки зустрічей"
+    observability: "моніторинг"
+    data-warehouse: "сховище даних"
+    automation: "автоматизації"
+  session_roles: [hub, master, child]
+  contours: [M, C, I]
+tools:
+  - id: codex-cli
+    kind: cli
+    name: "Codex CLI"
+    tasks: [code-review-6a, code-rescue]
+    roles: [strw-code-reviewer]
+    loops: [L3-build]
+    contours: [M]
+    status: active
+    rank: 20
+    availability:
+      probe: {kind: shell, cmd: "bin/codex-probe.sh NOEXPORT-cmd", cwd: strw-ops}
+      measured: {at: 2026-10-28T09:00Z, result: available, by: "NOEXPORT-by"}
+    constraints: {cost: subscription, user_data: none, enabled_by: preinstalled}
+    source: "NOEXPORT-source"
+  - id: claude-cli
+    kind: cli
+    name: "Claude CLI"
+    tasks: [code-review-6a, code-build]
+    roles: []
+    loops: []
+    contours: [M, C]
+    status: active
+    rank: 10
+    availability:
+      probe: {kind: lanes-tool, ref: claude}
+    constraints: {cost: subscription, user_data: none, enabled_by: preinstalled}
+    source: "lanes.yaml tools.claude"
+  - id: pptx-skill
+    kind: skill
+    name: "pptx"
+    tasks: [deck, office-files]
+    roles: [hub]
+    loops: []
+    contours: [M]
+    status: active
+    rank: 10
+    availability:
+      probe: {kind: session, how: "Skill pptx NOEXPORT-how"}
+      measured: {at: 2026-10-14T09:00Z, result: available, by: "fixture"}
+    constraints: {cost: subscription, user_data: none, enabled_by: preinstalled}
+    source: "fixture"
+  - id: artifact-slides
+    kind: artifact-type
+    name: "Slides"
+    tasks: [deck]
+    roles: [hub]
+    loops: []
+    contours: [M]
+    status: active
+    rank: 10
+    availability:
+      probe: {kind: session, how: "Artifact action:list scope:types"}
+      measured: {at: 2026-10-28T08:00Z, result: available, by: "fixture"}
+    constraints: {cost: subscription, user_data: none, enabled_by: preinstalled}
+    source: "fixture"
+  - id: artifact-dashboard
+    kind: artifact-type
+    name: "Dashboard"
+    tasks: [report-dashboard]
+    roles: []
+    loops: [L5-portfolio]
+    contours: [M]
+    status: active
+    rank: 10
+    availability:
+      probe: {kind: session, how: "Artifact action:list scope:types"}
+      measured: {at: 2026-10-28T08:00Z, result: available, by: "fixture"}
+    constraints: {cost: subscription, user_data: none, enabled_by: preinstalled}
+    source: "fixture"
+  - id: artifact-docs
+    kind: artifact-type
+    name: "Docs"
+    tasks: [report-doc]
+    roles: []
+    loops: []
+    contours: [M]
+    status: candidate
+    rank: 20
+    availability:
+      probe: {kind: session, how: "Artifact action:list scope:types"}
+      measured: {at: 2026-10-28, result: available, by: "fixture"}
+    constraints: {cost: subscription, user_data: none, enabled_by: preinstalled}
+    source: "fixture"
+    why: "звіти лишаються md у git, доки CEO не вирішить інакше"
+  - id: figma-mcp
+    kind: mcp
+    name: "Figma"
+    tasks: [design-mockup, design-system]
+    roles: [strw-designer]
+    loops: [L7-design]
+    contours: [M]
+    status: candidate
+    rank: 30
+    provides: [use_figma, get_screenshot]
+    availability:
+      probe: {kind: session, how: "MCP figma whoami"}
+      measured: {at: 2026-10-13T09:00Z, result: needs-auth, by: "fixture"}
+    constraints: {cost: subscription, user_data: none, enabled_by: ceo}
+    source: "fixture"
+    why: "потребує авторизації"
+  - id: metricool-mcp
+    kind: mcp
+    name: "Metricool"
+    tasks: [growth-queue]
+    roles: [strw-growth]
+    loops: [L4-growth]
+    contours: [M]
+    status: forbidden
+    rank: 50
+    availability:
+      probe: {kind: session, how: "MCP metricool getBrandSettings"}
+      measured: {at: 2026-10-19T09:00Z, result: available, by: "fixture"}
+    constraints: {cost: paid, user_data: reads, enabled_by: ceo}
+    source: "fixture"
+    why: "прямий розклад заборонено, лише ForReview"
+  - id: simulator
+    kind: resource
+    name: "iOS Simulator"
+    tasks: [ios-build]
+    roles: []
+    loops: []
+    contours: [M]
+    status: active
+    rank: 10
+    availability:
+      probe: {kind: lanes-tool, ref: simulator}
+    constraints: {cost: free, user_data: none, enabled_by: preinstalled}
+    source: "lanes.yaml tools.simulator"
+  - id: strw-code-reviewer
+    kind: agent
+    name: "strw-code-reviewer"
+    tasks: [code-review-6a]
+    roles: []
+    loops: [L3-build]
+    contours: [M]
+    status: active
+    rank: 5
+    availability:
+      probe: {kind: session, how: "agents/validators/strw-code-reviewer.md"}
+      measured: {at: 2026-10-28T09:00Z, result: available, by: "fixture"}
+    constraints: {cost: subscription, user_data: none, enabled_by: preinstalled}
+    source: "fixture"
