@@ -78,6 +78,7 @@ sub "${M}/nosep.md" "|---|---|---|---|---|---|
 " "";                                                                                       red "таблиця без роздільника" "без заголовка" "${M}/nosep.md"
 sub "${M}/notick.md" "| \`legal\` |" "| legal |";                                           red "task_type без бектиків" "не в бектиках" "${M}/notick.md"
 sub "${M}/reg-novocab.yaml" "  task_types:" "  task_types_off:" "${FIX}";                    red "реєстр без vocab.task_types" "без vocab.task_types" "${MAP}" "${M}/reg-novocab.yaml"
+sub "${M}/outempty.md" "| \`legal\` | юридичні документи |" "| \`legal\` |  |";            red "порожній «Вихід»" "legal: порожній «Вихід»" "${M}/outempty.md"
 sub "${M}/outdash.md" "| \`legal\` | юридичні документи |" "| \`legal\` | — |";           red "«Вихід» = —" "legal: порожній «Вихід»" "${M}/outdash.md"
 sub "${M}/whodash.md" "| — · не підключено | джерела немає |" "| — | джерела немає |";     red "«Хто» = —" "порожнє «Хто створює»" "${M}/whodash.md"
 sub "${M}/cols7.md" "| \`legal\` | юридичні документи | — | — | — · не підключено | джерела немає |" "| \`legal\` | юридичні документи | — | — | — · не підключено | джерела немає | зайве |"; red "рядок із 7 колонок" "не з 6 колонок" "${M}/cols7.md"

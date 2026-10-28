@@ -141,6 +141,9 @@ sub "${M}/ttlist.yaml" "  task_types:
 " "  task_types: [code-build]
   task_types_off:
 ";                                                                          red "task_types списком" "vocab.task_types" "${M}/ttlist.yaml"
+# без записів, що посилаються на словник: відмова саме перевірки словника (рев'ю #38 р.2 — інакше трейсбек)
+printf 'schema_version: 1\nvocab: {kinds: [cli], task_types: [code-build]}\ntools: []\n' > "${M}/ttlist0.yaml"; red "task_types списком, tools порожній" "vocab.task_types: немає або не мапа" "${M}/ttlist0.yaml"
+sub "${M}/idempty.yaml" "  - id: simulator" "  - id: \"\""; red "порожній id" "немає id" "${M}/idempty.yaml"
 printf '  - just-a-string\n' | cat "${FIX}" - > "${M}/toolstr.yaml";                      red "запис tools не мапа" "не мапа" "${M}/toolstr.yaml"
 sub "${M}/probe.yaml" "probe: {kind: lanes-tool, ref: simulator}" "probe: {ref: simulator}"; red "без probe.kind" "probe.kind" "${M}/probe.yaml"
 sub "${M}/constr.yaml" "constraints: {cost: free, user_data: none, enabled_by: preinstalled}" "constraints: free"; red "constraints не мапа" "constraints" "${M}/constr.yaml"
@@ -194,7 +197,7 @@ S="${TMP}/now-sec"; run "${S}" "${FIX}" --now "2026-10-28T09:00:00Z"
 if [ "${RC}" -eq 0 ] && cmp -s "${G}/tools.json" "${S}/tools.json"; then ok "--now із секундами = без секунд"; else bad "--now із секундами" "rc=${RC} ${OUT}"; fi
 : > "${TMP}/a-file"
 OUT="$(python3 "${GEN}" --registry "${FIX}" --out "${TMP}/a-file" --now "${NOW}" 2>&1)"; RC=$?
-if [ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q -- "не порожня тека" && ! printf '%s' "${OUT}" | /usr/bin/grep -q Traceback; then ok "червоний: --out не тека → rc 2"
+if [ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q -- "не порожня тека" && ! printf '%s' "${OUT}" | /usr/bin/grep -q Traceback; then ok "червоний: --out — файл, не тека → rc 2 «не порожня тека»"
 else bad "червоний: --out не тека" "rc=${RC} ${OUT}"; fi
 # тека з попереднього прогону: відмова не лишає старих файлів, які можна прийняти за нові
 NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; mkdir -p "${X}"; printf '[]\n' > "${X}/summary.json"
