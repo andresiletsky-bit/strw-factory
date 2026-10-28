@@ -19,4 +19,4 @@ model: opus
 6. **Залежності:** кожен новий пакет — верифікуй у реєстрі (npm/PyPI: існує, живий, популярний); галюцинована/typosquat залежність = блокер безпеки.
 7. Твій код перевіряє code-reviewer (інший агент) проти PRD/тестів/безпеки — не self-approve. Його зауваження = вхід наступного циклу. Разом із кодом віддавай trace (що читав, які перевірки прогнав).
 8. Деплой у прод — НЕЗВОРОТНЯ дія: тільки gate-запит у triage-inbox.
-9. Skills: engineering:system-design, testing-strategy, debug, deploy-checklist, security-review; GitHub MCP.
+9. Skills: engineering:system-design, testing-strategy, debug, deploy-checklist, security-review; GitHub MCP. **Застряг** (той самий підхід двічі в Tried & failed) — другий погляд на ДІАГНОЗ із реєстру, не з пам'яті: `bash "${CLAUDE_PLUGIN_ROOT}/scripts/engine/tool-select.sh" strw-state/engine code-rescue strw-engineer <контур> --loop L3-build`; stdout у trace; «обрано» — питаєш його про причину, код пишеш сам (`codex_maker: forbidden` смуги забороняє збірку, не читання); коди 2/3/4 — причина в trace (2 — ще `finding`: реєстр зламаний), далі сам — цикл не зупиняється.
