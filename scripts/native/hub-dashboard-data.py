@@ -30,6 +30,7 @@ import glob
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -63,6 +64,8 @@ TRIAGE_KINDS = ("question", "finding", "error")
 CHECK_FAIL = {"FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE", "ERROR"}
 CHECK_OK = {"SUCCESS", "NEUTRAL", "SKIPPED"}
 IDLE_HOURS = 24
+# Назву сесії пише людина; адреса тестувальника в ній — персональні дані, дашборду не потрібні.
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 PR_STALE_DAYS = 7
 
 
@@ -157,7 +160,7 @@ def build_sessions(raw, now):
             "table": "sessions",
             "id": sid,
             "name": text(s.get("name")),
-            "title": text(s.get("title")),
+            "title": EMAIL.sub("[email]", text(s.get("title"))),
             "group": text(g.get("name")) if isinstance(g, dict) else "",
             "running": s["isRunning"],
             "pr": pr,
@@ -186,12 +189,9 @@ def checks_of(rollup, where):
         if c.get("__typename") == "StatusContext" or "state" in c and "status" not in c:
             st = text(c.get("state")).upper()
             states.append("fail" if st in CHECK_FAIL else "ok" if st in CHECK_OK else "pending")
-        else:
-            if text(c.get("status")).upper() != "COMPLETED":
-                states.append("pending")
-            else:
-                con = text(c.get("conclusion")).upper()
-                states.append("fail" if con in CHECK_FAIL else "ok" if con in CHECK_OK else "pending")
+        else:  # CheckRun: до завершення conclusion порожній — це й є «йде»
+            con = text(c.get("conclusion")).upper()
+            states.append("fail" if con in CHECK_FAIL else "ok" if con in CHECK_OK else "pending")
     if "fail" in states:
         return "fail"
     if "pending" in states:

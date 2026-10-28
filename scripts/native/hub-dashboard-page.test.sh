@@ -78,6 +78,8 @@ const dash = {
   },
   draw(name, fn) { if (fn) { draws[name] = fn; targets[name] = targets[name] || el(); } if (draws[name]) draws[name](targets[name]); },
 };
+// посилання лише на github: URL із даних не стає javascript:-посиланням
+HUB.find((r) => r.key === 'pact-backend#72').url = 'javascript:alert(1)';
 const script = page.slice(page.lastIndexOf('<script>') + 8, page.lastIndexOf('</script>'));
 new Function('document', 'dash', script)(document, dash);
 
@@ -134,6 +136,7 @@ eq('PR: усі шість', keysOf('prs-body'), 'strw-ops#12,strw-ops#36,strw-fa
 eq('PR: текст посилання = ключ', targets['prs-body'].children[0].children[0].children[0].textContent, 'strw-ops#12');
 eq('PR: посилання лише на github', targets['prs-body'].children[0].children[0].children[0].href, 'https://github.com/andresiletsky-bit/strw-ops/pull/12');
 eq('PR: застарілий підсвічено, свіжий ні', targets['prs-body'].children.slice(0, 2).map((tr) => tr.children[4].className.includes('hb-old')).join(','), 'true,false');
+eq('PR: URL не з github → «#»', targets['prs-body'].children[5].children[0].children[0].href, '#');
 fire('#prs-red', 'checked', true);
 eq('PR: «лише червоні»', keysOf('prs-body'), 'strw-ops#12,pact-ios#240');
 eq('сесії: тихі сховано за замовчуванням', keysOf('sessions-body'), 'local_eeee,local_aaaa');

@@ -60,6 +60,8 @@ if [ "${RC}" -eq 0 ]; then
     [ "${r}" = '{"group": "", "id": "local_eeee", "idle": false, "idle_hours": 0, "last_activity": "2026-10-28T08:59Z", "name": "", "pr": null, "pr_state": "", "running": true, "started_by": "", "table": "sessions", "title": "епсилон: щойно"}' ] \
         && ok "сесія без group/name/pr — порожні, не вигадані" || bad "сесія без полів" "got: ${r}"
     if /usr/bin/grep -q -e secret-path -e 'claude://' "${G}/hub.json"; then bad "cwd або link просочились у вихід"; else ok "cwd і link сесій не експортуються"; fi
+    [ "$(jget "${G}/hub.json" 'T("sessions")[3]["title"]')" = "бета: додати [email] у TestFlight" ] && ! /usr/bin/grep -q '@example.com' "${G}/hub.json" \
+        && ok "email у назві сесії замасковано" || bad "email у назві сесії" "$(jget "${G}/hub.json" 'T("sessions")[3]["title"]')"
     # PR: порядок репо як REPOS, у репо — за номером; стан перевірок
     [ "$(jget "${G}/hub.json" '",".join(r["key"] for r in T("prs"))')" = "strw-ops#12,strw-ops#36,strw-factory#40,pact-ios#240,pact-backend#71,pact-backend#72" ] \
         && ok "PR: порядок репо і номерів" || bad "порядок PR" "$(jget "${G}/hub.json" '[r["key"] for r in T("prs")]')"
@@ -121,7 +123,7 @@ OUT2="$(python3 "${GEN}" --state "${FX}/state" --sessions "${FX}/sessions.json" 
 cmp -s "${GHD}/hub.json" "${X}/hub.json" && ok "сирий знімок <out>/prs відтворює hub.json" || bad "знімок prs не відтворює" "${OUT2}"
 GHF="${TMP}/gh-fail"; mkdir -p "${GHF}"; : > "${TMP}/gh.log"
 OUT="$(PATH="${FAKE}:${PATH}" GH_LOG="${TMP}/gh.log" GH_FIXTURES="${FX}/prs" GH_FAIL_REPO=pact-ios python3 "${GEN}" --state "${FX}/state" --sessions "${FX}/sessions.json" --gh --out "${GHF}" --now "${NOW}" 2>&1 < /dev/null)"; RC=$?
-[ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q "pact-ios" && [ ! -e "${GHF}/hub.json" ] && ok "червоний: gh упав на pact-ios → rc 2, названо репо, hub.json немає" \
+[ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q "gh pr list pact-ios: код 1 — HTTP 502 від gh" && [ ! -e "${GHF}/hub.json" ] && ok "червоний: gh упав на pact-ios → rc 2, код і stderr gh, hub.json немає" \
     || bad "червоний: gh упав" "rc=${RC} ${OUT}"
 # 3b. знімок PR кожного репо — читається: без файла відмова з назвою; маркер у назві — у виході
 for repo in ${REPOS}; do
@@ -177,6 +179,7 @@ m sessions.json '"sessionId": "local_bbbb", ' '';                               
 m sessions.json '"isRunning": false,' '"isRunning": "no",';                     red "isRunning не bool" "isRunning" "${M}"
 m sessions.json '"lastActivityAt": "2026-10-27T08:00:00.000Z"' '"lastActivityAt": "вчора"'; red "lastActivityAt не час" "вчора" "${M}"
 m sessions.json '"lastActivityAt": "2026-10-27T08:00:00.000Z"' '"lastActivityAt": "2026-10-27T08:00:00+03:00"'; red "lastActivityAt не UTC" "lastActivityAt" "${M}"
+m sessions.json '"lastActivityAt": "2026-10-27T08:00:00.000Z"' '"lastActivityAt": "2026-10-27T08:00:00"'; red "lastActivityAt без Z (пояс невідомий)" "lastActivityAt" "${M}"
 m sessions.json '"prNumber": 290' '"prNumber": "290"';                          red "prNumber рядком" "prNumber" "${M}"
 NCASE=$((NCASE+1)); M="${TMP}/m-${NCASE}"; fx_copy "${M}"; printf '{"sessions": []}\n' > "${M}/sessions.json"; red "сесії не масив" "очікувався масив" "${M}"
 m sessions.json '"sessionId": "local_bbbb"' '"sessionId": 7';                  red "sessionId не рядок" "немає sessionId" "${M}"
@@ -232,6 +235,14 @@ OUT="$(python3 "${GEN}" --state "${FX}/state" --sessions "${FX}/sessions.json" -
 NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; mkdir -p "${X}"; printf '[]\n' > "${X}/hub.json"
 OUT="$(python3 "${GEN}" --state "${FX}/state" --sessions "${FX}/sessions.json" --prs-dir "${FX}/prs" --out "${X}" --now "${NOW}" 2>&1 < /dev/null)"; RC=$?
 [ "${RC}" -eq 2 ] && [ "$(cat "${X}/hub.json")" = "[]" ] && ok "червоний: --out не порожня → rc 2, старий hub.json не чіпає" || bad "--out не порожня" "rc=${RC} ${OUT}"
+# неповна година не округлюється: 23 год 40 хв — 23, ще не «тихо»
+NCASE=$((NCASE+1)); M="${TMP}/m-${NCASE}"; fx_copy "${M}"; mut "${M}" sessions.json '"lastActivityAt": "2026-10-27T08:00:00.000Z"' '"lastActivityAt": "2026-10-27T09:20:00.000Z"'; run "${M}/out" "${M}"
+r=""; [ "${RC}" -eq 0 ] && r="$(jget "${M}/out/hub.json" '"%(idle_hours)s %(idle)s" % [x for x in T("sessions") if x["id"]=="local_bbbb"][0]')"
+[ "${r}" = "23 False" ] && ok "23 год 40 хв → 23, не тихо (floor, не round)" || bad "неповна година" "rc=${RC} got: ${r}"
+# «чекає CEO» — лише blocked: залишковий ceo: у ready-елементі не рахується
+NCASE=$((NCASE+1)); M="${TMP}/m-${NCASE}"; fx_copy "${M}"; mut "${M}" state/engine/items/a.one.yaml 'blocked_by: []' 'blocked_by: ["ceo:tri-002"]'; run "${M}/out" "${M}"
+r=""; [ "${RC}" -eq 0 ] && r="$(jget "${M}/out/hub.json" 'T("summary")[0]["items_on_ceo"]')"
+[ "${r}" = "1" ] && ok "ready-елемент із ceo: не рахується в items_on_ceo" || bad "items_on_ceo рахує не-blocked" "rc=${RC} got: ${r}"
 # рівно 20 сесій — попередження про обрізаний list_sessions; 21 — без нього
 NCASE=$((NCASE+1)); M="${TMP}/m-${NCASE}"; fx_copy "${M}"
 python3 -c 'import json,sys; one=json.load(open(sys.argv[1]))[1]; json.dump([dict(one, sessionId="local_%02d" % i) for i in range(20)], open(sys.argv[1],"w"))' "${M}/sessions.json"
@@ -239,6 +250,9 @@ run "${M}/out" "${M}"; [ "${RC}" -eq 0 ] && printf '%s' "${OUT}" | /usr/bin/grep
 NCASE=$((NCASE+1)); M="${TMP}/m-${NCASE}"; fx_copy "${M}"
 python3 -c 'import json,sys; one=json.load(open(sys.argv[1]))[1]; json.dump([dict(one, sessionId="local_%02d" % i) for i in range(21)], open(sys.argv[1],"w"))' "${M}/sessions.json"
 run "${M}/out" "${M}"; [ "${RC}" -eq 0 ] && ! printf '%s' "${OUT}" | /usr/bin/grep -q "обрізано" && ok "21 сесія — без попередження" || bad "21 сесія" "rc=${RC} ${OUT}"
+NCASE=$((NCASE+1)); M="${TMP}/m-${NCASE}"; fx_copy "${M}"
+python3 -c 'import json,sys; one=json.load(open(sys.argv[1]))[1]; json.dump([dict(one, sessionId="local_%02d" % i, isArchived=(i == 0)) for i in range(20)], open(sys.argv[1],"w"))' "${M}/sessions.json"
+run "${M}/out" "${M}"; [ "${RC}" -eq 0 ] && printf '%s' "${OUT}" | /usr/bin/grep -q "можливо, обрізано" && ok "19 + 1 архівна = 20 рядків list_sessions → попередження" || bad "20 з архівною без попередження" "rc=${RC} ${OUT}"
 
 # --- 5. немає читача YAML → rc 2 з назвою -----------------------------------------------------------
 NL="${TMP}/nolib/scripts/native"; mkdir -p "${NL}" "${TMP}/nolib-out"; cp "${GEN}" "${NL}/"
