@@ -5,10 +5,12 @@
 # «я пам'ятаю, що codex є»: реєстр — strw-state/engine/tools.yaml (схема v1), доступність —
 # та сама проба, що tool-probe.sh (lib/tool_registry.py).
 #
-#   tool-select.sh <engine-dir> <тип-задачі> <роль> <контур> [--loop <петля>]
+#   tool-select.sh <engine-dir> <тип-задачі> <роль> <контур> [--loop <петля>] [--kind <вид>]
 #
-# Роль — vocab.session_roles (hub|master|child) або `name:` агента з agents/**/*.md плагіна.
-# Відбір: тип задачі ∈ tasks · роль ∈ roles ([] = будь-яка) · контур ∈ contours · петля ∈ loops
+# Роль — vocab.session_roles (hub|master|child) або `name:` із закритого frontmatter agents/**/*.md плагіна;
+# петля — `id:` паспорта loops/*.md плагіна; вид — vocab.kinds (L3 6a: `--kind cli` — зовнішній рев'юер
+# окремим процесом, а не внутрішній агент тієї ж задачі code-review-6a).
+# Відбір: тип задачі ∈ tasks · [kind = вид] · роль ∈ roles ([] = будь-яка) · контур ∈ contours · петля ∈ loops
 # ([] = будь-яка; запис із петлями без --loop не пропонується). forbidden НІКОЛИ не в списку
 # (лише рядок «відкинуто» в stderr). Кожного відібраного проба міряє один раз.
 # Порядок: доступні вище недоступних · active вище candidate · менший rank · id.
@@ -19,16 +21,24 @@
 #   обрано: <id> (<назва>) · задача … · rank R · <проба>                          → 0
 #   немає доступного: N кандидат(ів) · …: <id> — <стан>; …                          → 3
 #   немає інструмента в реєстрі: задача … · роль … · контур …                       → 4
-# «Не поміряти» → 2, stdout порожній: невідомий тип задачі, роль чи контур (не порожній
+# «Не поміряти» → 2, stdout порожній: невідомий тип задачі, роль, контур, петля чи вид (не порожній
 # успіх), немає/зламаний реєстр, lanes-tool на неіснуючий ключ, немає читача.
-# Оточення — як у tool-probe.sh; плюс STRW_AGENTS_DIR (типово agents/ цього плагіна).
+# Оточення — як у tool-probe.sh; плюс STRW_AGENTS_DIR і STRW_LOOPS_DIR (типово agents/ і loops/ цього плагіна).
 set -uo pipefail
-usage() { echo "tool-select: tool-select.sh <engine-dir> <тип-задачі> <роль> <контур> [--loop <петля>] (код 2)" >&2; exit 2; }
-[ $# -eq 4 ] || [ $# -eq 6 ] || usage
-LOOP=""
-if [ $# -eq 6 ]; then [ "$5" = "--loop" ] && [ -n "$6" ] || usage; LOOP="$6"; fi
+usage() { echo "tool-select: tool-select.sh <engine-dir> <тип-задачі> <роль> <контур> [--loop <петля>] [--kind <вид>] (код 2)" >&2; exit 2; }
+[ $# -ge 4 ] || usage
+ENGINE="$1"; TASK="$2"; ROLE="$3"; CONTOUR="$4"; shift 4
+LOOP=""; KIND=""; SEEN=""
+while [ $# -gt 0 ]; do   # кожна опція — не більше разу, зі значенням
+  case "$1" in --loop|--kind) ;; *) usage ;; esac
+  [ $# -ge 2 ] && [ -n "$2" ] || usage
+  case " ${SEEN} " in *" $1 "*) usage ;; esac
+  SEEN="${SEEN} $1"
+  if [ "$1" = "--loop" ]; then LOOP="$2"; else KIND="$2"; fi
+  shift 2
+done
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -d "$1" ] || { echo "tool-select: немає $1 (код 2)" >&2; exit 2; }
+[ -d "${ENGINE}" ] || { echo "tool-select: немає ${ENGINE} (код 2)" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "tool-select: немає python3 (код 2)" >&2; exit 2; }
 ENGINE_LIB=""
 for c in "${STRW_ENGINE_LIB:-}" "${HERE}/lib" "${STRW_ROOT:-$HOME/Developer/STRW}/strw-factory/scripts/engine/lib"; do   # явна змінна → поруч → парасолька
@@ -39,7 +49,8 @@ done
 . "${HERE}/repo-dir.sh"
 REPO_DIRS="$(strw_repo_dirs "${STRW_ROOT:-$HOME/Developer/STRW}")" || { echo "tool-select: словник репо не резолвиться (код 2)" >&2; exit 2; }
 AGENTS="${STRW_AGENTS_DIR:-${HERE}/../../agents}"
-STRW_ENGINE_LIB="$ENGINE_LIB" REPO_DIRS="$REPO_DIRS" AGENTS="$AGENTS" python3 - "$1" "$2" "$3" "$4" "$LOOP" <<'PY'
+LOOPS="${STRW_LOOPS_DIR:-${HERE}/../../loops}"
+STRW_ENGINE_LIB="$ENGINE_LIB" REPO_DIRS="$REPO_DIRS" AGENTS="$AGENTS" LOOPS="$LOOPS" python3 - "${ENGINE}" "${TASK}" "${ROLE}" "${CONTOUR}" "${LOOP}" "${KIND}" <<'PY'
 import datetime, os, sys
 def die(msg):
     print(f"tool-select: {msg} (код 2)", file=sys.stderr); sys.exit(2)
@@ -50,14 +61,15 @@ try:
 except ImportError as e:
     die(f"немає читача: {e}")
 try:
-    engine, task, role, contour, loop = sys.argv[1:6]
+    engine, task, role, contour, loop, kind = sys.argv[1:7]
     now = tr.parse_at(os.environ["STRW_TOOLS_NOW"], "STRW_TOOLS_NOW") if os.environ.get("STRW_TOOLS_NOW") \
         else datetime.datetime.now(datetime.timezone.utc)
     dirs = dict(l.split("=", 1) for l in os.environ["REPO_DIRS"].splitlines() if "=" in l)
     doc = tr.load(engine, load_nodup)
     p = tr.Prober(engine, dirs, float(os.environ.get("TOOL_PROBE_TIMEOUT", "10")), now,
                   int(os.environ.get("TOOL_MEASURED_MAX_AGE_DAYS", "14")), load_nodup)
-    rc, out, diag = tr.select(doc, task, role, contour, loop or None, tr.agent_names(os.environ["AGENTS"]), p)
+    rc, out, diag = tr.select(doc, task, role, contour, loop or None, kind or None,
+                              tr.agent_names(os.environ["AGENTS"]), tr.loop_ids(os.environ["LOOPS"]), p)
 except tr.RegistryError as e:
     die(str(e))
 except Exception as e:   # необроблений збій — «не поміряти», не 1 і не 0

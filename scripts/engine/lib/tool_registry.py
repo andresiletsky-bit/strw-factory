@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Реєстр інструментів фабрики (strw-state/engine/tools.yaml, схема v1) — читання, проба, підбір.
+"""Реєстр інструментів фабрики (strw-state/engine/tools.yaml, схема v1/v1.1) — читання, проба, підбір.
 
 Один модуль на два входи — tool-probe.sh (проба одного запису) і tool-select.sh (підбір
 під тип задачі, роль і контур), щоб «доступний» означало одне й те саме в обох
@@ -13,7 +13,7 @@
   · lanes-tool — проба з `lanes.yaml tools.<ref>.probe` (та сама, що в toolchain-filter);
   · session    — інструмент сесії (MCP, Artifact, Skill) з shell НЕ міряється: читається
                  `availability.measured` (result + at); вимір, старший за max_age_days або
-                 з майбутнього, — «протух», не «доступний».
+                 з майбутнього (понад годину), — «протух», не «доступний».
 """
 import datetime
 import glob
@@ -25,6 +25,7 @@ PROBE_KINDS = ("shell", "lanes-tool", "session")
 SESSION_RESULTS = ("available", "unavailable", "needs-auth")
 STATUSES = ("active", "candidate", "forbidden")
 CWD_REPOS = ("strw-ops", "strw-factory", "strw-state")
+FUTURE_GRACE = datetime.timedelta(hours=1)   # годинник сесії й машини розходяться; більше — одруківка дати
 
 
 class RegistryError(Exception):
@@ -35,37 +36,42 @@ def _str_list(v):
     return isinstance(v, list) and all(isinstance(x, str) and x for x in v)
 
 
+def _nonblank(v):
+    return isinstance(v, str) and bool(v.strip())
+
+
 def _check_tool(t, i):
     if not isinstance(t, dict):
         raise RegistryError(f"tools[{i}] не мапа")
     tid = t.get("id")
-    if not isinstance(tid, str) or not tid:
+    if not _nonblank(tid):
         raise RegistryError(f"tools[{i}]: немає `id`")
     where = f"інструмент {tid}"
+    if not _nonblank(t.get("kind")):
+        raise RegistryError(f"{where}: немає `kind`")
     if t.get("status") not in STATUSES:
         raise RegistryError(f"{where}: status {t.get('status')!r} поза {'|'.join(STATUSES)}")
     rank = t.get("rank")
     if not isinstance(rank, int) or isinstance(rank, bool):
         raise RegistryError(f"{where}: rank {rank!r} — не ціле число")
-    if not _str_list(t.get("tasks")) or not t["tasks"]:
-        raise RegistryError(f"{where}: `tasks` — непорожній список рядків")
+    for f in ("tasks", "contours"):
+        if not _str_list(t.get(f)) or not t[f]:
+            raise RegistryError(f"{where}: `{f}` — непорожній список рядків (порожній = запис недосяжний)")
     for f in ("roles", "loops"):
         if not _str_list(t.get(f, [])):
             raise RegistryError(f"{where}: `{f}` — список рядків ([] = будь-яка)")
-    if not _str_list(t.get("contours")) or not t["contours"]:
-        raise RegistryError(f"{where}: `contours` — непорожній список рядків")
     av = t.get("availability")
     probe = av.get("probe") if isinstance(av, dict) else None
     if not isinstance(probe, dict) or probe.get("kind") not in PROBE_KINDS:
         raise RegistryError(f"{where}: availability.probe.kind поза {'|'.join(PROBE_KINDS)}")
     kind = probe["kind"]
     if kind == "shell":
-        if not isinstance(probe.get("cmd"), str) or not probe["cmd"].strip():
-            raise RegistryError(f"{where}: проба shell без `cmd`")
+        if not _nonblank(probe.get("cmd")):
+            raise RegistryError(f"{where}: проба shell без `cmd` (порожня команда дала б код 0 = «доступний»)")
         if probe.get("cwd", "strw-ops") not in CWD_REPOS:
             raise RegistryError(f"{where}: cwd {probe.get('cwd')!r} поза {'|'.join(CWD_REPOS)}")
     elif kind == "lanes-tool":
-        if not isinstance(probe.get("ref"), str) or not probe["ref"]:
+        if not _nonblank(probe.get("ref")):
             raise RegistryError(f"{where}: проба lanes-tool без `ref`")
     else:
         m = av.get("measured")
@@ -73,6 +79,15 @@ def _check_tool(t, i):
             raise RegistryError(f"{where}: проба session без measured.at/result ({'|'.join(SESSION_RESULTS)}) — "
                                 "з shell її не поміряти, без виміру — не вгадувати")
         parse_at(m["at"], where)
+
+
+def _vocab_list(vocab, key, allow_map=False):
+    v = vocab.get(key)
+    if allow_map and isinstance(v, dict) and all(isinstance(k, str) for k in v):
+        return list(v.keys())
+    if _str_list(v):
+        return list(v)
+    raise RegistryError(f"tools.yaml: vocab.{key} — {'мапа або ' if allow_map else ''}список рядків, а не {type(v).__name__}")
 
 
 def load(engine, load_nodup):
@@ -86,8 +101,13 @@ def load(engine, load_nodup):
         raise RegistryError(f"tools.yaml не парситься: {e}")
     if not isinstance(doc, dict) or doc.get("schema_version") != 1:
         raise RegistryError("tools.yaml: schema_version не 1 — цей скрипт знає лише схему v1")
-    if not isinstance(doc.get("vocab"), dict):
+    vocab = doc.get("vocab")
+    if not isinstance(vocab, dict):
         raise RegistryError("tools.yaml: немає `vocab:`")
+    doc["_vocab"] = {"task_types": _vocab_list(vocab, "task_types", allow_map=True),
+                     "session_roles": _vocab_list(vocab, "session_roles"),
+                     "contours": _vocab_list(vocab, "contours"),
+                     "kinds": _vocab_list(vocab, "kinds")}
     tools = doc.get("tools")
     if not isinstance(tools, list):
         raise RegistryError("tools.yaml: `tools:` має бути списком")
@@ -122,6 +142,11 @@ def parse_at(v, where="measured.at"):
     raise RegistryError(f"{where}: measured.at {v!r} — не дата (2026-10-28T09:00Z)")
 
 
+def one_line(cmd):
+    """Команда в рядку виводу — без переносів: stdout tool-probe — рівно один рядок, а `cmd: |` у YAML багаторядковий."""
+    return " ⏎ ".join(l.strip() for l in cmd.strip().splitlines() if l.strip())
+
+
 class Prober:
     """Пробує інструменти тут і зараз, з таймаутом."""
 
@@ -146,11 +171,12 @@ class Prober:
 
     def _run(self, cmd, cwd):
         """Код 0 → available; інакше unavailable; не вклався в таймаут → timeout (уся група процесів убита)."""
+        shown = one_line(cmd)
         try:
             p = subprocess.Popen(["bash", "-c", cmd], cwd=cwd, stdin=subprocess.DEVNULL,
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         except OSError as e:
-            return "unavailable", f"проба `{cmd}` не запустилась: {e}"
+            return "unavailable", f"проба `{shown}` не запустилась: {e}"
         try:
             rc = p.wait(timeout=self.timeout)
         except subprocess.TimeoutExpired:
@@ -159,8 +185,8 @@ class Prober:
             except OSError:
                 pass
             p.wait()
-            return "timeout", f"проба `{cmd}` не завершилась за {self.timeout:g} с"
-        return ("available" if rc == 0 else "unavailable"), f"проба `{cmd}` → код {rc}"
+            return "timeout", f"проба `{shown}` не завершилась за {self.timeout:g} с"
+        return ("available" if rc == 0 else "unavailable"), f"проба `{shown}` → код {rc}"
 
     def probe(self, t):
         """→ (стан, деталь); стан ∈ available | unavailable | needs-auth | stale | timeout."""
@@ -173,62 +199,72 @@ class Prober:
             if not d:
                 raise RegistryError(f"немає словника репо для cwd {repo} (repo-dir.sh)")
             if not os.path.isdir(d):
-                res = ("unavailable", f"shell: немає теки {repo} ({d})")
-            else:
-                st, det = self._run(pr["cmd"], d)
-                res = (st, f"shell (cwd {repo}): {det}")
-        elif kind == "lanes-tool":
+                return "unavailable", f"shell: немає теки {repo} ({d})"
+            st, det = self._run(pr["cmd"], d)
+            return st, f"shell (cwd {repo}): {det}"
+        if kind == "lanes-tool":
             lt = self._lanes_tools().get(pr["ref"])
-            if not isinstance(lt, dict) or not str(lt.get("probe", "")).strip():
-                raise RegistryError(f"інструмент {t['id']}: lanes-tool {pr['ref']!r} — немає в lanes.yaml tools")
+            if not isinstance(lt, dict) or not _nonblank(lt.get("probe")):
+                raise RegistryError(f"інструмент {t['id']}: lanes-tool {pr['ref']!r} — немає в lanes.yaml tools або проба порожня")
             st, det = self._run(lt["probe"], None)
-            res = (st, f"lanes-tool {pr['ref']}: {det}")
-        else:
-            m = av["measured"]
-            at = parse_at(m["at"], f"інструмент {t['id']}")
-            by = f" · by {m['by']}" if m.get("by") else ""
-            stamp = f"сесійний вимір {m['at']}: {m['result']}{by}"
-            if at > self.now + datetime.timedelta(hours=1):
-                res = ("stale", f"{stamp} — дата з майбутнього, вимір не чинний")
-            elif self.now - at > self.max_age:
-                res = ("stale", f"{stamp} — старший за {self.max_age.days} дн., переміряти в сесії")
-            else:
-                res = (m["result"], stamp)
-        return res
+            return st, f"lanes-tool {pr['ref']}: {det}"
+        m = av["measured"]
+        at = parse_at(m["at"], f"інструмент {t['id']}")
+        by = f" · by {m['by']}" if m.get("by") else ""
+        stamp = f"сесійний вимір {m['at']}: {m['result']}{by}"
+        if at > self.now + FUTURE_GRACE:
+            return "stale", f"{stamp} — дата з майбутнього, вимір не чинний"
+        if self.now - at > self.max_age:
+            return "stale", f"{stamp} — старший за {self.max_age.days} дн., переміряти в сесії"
+        return m["result"], stamp
+
+
+def frontmatter_values(path, key):
+    """Значення `key:` лише з ЗАКРИТОГО frontmatter (`---` … `---` на початку файла); тіло — не словник."""
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().split("\n")
+    if not lines or lines[0].strip() != "---":
+        return []
+    vals = []
+    for ln in lines[1:]:
+        if ln.strip() == "---":
+            return vals
+        if ln.startswith(key + ":"):
+            vals.append(ln[len(key) + 1:].strip().strip("\"'"))
+    return []   # frontmatter не закрито — увесь файл не читається як словник
 
 
 def agent_names(agents_dir):
     """Ролі-агенти — `name:` з frontmatter agents/**/*.md плагіна."""
-    names = set()
     if not agents_dir or not os.path.isdir(agents_dir):
-        return names
-    for p in glob.glob(os.path.join(agents_dir, "**", "*.md"), recursive=True):
-        with open(p, encoding="utf-8") as fh:
-            lines = fh.read().split("\n")
-        if not lines or lines[0].strip() != "---":
-            continue
-        for ln in lines[1:]:
-            if ln.strip() == "---":
-                break
-            if ln.startswith("name:"):
-                names.add(ln[5:].strip().strip("\"'"))
-    return names
+        return set()
+    return {v for p in glob.glob(os.path.join(agents_dir, "**", "*.md"), recursive=True)
+            for v in frontmatter_values(p, "name")}
 
 
-def select(doc, task, role, contour, loop, agents, prober):
+def loop_ids(loops_dir):
+    """Петлі — `id:` з frontmatter loops/*.md плагіна (реєстр словника петель не має)."""
+    if not loops_dir or not os.path.isdir(loops_dir):
+        return set()
+    return {v for p in glob.glob(os.path.join(loops_dir, "*.md")) for v in frontmatter_values(p, "id")}
+
+
+def select(doc, task, role, contour, loop, kind, agents, loops, prober):
     """→ (код, рядки stdout, рядки stderr). 0 обрано · 3 немає доступного · 4 немає в реєстрі."""
-    vocab = doc["vocab"]
-    tt = vocab.get("task_types")
-    task_types = list(tt.keys()) if isinstance(tt, dict) else list(tt or [])
-    roles = list(vocab.get("session_roles") or []) + sorted(agents)
-    contours = list(vocab.get("contours") or [])
-    if task not in task_types:
-        raise RegistryError(f"невідомий тип задачі {task!r}; словник: {', '.join(task_types) or '(порожній)'}")
+    v = doc["_vocab"]
+    roles = v["session_roles"] + sorted(agents)
+    if task not in v["task_types"]:
+        raise RegistryError(f"невідомий тип задачі {task!r}; словник: {', '.join(v['task_types']) or '(порожній)'}")
     if role not in roles:
         hint = "" if agents else " (agents/ плагіна не знайдено — ролі-агенти не відомі)"
         raise RegistryError(f"невідома роль {role!r}; словник: {', '.join(roles) or '(порожній)'}{hint}")
-    if contour not in contours:
-        raise RegistryError(f"невідомий контур {contour!r}; словник: {', '.join(contours) or '(порожній)'}")
+    if contour not in v["contours"]:
+        raise RegistryError(f"невідомий контур {contour!r}; словник: {', '.join(v['contours']) or '(порожній)'}")
+    if loop is not None and loop not in loops:
+        hint = "" if loops else " (loops/ плагіна не знайдено)"
+        raise RegistryError(f"невідома петля {loop!r}; словник: {', '.join(sorted(loops)) or '(порожній)'}{hint}")
+    if kind is not None and kind not in v["kinds"]:
+        raise RegistryError(f"невідомий вид {kind!r}; словник: {', '.join(v['kinds']) or '(порожній)'}")
 
     diag, cands = [], []
     for t in doc["tools"]:
@@ -236,6 +272,9 @@ def select(doc, task, role, contour, loop, agents, prober):
             continue
         if t["status"] == "forbidden":
             diag.append(f"відкинуто {t['id']}: forbidden — {t.get('why', 'без why')}")
+            continue
+        if kind is not None and t["kind"] != kind:
+            diag.append(f"відкинуто {t['id']}: вид {t['kind']} ≠ {kind}")
             continue
         if t.get("roles") and role not in t["roles"]:
             diag.append(f"відкинуто {t['id']}: роль {role} поза [{', '.join(t['roles'])}]")
@@ -247,7 +286,8 @@ def select(doc, task, role, contour, loop, agents, prober):
             diag.append(f"відкинуто {t['id']}: петля {loop or '—'} поза [{', '.join(t['loops'])}]")
             continue
         cands.append(t)
-    scope = f"задача {task} · роль {role} · контур {contour}" + (f" · петля {loop}" if loop else "")
+    scope = (f"задача {task} · роль {role} · контур {contour}" + (f" · петля {loop}" if loop else "")
+             + (f" · вид {kind}" if kind else ""))
     if not cands:
         return 4, [f"немає інструмента в реєстрі: {scope}"], diag
 
