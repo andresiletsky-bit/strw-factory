@@ -31,7 +31,7 @@ printf 'schema_version: 1\ntools: {}\n' > "${E}/lanes.yaml"
 A="${TMP}/agents"; mkdir -p "${A}/validators"
 printf -- '---\nname: strw-code-reviewer\nmodel: sonnet\n---\nтіло\n' > "${A}/validators/code-reviewer.md"
 printf -- '---\nname: "strw-engineer"\n---\n' > "${A}/engineer.md"
-printf 'name: strw-not-frontmatter\n' > "${A}/notes.md"
+printf 'нотатка\nname: strw-not-frontmatter\n' > "${A}/notes.md"
 tool() { # tool <id> <status> <rank> <tasks> <roles> <loops> <contours> <probe-рядки> [measured]
     printf '  - id: %s\n    kind: cli\n    name: "%s"\n    tasks: [%s]\n    roles: [%s]\n    loops: [%s]\n    contours: [%s]\n    status: %s\n    rank: %s\n' "$1" "$1" "$4" "$5" "$6" "$7" "$2" "$3"
     [ "$2" = active ] || printf '    why: "фікстура: %s"\n' "$2"
@@ -107,7 +107,8 @@ for c in "code-reveiw strw-code-reviewer M:невідомий тип задач�
 done
 AG="${TMP}/no-agents" run "${E}" code-review-6a strw-code-reviewer M --loop L3-build; rc=$?
 if [ "${rc}" -eq 2 ] && grep -qF 'agents/ плагіна не знайдено' "${TMP}/err"; then ok "без agents/ роль-агент невідома → 2 з підказкою"; else bad "без agents/" "$(show ${rc})"; fi
-if grep -qF "strw-not-frontmatter" "${TMP}/err"; then bad "name: поза frontmatter не має ставати роллю" "$(cat "${TMP}/err")"; else ok "name: поза frontmatter — не роль"; fi
+run "${E}" code-review-6a strw-nobody M; rc=$?
+if [ "${rc}" -eq 2 ] && grep -qF "strw-code-reviewer, strw-engineer" "${TMP}/err" && ! grep -qF "strw-not-frontmatter" "${TMP}/err"; then ok "словник ролей: агенти з frontmatter, name: поза ним — не роль"; else bad "name: поза frontmatter не має ставати роллю" "$(show ${rc})"; fi
 out="$(STRW_ROOT="${R}" STRW_TOOLS_NOW=2026-10-28T12:00Z env -u STRW_AGENTS_DIR bash "${TOOL}" "${E}" code-review-6a strw-code-reviewer M --loop L3-build 2>&1)"; rc=$?
 if [ "${rc}" -eq 0 ]; then ok "типово agents/ — цього плагіна (strw-code-reviewer відомий)"; else bad "типова тека agents/" "rc=${rc} ${out}"; fi
 run "${E}" tie-task child M; rc=$?
