@@ -8,8 +8,8 @@
 Тримає: таблиця між `<!-- map:begin -->` і `<!-- map:end -->` має рівно один рядок на кожен `vocab.task_types`
 реєстру (ні зайвих, ні відсутніх, ні дублів); «Куди» — один із виміряних типів, `файл` або `—`; «Статус» —
 `впроваджено|кандидат|чекає CEO`, а для `—` лише `—`; «Вихід» і «Чому» непорожні; розділів типів (`### <тип>` під
-`## Типи`) рівно стільки, скільки виміряно, кожен раз; кожен запис реєстру `kind: artifact-type` названий типом
-із розділів; живий Dashboard — посилання claude.ai/artifact і рядок `Dashboard · впроваджено` у карті.
+`## Типи`) рівно стільки, скільки виміряно, кожен раз; id кожного запису реєстру `kind: artifact-type` —
+`artifact-<тип>` одного з розділів (id, не `name`: назва — для людини, «Artifact · Docs» у #283); живий Dashboard — посилання claude.ai/artifact і рядок `Dashboard · впроваджено` у карті.
 """
 import argparse
 import os
@@ -33,6 +33,7 @@ import yaml  # noqa: E402
 
 # Виміряно 28.10: Artifact action:list scope:types. Новий вимір — змінити тут і розділи карти разом.
 MEASURED_TYPES = ("Dashboard", "Design", "Design System", "Docs", "Slides")
+TYPE_IDS = tuple("artifact-" + x.lower().replace(" ", "-") for x in MEASURED_TYPES)
 WHERE_EXTRA = ("файл", "—")
 STATUSES = ("впроваджено", "кандидат", "чекає CEO")
 ARTIFACT_URL = re.compile(r"https://claude\.ai/artifact/[A-Za-z0-9]{10,}")
@@ -99,8 +100,8 @@ def check(text, reg):
         found.append("task_type карти поза vocab.task_types: %s" % x)
 
     for t in (reg.get("tools") or []):
-        if isinstance(t, dict) and t.get("kind") == "artifact-type" and t.get("name") not in MEASURED_TYPES:
-            found.append("запис реєстру %s (artifact-type) зветься «%s» — такого типу в карті немає" % (t.get("id"), t.get("name")))
+        if isinstance(t, dict) and t.get("kind") == "artifact-type" and t.get("id") not in TYPE_IDS:
+            found.append("запис реєстру %s (artifact-type) — не %s: такого типу в карті немає" % (t.get("id"), "|".join(TYPE_IDS)))
 
     live = text.split("## Живий Dashboard реєстру", 1)[1] if "## Живий Dashboard реєстру" in text else ""
     if not ARTIFACT_URL.search(live):

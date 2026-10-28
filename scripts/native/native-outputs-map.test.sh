@@ -62,7 +62,10 @@ sub "${M}/nourl.md" "**Приватний Dashboard «Реєстр інстру�
 sub "${M}/nolive.md" "| Dashboard | впроваджено |" "| Dashboard | кандидат |";       red "немає Dashboard · впроваджено" "Dashboard · впроваджено" "${M}/nolive.md"
 sub "${M}/nomark.md" "<!-- map:end -->" "";                                           red "немає маркера кінця" "маркери" "${M}/nomark.md"
 sub "${M}/cols.md" "| \`legal\` | юридичні документи | — | — | — · не підключено | джерела немає |" "| \`legal\` | юридичні документи | — | — | джерела немає |"; red "рядок не з 6 колонок" "не з 6 колонок" "${M}/cols.md"
-sub "${M}/reg-type.yaml" "    name: \"Docs\"" "    name: \"Doc\"" "${FIX}";               red "artifact-type реєстру не з карти" "зветься «Doc»" "${MAP}" "${M}/reg-type.yaml"
+sub "${M}/reg-type.yaml" "  - id: artifact-docs" "  - id: artifact-doc" "${FIX}";            red "artifact-type реєстру не з карти" "artifact-doc (artifact-type)" "${MAP}" "${M}/reg-type.yaml"
+sub "${M}/reg-name.yaml" "    name: \"Docs\"" "    name: \"Artifact · Docs\"" "${FIX}"
+out="$(python3 "${CHK}" --map "${MAP}" --registry "${M}/reg-name.yaml" 2>&1)"; rc=$?
+[ "${rc}" -eq 0 ] && ok "назва artifact-type — для людини, не звіряється (контроль, форма #283)" || bad "назва artifact-type не мала б червоніти" "rc=${rc} ${out}"
 sub "${M}/reg-vocab.yaml" "    automation: \"автоматизації\"" "    automation: \"автоматизації\"
     voice: \"голос\"" "${FIX}";                                                          red "новий task_type у реєстрі без рядка карти" "немає task_type реєстру: voice" "${MAP}" "${M}/reg-vocab.yaml"
 sub "${M}/who.md" "| — · не підключено | джерела немає |" "|  | джерела немає |";   red "порожнє «Хто створює»" "порожнє «Хто створює»" "${M}/who.md"
