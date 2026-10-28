@@ -1,0 +1,194 @@
+<meta name="dash-one-writer">
+<!-- Сторінка приватного Dashboard «Реєстр інструментів STRW» (factory.native-outputs).
+     Джерело в git: strw-factory/scripts/native/tools-dashboard/index.html → документ files/index.html.
+     Дані — три датасети з scripts/native/tools-dashboard-data.py: summary, tasks, tools.
+     Процедура оновлення — references/native-outputs.md § «Живий Dashboard реєстру». -->
+<style>
+  .tr-page { display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); }
+  .tr-head h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+  .tr-head p { margin: var(--cds-gap-xs) 0 0; color: var(--color-fg-muted); font-size: var(--cds-font-size-body); max-width: 70ch; }
+  .tr-page b { font-weight: var(--cds-font-weight-medium); color: var(--color-fg); }
+  .tr-tiles { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); }
+  .tr-tile { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-md); display: grid; gap: var(--cds-gap-xs); }
+  .tr-tile span { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .tr-tile strong { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; }
+  .tr-tile.tr-warn strong { color: var(--color-warn); }
+  .tr-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-sm); min-width: 0; }
+  .tr-card h2 { margin: 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); }
+  .tr-card > p { margin: 0; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); max-width: 80ch; }
+  .tr-tools { display: flex; gap: var(--cds-gap-sm); flex-wrap: wrap; align-items: center; }
+  .tr-tools input, .tr-tools select { font: inherit; font-size: var(--cds-font-size-caption); padding: var(--cds-pad-xs) var(--cds-pad-sm); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); color: var(--color-fg); }
+  .tr-scroll { overflow: auto; max-height: 34rem; }
+  .tr-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+  .tr-table th { position: sticky; top: 0; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+  .tr-table td { padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+  .tr-table td.tr-num { text-align: right; }
+  .tr-table code { font-size: var(--cds-font-size-caption); }
+  .tr-chip { display: inline-block; padding: 0 var(--cds-pad-xs); border-radius: var(--cds-radius); border: 1px solid var(--color-border-line); white-space: nowrap; }
+  .tr-chip.tr-active { color: var(--color-ok); }
+  .tr-chip.tr-candidate { color: var(--color-warn); }
+  .tr-chip.tr-forbidden, .tr-chip.tr-needs-auth, .tr-chip.tr-unavailable { color: var(--color-bad); }
+  .tr-stale { color: var(--color-warn); }
+  .tr-foot { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .tr-foot code { word-break: break-all; }
+  [data-dash-source-state=empty] { color: transparent; }
+  [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+  @media (max-width: 40rem) { .tr-hide-narrow { display: none; } }
+</style>
+
+<div class="tr-page">
+  <header class="tr-head" id="top">
+    <h1>Реєстр інструментів STRW</h1>
+    <p>У реєстрі <b data-draw="s-tools" data-source="summary" data-field="tools" data-row="0">—</b> інструментів,
+      активних <b data-draw="s-active" data-source="summary" data-field="active" data-row="0">—</b>.
+      Застарілих вимірів (понад 14 днів): <b data-draw="s-stale" data-source="summary" data-field="stale" data-row="0">—</b>;
+      потребують авторизації: <b data-draw="s-auth" data-source="summary" data-field="needs_auth" data-row="0">—</b>.</p>
+  </header>
+
+  <section class="tr-tiles" id="summary" aria-label="Підсумки">
+    <div class="tr-tile"><span>Активні</span><strong data-draw="t-active" data-source="summary" data-field="active" data-row="0">—</strong></div>
+    <div class="tr-tile"><span>Кандидати</span><strong data-draw="t-candidate" data-source="summary" data-field="candidate" data-row="0">—</strong></div>
+    <div class="tr-tile"><span>Заборонені</span><strong data-draw="t-forbidden" data-source="summary" data-field="forbidden" data-row="0">—</strong></div>
+    <div class="tr-tile"><span>Не виміряно</span><strong data-draw="t-unmeasured" data-source="summary" data-field="unmeasured" data-row="0">—</strong></div>
+    <div class="tr-tile tr-warn"><span>Вимір застарів</span><strong data-draw="t-stale" data-source="summary" data-field="stale" data-row="0">—</strong></div>
+    <div class="tr-tile"><span>Задачі без активного</span><strong data-draw="t-noactive" data-source="summary" data-field="task_types_without_active" data-row="0">—</strong></div>
+  </section>
+
+  <section class="tr-card" id="tasks">
+    <h2>Типи задач</h2>
+    <p>Скільки інструментів реєстру закрито за кожним типом задачі. «Активні за rank» — порядок реєстру (менший rank перший, рівні — за id), а не відповідь підбору: tool-select ще відкидає недоступне, чужий контур і чужу роль.</p>
+    <div class="tr-tools">
+      <label><input type="checkbox" id="tasks-gaps"> лише без активного інструмента</label>
+    </div>
+    <div class="tr-scroll">
+      <table class="tr-table" data-source="tasks" data-row-key="task">
+        <thead><tr>
+          <th data-field="task">Тип задачі</th>
+          <th data-field="description" class="tr-hide-narrow">Що це</th>
+          <th data-field="active">Активні</th>
+          <th data-field="candidate">Кандидати</th>
+          <th data-field="forbidden">Заборонені</th>
+          <th data-field="active_by_rank">Активні за rank</th>
+        </tr></thead>
+        <tbody data-draw="tasks-body" data-source="tasks"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="tr-card" id="tools">
+    <h2>Інструменти</h2>
+    <p>Рядок на запис реєстру. Вимір старший за 14 днів підсвічено. Команди проб і службові поля в дашборд не потрапляють.</p>
+    <div class="tr-tools">
+      <input type="search" id="tools-q" placeholder="Пошук за id, назвою, задачею" aria-label="Пошук інструментів">
+      <select id="tools-status" aria-label="Статус">
+        <option value="">усі статуси</option>
+        <option value="active">active</option>
+        <option value="candidate">candidate</option>
+        <option value="forbidden">forbidden</option>
+      </select>
+    </div>
+    <div class="tr-scroll">
+      <table class="tr-table" data-source="tools" data-row-key="id">
+        <thead><tr>
+          <th data-field="id">id</th>
+          <th data-field="name" class="tr-hide-narrow">Назва</th>
+          <th data-field="kind">Вид</th>
+          <th data-field="status">Статус</th>
+          <th data-field="rank">rank</th>
+          <th data-field="tasks">Задачі</th>
+          <th data-field="measured_result">Вимір</th>
+          <th data-field="measured_age_days">Днів тому</th>
+          <th data-field="contours" class="tr-hide-narrow">Контури</th>
+          <th data-field="user_data" class="tr-hide-narrow">Дані користувачів</th>
+          <th data-field="enabled_by" class="tr-hide-narrow">Вмикає</th>
+          <th data-field="why" class="tr-hide-narrow">Чому</th>
+        </tr></thead>
+        <tbody data-draw="tools-body" data-source="tools"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="tr-foot" id="source">
+    Джерело: <code data-draw="f-source" data-source="summary" data-field="source" data-row="0">—</code> ·
+    згенеровано <span data-draw="f-at" data-source="summary" data-field="generated_at" data-row="0">—</span> ·
+    sha256 <code data-draw="f-sha" data-source="summary" data-field="registry_sha256" data-row="0">—</code>.
+    Приватний; оновлює сесія фабрики генератором <code>scripts/native/tools-dashboard-data.py</code>.
+  </footer>
+</div>
+
+<script>
+  // Один рядок summary → кожне число — окрема drawing; рядок summary завжди один (генератор).
+  const one = (field, fmt) => (el) => {
+    const s = dash.data('summary');
+    const row = s.status === 'ok' && s.data.length ? s.data[0] : null;
+    el.textContent = row && row[field] !== undefined && row[field] !== null ? (fmt ? fmt(row[field]) : String(row[field])) : '—';
+  };
+  [['s-tools', 'tools'], ['s-active', 'active'], ['s-stale', 'stale'], ['s-auth', 'needs_auth'],
+   ['t-active', 'active'], ['t-candidate', 'candidate'], ['t-forbidden', 'forbidden'],
+   ['t-unmeasured', 'unmeasured'], ['t-stale', 'stale'], ['t-noactive', 'task_types_without_active'],
+   ['f-source', 'source'], ['f-at', 'generated_at'], ['f-sha', 'registry_sha256']]
+    .forEach(([name, field]) => dash.draw(name, one(field)));
+
+  const cell = (tr, text, cls) => {
+    const td = document.createElement('td');
+    if (cls) td.className = cls;
+    td.textContent = text === null || text === undefined ? '' : String(text);
+    tr.appendChild(td);
+    return td;
+  };
+  const chip = (td, value) => {
+    td.textContent = '';
+    const s = document.createElement('span');
+    s.className = 'tr-chip tr-' + value;
+    s.textContent = value;
+    td.appendChild(s);
+  };
+
+  let gapsOnly = false;
+  document.querySelectorAll('#tasks-gaps').forEach((box) => box.addEventListener('change', () => { gapsOnly = box.checked; dash.draw('tasks-body'); }));
+  dash.draw('tasks-body', (tbody) => {
+    const t = dash.data('tasks');
+    tbody.replaceChildren();
+    if (t.status !== 'ok') return;
+    t.data.filter((r) => !gapsOnly || Number(r.active) === 0).forEach((r) => {
+      const tr = document.createElement('tr');
+      cell(tr, r.task);
+      cell(tr, r.description, 'tr-hide-narrow');
+      cell(tr, r.active, 'tr-num');
+      cell(tr, r.candidate, 'tr-num');
+      cell(tr, r.forbidden, 'tr-num');
+      cell(tr, r.active_by_rank);
+      tbody.appendChild(tr);
+    });
+  });
+
+  let q = '', statusPick = '';
+  document.querySelectorAll('#tools-q').forEach((inp) => inp.addEventListener('input', () => { q = inp.value.trim().toLowerCase(); dash.draw('tools-body'); }));
+  document.querySelectorAll('#tools-status').forEach((sel) => sel.addEventListener('change', () => { statusPick = sel.value; dash.draw('tools-body'); }));
+  dash.draw('tools-body', (tbody) => {
+    const t = dash.data('tools');
+    tbody.replaceChildren();
+    if (t.status !== 'ok') return;
+    t.data
+      .filter((r) => !statusPick || r.status === statusPick)
+      .filter((r) => !q || [r.id, r.name, r.tasks].join(' ').toLowerCase().includes(q))
+      .forEach((r) => {
+        const tr = document.createElement('tr');
+        cell(tr, r.id);
+        cell(tr, r.name, 'tr-hide-narrow');
+        cell(tr, r.kind);
+        chip(cell(tr, ''), r.status);
+        cell(tr, r.rank, 'tr-num');
+        cell(tr, r.tasks);
+        const m = cell(tr, '');
+        if (r.measured_result === 'unmeasured') m.textContent = 'не виміряно'; else chip(m, r.measured_result);
+        const stale = r.stale === true || r.stale === 'true';
+        cell(tr, r.measured_age_days, 'tr-num' + (stale ? ' tr-stale' : ''));
+        cell(tr, r.contours, 'tr-hide-narrow');
+        cell(tr, r.user_data, 'tr-hide-narrow');
+        cell(tr, r.enabled_by, 'tr-hide-narrow');
+        cell(tr, r.why, 'tr-hide-narrow');
+        tbody.appendChild(tr);
+      });
+  });
+</script>

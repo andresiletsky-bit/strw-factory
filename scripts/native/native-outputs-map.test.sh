@@ -66,7 +66,7 @@ sub "${M}/reg-type.yaml" "    name: \"Docs\"" "    name: \"Doc\"" "${FIX}";     
 sub "${M}/reg-vocab.yaml" "    automation: \"автоматизації\"" "    automation: \"автоматизації\"
     voice: \"голос\"" "${FIX}";                                                          red "новий task_type у реєстрі без рядка карти" "немає task_type реєстру: voice" "${MAP}" "${M}/reg-vocab.yaml"
 out="$(python3 "${CHK}" --map "${TMP}/nope.md" --registry "${FIX}" 2>&1)"; rc=$?
-[ "${rc}" -eq 2 ] && ok "карти немає → 2 (не поміряти)" || bad "карти немає мало дати 2" "rc=${rc} ${out}"
+[ "${rc}" -eq 2 ] && printf '%s' "${out}" | /usr/bin/grep -q "не читається" && ok "карти немає → 2 «не читається» (не поміряти)" || bad "карти немає мало дати 2" "rc=${rc} ${out}"
 
 LIVE="${STRW_ROOT:-${HOME}/Developer/STRW}/strw-state/engine/tools.yaml"
 if [ -f "${LIVE}" ]; then
