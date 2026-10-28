@@ -36,6 +36,8 @@ printf -- '---\nname: strw-code-reviewer\nmodel: sonnet\n---\nтіло\n```yaml\
 printf -- '---\nname: "strw-engineer"\n---\n' > "${A}/engineer.md"
 printf 'нотатка\nname: strw-not-frontmatter\n' > "${A}/notes.md"
 printf -- '---\nname: strw-unclosed\nтіло без закриття\n' > "${A}/unclosed.md"
+printf -- 'вступ\nname: strw-noopen\n---\nтіло після лінії\n' > "${A}/noopen.md"
+printf -- '---\nnames: strw-prefix\nname: strw-engineer\n---\n' > "${A}/prefix.md"
 L="${TMP}/loops"; mkdir -p "${L}"
 printf -- '---\nid: L3-build\ntrigger: x\n---\n' > "${L}/L3-build.md"
 tool() { # tool <id> <kind> <status> <rank> <tasks> <roles> <loops> <contours> <probe-рядки> [measured]
@@ -122,21 +124,27 @@ touch "${R}/on-codex" "${R}/on-claude"
 # --- 5. порожньо, невідомо, рівні -----------------------------------------------------------
 run "${E}" deck child M; rc=$?
 if [ "${rc}" -eq 4 ] && [ "$(cat "${TMP}/out")" = "немає інструмента в реєстрі: задача deck · роль child · контур M" ]; then ok "задача без записів → 4"; else bad "задача без записів" "$(show ${rc})"; fi
-for c in "code-reveiw strw-code-reviewer M:невідомий тип задачі 'code-reveiw'" "code-review-6a strw-nobody M:невідома роль 'strw-nobody'" "code-review-6a hub X:невідомий контур 'X'" "code-review-6a strw-ghost M:невідома роль 'strw-ghost'" "code-review-6a strw-unclosed M:невідома роль 'strw-unclosed'"; do
+for c in "code-reveiw strw-code-reviewer M:невідомий тип задачі 'code-reveiw'" "code-review-6a strw-nobody M:невідома роль 'strw-nobody'" "code-review-6a hub X:невідомий контур 'X'" "code-review-6a strw-ghost M:невідома роль 'strw-ghost'" "code-review-6a strw-unclosed M:невідома роль 'strw-unclosed'" "code-review-6a strw-noopen M:невідома роль 'strw-noopen'"; do
     set -- ${c%%:*}; run "${E}" "$@"; rc=$?
     if [ "${rc}" -eq 2 ] && [ ! -s "${TMP}/out" ] && grep -qF "${c#*:}" "${TMP}/err"; then ok "${c#*:} → 2, stdout порожній"; else bad "${c#*:}" "$(show ${rc})"; fi
 done
 AG="${TMP}/no-agents" run "${E}" code-review-6a strw-code-reviewer M --loop L3-build; rc=$?
 if [ "${rc}" -eq 2 ] && grep -qF 'agents/ плагіна не знайдено' "${TMP}/err"; then ok "без agents/ роль-агент невідома → 2 з підказкою"; else bad "без agents/" "$(show ${rc})"; fi
 run "${E}" code-review-6a strw-nobody M; rc=$?
-if [ "${rc}" -eq 2 ] && grep -qF "словник: hub, master, child, strw-code-reviewer, strw-engineer" "${TMP}/err" && ! grep -qE "strw-not-frontmatter|strw-ghost|strw-unclosed" "${TMP}/err"; then ok "словник ролей: лише name: закритого frontmatter (не тіло, не файл без ---, не незакритий)"; else bad "словник ролей" "$(show ${rc})"; fi
+if [ "${rc}" -eq 2 ] && grep -qF "словник: hub, master, child, strw-code-reviewer, strw-engineer" "${TMP}/err" && ! grep -qE "strw-not-frontmatter|strw-ghost|strw-unclosed|strw-noopen|strw-prefix" "${TMP}/err"; then ok "словник ролей: лише name: закритого frontmatter (не тіло, не файл без відкриття ---, не незакритий, не names:)"; else bad "словник ролей" "$(show ${rc})"; fi
 out="$(STRW_ROOT="${R}" STRW_TOOLS_NOW=2026-10-28T12:00Z env -u STRW_AGENTS_DIR -u STRW_LOOPS_DIR bash "${TOOL}" "${E}" code-review-6a strw-code-reviewer M --loop L3-build 2>&1)"; rc=$?
 if [ "${rc}" -eq 0 ]; then ok "типово agents/ і loops/ — цього плагіна (strw-code-reviewer і L3-build відомі)"; else bad "типові теки agents/ і loops/" "rc=${rc} ${out}"; fi
 run "${E}" schedule child M; rc=$?
 if [ "${rc}" -eq 0 ] && [ "$(ids)" = "tie-a tie-b " ]; then ok "рівний rank → за id"; else bad "рівний rank" "$(show ${rc})"; fi
-for a in "${E} deck child" "${E} deck child M --lop L3" "${E} deck child M --loop" "${E} deck child M --loop L3-build --loop L3-build" "${E} deck child M --kind cli --kind cli" "${E} deck child M extra"; do
+for a in "${E} deck child" "${E} deck child M --lop L3" "${E} deck child M --loop" "${E} deck child M --loop L3-build --loop L3-build" "${E} deck child M --kind cli --kind cli" "${E} deck child M extra" "${E} deck child M --knd cli"; do
     run ${a}; rc=$?
     if [ "${rc}" -eq 2 ] && [ ! -s "${TMP}/out" ]; then ok "аргументи «${a#${E} }» → 2"; else bad "аргументи «${a#${E} }»" "$(show ${rc})"; fi
+done
+
+# порожнє значення опції (непідставлена змінна в паспорті) — не «без фільтра», а 2
+for o in --kind --loop; do
+    run "${E}" code-review-6a strw-code-reviewer M "${o}" ""; rc=$?
+    if [ "${rc}" -eq 2 ] && [ ! -s "${TMP}/out" ]; then ok "${o} \"\" → 2 (не тихе зняття фільтра)"; else bad "${o} порожнім значенням" "$(show ${rc})"; fi
 done
 
 # --- 6. проводка: виклик із паспорта ВИКОНУЄТЬСЯ ----------------------------------------------

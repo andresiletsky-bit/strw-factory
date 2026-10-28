@@ -71,11 +71,14 @@ tool() { # tool <id> <probe-yaml-рядки> [measured-рядок] [status] — 
         how: "mcp__x"' '{at: 2026-10-14T11:59Z, result: available}'
   tool sess-soon '        kind: session
         how: "mcp__x"' '{at: 2026-10-28T12:30Z, result: available}'
+  tool sess-2h '        kind: session
+        how: "mcp__x"' '{at: 2026-10-28T14:00Z, result: available}'
   tool sess-tomorrow '        kind: session
         how: "mcp__x"' '{at: 2026-10-29T12:00Z, result: available}'
   tool multi '        kind: shell
         cmd: |
           true
+
           bash --version >/dev/null'
   tool lanes-empty '        kind: lanes-tool
         ref: empty'
@@ -131,6 +134,7 @@ expect "session: наївний YAML datetime читається як UTC"      
 expect "межа давності: рівно 14 дн. — ще чинний"                 0 "sess-14d · available" sess-14d
 expect "межа давності: 14 дн. і хвилина — stale"                3 "sess-14d1m · stale" sess-14d1m
 expect "майбутнє в межах години (годинники) — чинний"           0 "sess-soon · available" sess-soon
+expect "майбутнє +2 год — уже stale (поблажка лише година)"      3 "sess-2h · stale" sess-2h
 expect "майбутнє +1 доба (одруківка дати) — stale"              3 "sess-tomorrow · stale · сесійний вимір 2026-10-29T12:00Z: available — дата з майбутнього" sess-tomorrow
 expect "багаторядковий cmd: stdout — один рядок, переноси як ⏎" 0 "multi · available · shell (cwd strw-ops): проба \`true ⏎ bash --version >/dev/null\` → код 0" multi
 expect2 "lanes-tool з порожньою пробою → 2 (bash -c '' дав би 0)" "lanes-tool 'empty' — немає в lanes.yaml tools або проба порожня" lanes-empty
@@ -163,6 +167,9 @@ broken "${TMP}/b16" '/^  kinds:/d';                                      expect2
 broken "${TMP}/b17" 's/task_types: {code-build: "збірка"}/task_types: code-build/'; expect2 "vocab.task_types рядком → 2 (не словник із літер)" "vocab.task_types — мапа або список рядків" real-sh "${TMP}/b17"
 broken "${TMP}/b18" 's/ref: bashv/ref: ""/';                             expect2 "lanes-tool без ref → 2" "проба lanes-tool без \`ref\`" lanes-ok "${TMP}/b18"
 broken "${TMP}/b19" '1,/    kind: cli/s/    kind: cli/    kindx: cli/';  expect2 "запис без kind → 2" "немає \`kind\`" real-sh "${TMP}/b19"
+broken "${TMP}/b20" 's/contours: \[M, C, I\]/contours: M/';            expect2 "vocab.contours рядком → 2" "vocab.contours — список рядків" real-sh "${TMP}/b20"
+broken "${TMP}/b21" 's/session_roles: \[hub, master, child\]/session_roles: hub/'; expect2 "vocab.session_roles рядком → 2" "vocab.session_roles — список рядків" real-sh "${TMP}/b21"
+broken "${TMP}/b22" 's/^  - id: exit7$/  - id: ""/';                    expect2 "порожній id → 2" "немає \`id\`" real-sh "${TMP}/b22"
 # зламаний ІНШИЙ запис теж зупиняє: реєстр або читається весь, або «не поміряти»
 expect2 "зламаний сусідній запис → 2 (fail-closed)" "інструмент sess-auth" real-sh "${TMP}/b4"
 expect2 "зламана дата сусіда → 2 ще при читанні, не при пробі" "measured.at 'yesterday'" real-sh "${TMP}/b5"
