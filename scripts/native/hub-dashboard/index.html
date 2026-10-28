@@ -1,0 +1,334 @@
+<meta name="dash-one-writer">
+<!-- Сторінка приватного Dashboard «Дошка хаба STRW» (factory.hub-dashboard).
+     Джерело в git: strw-factory/scripts/native/hub-dashboard/index.html → документ files/index.html.
+     Дані — один датасет `hub` (hub.json з scripts/native/hub-dashboard-data.py); таблиці ділить dash.calc за полем table.
+     Процедура оновлення — references/native-outputs.md § «Живий Dashboard хаба». Проза дошки — у strw-ops, не тут. -->
+<style>
+  .hb-page { display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); }
+  .hb-head h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+  .hb-head p { margin: var(--cds-gap-xs) 0 0; color: var(--color-fg-muted); font-size: var(--cds-font-size-body); max-width: 70ch; }
+  .hb-page b { font-weight: var(--cds-font-weight-medium); color: var(--color-fg); font-variant-numeric: tabular-nums; }
+  .hb-tiles { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); }
+  .hb-tile { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-md); display: grid; gap: var(--cds-gap-xs); align-content: start; }
+  .hb-tile span { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .hb-tile strong { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; }
+  .hb-tile.hb-warn strong { color: var(--color-warn); }
+  .hb-tile.hb-bad strong { color: var(--color-bad); }
+  .hb-grid { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+  .hb-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-sm); min-width: 0; align-content: start; }
+  .hb-card h2 { margin: 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); }
+  .hb-card > p { margin: 0; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); max-width: 80ch; }
+  .hb-tools { display: flex; gap: var(--cds-gap-sm); flex-wrap: wrap; align-items: center; font-size: var(--cds-font-size-caption); }
+  .hb-tools input[type=search], .hb-tools select { font: inherit; padding: var(--cds-pad-xs) var(--cds-pad-sm); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); color: var(--color-fg); }
+  .hb-scroll { overflow: auto; max-height: 30rem; }
+  .hb-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+  .hb-table th { position: sticky; top: 0; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+  .hb-table td { padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+  .hb-table td.hb-num { text-align: right; }
+  .hb-table a { color: inherit; }
+  .hb-chip { display: inline-block; padding: 0 var(--cds-pad-xs); border-radius: var(--cds-radius); border: 1px solid var(--color-border-line); white-space: nowrap; }
+  .hb-chip.hb-ok { color: var(--color-ok); }
+  .hb-chip.hb-warn { color: var(--color-warn); }
+  .hb-chip.hb-bad { color: var(--color-bad); }
+  .hb-chip.hb-muted { color: var(--color-fg-muted); }
+  .hb-late { color: var(--color-bad); }
+  .hb-old { color: var(--color-warn); }
+  .hb-foot { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .hb-foot code { word-break: break-all; }
+  [data-dash-source-state=empty] { color: transparent; }
+  [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+  @media (max-width: 40rem) { .hb-hide-narrow { display: none; } }
+</style>
+
+<div class="hb-page">
+  <header class="hb-head" id="top">
+    <h1>Дошка хаба STRW</h1>
+    <p>Сесій <b data-draw="h-sessions" data-source="summary" data-field="sessions" data-row="0">—</b>, з них працюють
+      <b data-draw="h-running" data-source="summary" data-field="sessions_running" data-row="0">—</b>. Відкритих PR
+      <b data-draw="h-prs" data-source="summary" data-field="prs_open" data-row="0">—</b>, з червоними перевірками
+      <b data-draw="h-fail" data-source="summary" data-field="prs_checks_fail" data-row="0">—</b>. Карток тріажу
+      <b data-draw="h-triage" data-source="summary" data-field="triage_open" data-row="0">—</b>, строк минув у
+      <b data-draw="h-overdue" data-source="summary" data-field="triage_overdue" data-row="0">—</b>. Елементів реєстру чекають CEO:
+      <b data-draw="h-ceo" data-source="summary" data-field="items_on_ceo" data-row="0">—</b>.</p>
+  </header>
+
+  <section class="hb-tiles" id="summary" aria-label="Підсумки">
+    <div class="hb-tile"><span>Сесії працюють</span><strong data-draw="t-running" data-source="summary" data-field="sessions_running" data-row="0">—</strong></div>
+    <div class="hb-tile"><span>Відкриті PR</span><strong data-draw="t-prs" data-source="summary" data-field="prs_open" data-row="0">—</strong></div>
+    <div class="hb-tile hb-bad"><span>PR з червоними перевірками</span><strong data-draw="t-fail" data-source="summary" data-field="prs_checks_fail" data-row="0">—</strong></div>
+    <div class="hb-tile hb-warn"><span>Тріаж: строк минув</span><strong data-draw="t-overdue" data-source="summary" data-field="triage_overdue" data-row="0">—</strong></div>
+    <div class="hb-tile"><span>Елементи ready</span><strong data-draw="t-ready" data-source="summary" data-field="items_ready" data-row="0">—</strong></div>
+    <div class="hb-tile hb-warn"><span>Чекають CEO</span><strong data-draw="t-ceo" data-source="summary" data-field="items_on_ceo" data-row="0">—</strong></div>
+  </section>
+
+  <section class="hb-grid" id="prs">
+    <div class="hb-card">
+      <h2>PR за репо</h2>
+      <p>Відкриті PR п'яти репо фабрики з <code>gh pr list</code> у момент оновлення.</p>
+      <div class="hb-scroll">
+        <table class="hb-table" data-source="repos" data-row-key="repo">
+          <thead><tr>
+            <th data-field="repo">Репо</th>
+            <th data-field="open">Відкриті</th>
+            <th data-field="draft">Чернетки</th>
+            <th data-field="checks_fail">Червоні</th>
+            <th data-field="checks_pending">Йдуть</th>
+          </tr></thead>
+          <tbody data-draw="repos-body" data-source="repos"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="hb-card">
+      <h2>Відкриті PR</h2>
+      <p>Без оновлення <b data-draw="p-stale-limit" data-source="summary" data-field="pr_stale_limit_days" data-row="0">—</b> днів і довше — підсвічено.</p>
+      <div class="hb-tools"><label><input type="checkbox" id="prs-red"> лише з червоними перевірками</label></div>
+      <div class="hb-scroll">
+        <table class="hb-table" data-source="prs" data-row-key="key">
+          <thead><tr>
+            <th data-field="key">PR</th>
+            <th data-field="title" class="hb-hide-narrow">Назва</th>
+            <th data-field="checks">Перевірки</th>
+            <th data-field="review" class="hb-hide-narrow">Рев'ю</th>
+            <th data-field="updated_days">Днів без оновлення</th>
+          </tr></thead>
+          <tbody data-draw="prs-body" data-source="prs"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="hb-card" id="sessions">
+    <h2>Сесії</h2>
+    <p>Зі знімка <code>list_sessions</code>, який хаб передав генератору; самого хаба там немає, архівні пропущено. Тиша
+      <b data-draw="s-idle-limit" data-source="summary" data-field="idle_limit_hours" data-row="0">—</b> год і довше — «тихо».</p>
+    <div class="hb-tools"><label><input type="checkbox" id="sessions-quiet" checked> сховати тихі</label></div>
+    <div class="hb-scroll">
+      <table class="hb-table" data-source="sessions" data-row-key="id">
+        <thead><tr>
+          <th data-field="title">Сесія</th>
+          <th data-field="name" class="hb-hide-narrow">Ім'я</th>
+          <th data-field="running">Стан</th>
+          <th data-field="pr">PR</th>
+          <th data-field="idle_hours">Год тиші</th>
+          <th data-field="group" class="hb-hide-narrow">Група</th>
+        </tr></thead>
+        <tbody data-draw="sessions-body" data-source="sessions"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="hb-card" id="triage">
+    <h2>Тріаж</h2>
+    <p>Картки з <code>strw-state/triage/open</code>. «Строк минув» — днів після <code>decide_by</code>; строк сьогодні ще не минув.</p>
+    <div class="hb-tools"><label><input type="checkbox" id="triage-late"> лише зі строком, що минув</label></div>
+    <div class="hb-scroll">
+      <table class="hb-table" data-source="triage" data-row-key="id">
+        <thead><tr>
+          <th data-field="id">Картка</th>
+          <th data-field="kind">Вид</th>
+          <th data-field="product" class="hb-hide-narrow">Продукт</th>
+          <th data-field="decide_by">Строк</th>
+          <th data-field="overdue_days">Днів після строку</th>
+          <th data-field="summary" class="hb-hide-narrow">Суть</th>
+        </tr></thead>
+        <tbody data-draw="triage-body" data-source="triage"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="hb-grid" id="registry">
+    <div class="hb-card">
+      <h2>Реєстр за смугами</h2>
+      <p>Елементи <code>strw-state/engine/items</code>. «Інші» — проміжні стани циклу (claimed, gated, reviewed, merge-pending).</p>
+      <div class="hb-scroll">
+        <table class="hb-table" data-source="lanes" data-row-key="lane">
+          <thead><tr>
+            <th data-field="lane">Смуга</th>
+            <th data-field="ready">ready</th>
+            <th data-field="running">running</th>
+            <th data-field="blocked">blocked</th>
+            <th data-field="parked">parked</th>
+            <th data-field="other">інші</th>
+            <th data-field="done">done</th>
+            <th data-field="total">усього</th>
+          </tr></thead>
+          <tbody data-draw="lanes-body" data-source="lanes"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="hb-card">
+      <h2>Елементи</h2>
+      <p>Рядок на елемент. «Чекає CEO» — blocked із посиланням <code>ceo:</code>.</p>
+      <div class="hb-tools">
+        <input type="search" id="items-q" placeholder="Пошук за id, смугою, продуктом" aria-label="Пошук елементів">
+        <select id="items-state" aria-label="Стан">
+          <option value="open">усі, крім done</option>
+          <option value="">усі</option>
+          <option value="ready">ready</option>
+          <option value="running">running</option>
+          <option value="blocked">blocked</option>
+          <option value="parked">parked</option>
+          <option value="done">done</option>
+        </select>
+      </div>
+      <div class="hb-scroll">
+        <table class="hb-table" data-source="items" data-row-key="id">
+          <thead><tr>
+            <th data-field="id">Елемент</th>
+            <th data-field="state">Стан</th>
+            <th data-field="lane" class="hb-hide-narrow">Смуга</th>
+            <th data-field="blocked_by" class="hb-hide-narrow">Чекає на</th>
+            <th data-field="size">Розмір</th>
+          </tr></thead>
+          <tbody data-draw="items-body" data-source="items"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <footer class="hb-foot" id="source">
+    Згенеровано <span data-draw="f-at" data-source="summary" data-field="generated_at" data-row="0">—</span> ·
+    стан: <code data-draw="f-state" data-source="summary" data-field="state_source" data-row="0">—</code> ·
+    sha256 сесій <code data-draw="f-sess" data-source="summary" data-field="sessions_sha256" data-row="0">—</code> ·
+    sha256 PR <code data-draw="f-prs" data-source="summary" data-field="prs_sha256" data-row="0">—</code>.
+    Приватний; оновлює хаб генератором <code>scripts/native/hub-dashboard-refresh.sh</code>. Проза дошки — у strw-ops.
+  </footer>
+</div>
+
+<script>
+  // Сім таблиць одного файла hub.json: кожна — рядки з полем table = її id (поле пише генератор).
+  // fn — з літералом усередині: читачі бачать його текст у Sources, і він не залежить від змінних сторінки.
+  dash.calc('summary', { inputs: ['hub'], fn: (hub) => hub.filter((r) => r.table === 'summary'),
+    title: 'Підсумки', description: 'Один рядок підсумків із hub.json.' });
+  dash.calc('sessions', { inputs: ['hub'], fn: (hub) => hub.filter((r) => r.table === 'sessions'),
+    title: 'Сесії', description: 'Рядок на сесію зі знімка list_sessions.' });
+  dash.calc('prs', { inputs: ['hub'], fn: (hub) => hub.filter((r) => r.table === 'prs'),
+    title: 'Відкриті PR', description: 'Рядок на відкритий PR п\'яти репо.' });
+  dash.calc('repos', { inputs: ['hub'], fn: (hub) => hub.filter((r) => r.table === 'repos'),
+    title: 'PR за репо', description: 'Рядок на кожне з п\'яти репо.' });
+  dash.calc('triage', { inputs: ['hub'], fn: (hub) => hub.filter((r) => r.table === 'triage'),
+    title: 'Тріаж', description: 'Рядок на картку triage/open.' });
+  dash.calc('items', { inputs: ['hub'], fn: (hub) => hub.filter((r) => r.table === 'items'),
+    title: 'Елементи реєстру', description: 'Рядок на елемент engine/items.' });
+  dash.calc('lanes', { inputs: ['hub'], fn: (hub) => hub.filter((r) => r.table === 'lanes'),
+    title: 'Реєстр за смугами', description: 'Лічильники станів на смугу.' });
+
+  // logic:begin — чисті предикати таблиць; їх виконує scripts/native/hub-dashboard-page.test.sh
+  const yes = (v) => v === true || v === 'true';
+  const prVisible = (r, redOnly) => !redOnly || r.checks === 'fail';
+  const sessionVisible = (r, hideQuiet) => !hideQuiet || !yes(r.idle);
+  const triageVisible = (r, lateOnly) => !lateOnly || Number(r.overdue_days) > 0;
+  const itemVisible = (r, statePick, q) =>
+    (statePick === '' || (statePick === 'open' ? r.state !== 'done' : r.state === statePick)) &&
+    (!q || [r.id, r.lane, r.product].join(' ').toLowerCase().includes(q));
+  const checksTone = (c) => ({ pass: 'hb-ok', fail: 'hb-bad', pending: 'hb-warn' }[c] || 'hb-muted');
+  const stateTone = (s) => ({ ready: 'hb-ok', running: 'hb-ok', blocked: 'hb-bad', parked: 'hb-warn' }[s] || 'hb-muted');
+  // logic:end
+
+  const one = (field) => (el) => {
+    const s = dash.data('summary');
+    const row = s.status === 'ok' && s.data.length ? s.data[0] : null;
+    el.textContent = row && row[field] !== undefined && row[field] !== null ? String(row[field]) : '—';
+  };
+  [['h-sessions', 'sessions'], ['h-running', 'sessions_running'], ['h-prs', 'prs_open'], ['h-fail', 'prs_checks_fail'],
+   ['h-triage', 'triage_open'], ['h-overdue', 'triage_overdue'], ['h-ceo', 'items_on_ceo'],
+   ['t-running', 'sessions_running'], ['t-prs', 'prs_open'], ['t-fail', 'prs_checks_fail'], ['t-overdue', 'triage_overdue'],
+   ['t-ready', 'items_ready'], ['t-ceo', 'items_on_ceo'], ['p-stale-limit', 'pr_stale_limit_days'], ['s-idle-limit', 'idle_limit_hours'],
+   ['f-at', 'generated_at'], ['f-state', 'state_source'], ['f-sess', 'sessions_sha256'], ['f-prs', 'prs_sha256']]
+    .forEach(([name, field]) => dash.draw(name, one(field)));
+
+  const cell = (tr, value, cls) => {
+    const td = document.createElement('td');
+    if (cls) td.className = cls;
+    td.textContent = value === null || value === undefined ? '' : String(value);
+    tr.appendChild(td);
+    return td;
+  };
+  const chip = (td, value, tone) => {
+    td.textContent = '';
+    const s = document.createElement('span');
+    s.className = 'hb-chip ' + tone;
+    s.textContent = value;
+    td.appendChild(s);
+  };
+  const rows = (id) => { const t = dash.data(id); return t.status === 'ok' ? t.data : null; };
+  const table = (name, id, fill) => dash.draw(name, (tbody) => {
+    tbody.replaceChildren();
+    const data = rows(id);
+    if (data) fill(tbody, data);
+  });
+
+  table('repos-body', 'repos', (tbody, data) => data.forEach((r) => {
+    const tr = document.createElement('tr');
+    cell(tr, r.repo);
+    cell(tr, r.open, 'hb-num');
+    cell(tr, r.draft, 'hb-num');
+    cell(tr, r.checks_fail, 'hb-num');
+    cell(tr, r.checks_pending, 'hb-num');
+    tbody.appendChild(tr);
+  }));
+
+  let redOnly = false;
+  document.querySelectorAll('#prs-red').forEach((box) => box.addEventListener('change', () => { redOnly = box.checked; dash.draw('prs-body'); }));
+  table('prs-body', 'prs', (tbody, data) => data.filter((r) => prVisible(r, redOnly)).forEach((r) => {
+    const tr = document.createElement('tr');
+    tr.dataset.key = r.key;
+    const td = cell(tr, '');
+    const a = document.createElement('a');
+    a.href = String(r.url || '').startsWith('https://github.com/') ? r.url : '#';
+    a.textContent = r.key;
+    td.appendChild(a);
+    cell(tr, r.title, 'hb-hide-narrow');
+    chip(cell(tr, ''), r.checks, checksTone(r.checks));
+    cell(tr, r.review, 'hb-hide-narrow');
+    cell(tr, r.updated_days, 'hb-num' + (yes(r.stale) ? ' hb-old' : ''));
+    tbody.appendChild(tr);
+  }));
+
+  let hideQuiet = true;
+  document.querySelectorAll('#sessions-quiet').forEach((box) => box.addEventListener('change', () => { hideQuiet = box.checked; dash.draw('sessions-body'); }));
+  table('sessions-body', 'sessions', (tbody, data) => data.filter((r) => sessionVisible(r, hideQuiet)).forEach((r) => {
+    const tr = document.createElement('tr');
+    tr.dataset.key = r.id;
+    cell(tr, r.title);
+    cell(tr, r.name, 'hb-hide-narrow');
+    chip(cell(tr, ''), yes(r.running) ? 'працює' : 'стоїть', yes(r.running) ? 'hb-ok' : 'hb-muted');
+    cell(tr, r.pr === null || r.pr === undefined ? '' : '#' + r.pr + (r.pr_state ? ' ' + r.pr_state : ''));
+    cell(tr, r.idle_hours, 'hb-num' + (yes(r.idle) ? ' hb-old' : ''));
+    cell(tr, r.group, 'hb-hide-narrow');
+    tbody.appendChild(tr);
+  }));
+
+  let lateOnly = false;
+  document.querySelectorAll('#triage-late').forEach((box) => box.addEventListener('change', () => { lateOnly = box.checked; dash.draw('triage-body'); }));
+  table('triage-body', 'triage', (tbody, data) => data.filter((r) => triageVisible(r, lateOnly)).forEach((r) => {
+    const tr = document.createElement('tr');
+    cell(tr, r.id);
+    cell(tr, r.kind);
+    cell(tr, r.product, 'hb-hide-narrow');
+    cell(tr, r.decide_by);
+    cell(tr, r.overdue_days, 'hb-num' + (Number(r.overdue_days) > 0 ? ' hb-late' : ''));
+    cell(tr, r.summary, 'hb-hide-narrow');
+    tbody.appendChild(tr);
+  }));
+
+  table('lanes-body', 'lanes', (tbody, data) => data.forEach((r) => {
+    const tr = document.createElement('tr');
+    cell(tr, r.lane);
+    ['ready', 'running', 'blocked', 'parked', 'other', 'done', 'total'].forEach((k) => cell(tr, r[k], 'hb-num'));
+    tbody.appendChild(tr);
+  }));
+
+  let q = '', statePick = 'open';
+  document.querySelectorAll('#items-q').forEach((inp) => inp.addEventListener('input', () => { q = inp.value.trim().toLowerCase(); dash.draw('items-body'); }));
+  document.querySelectorAll('#items-state').forEach((sel) => sel.addEventListener('change', () => { statePick = sel.value; dash.draw('items-body'); }));
+  table('items-body', 'items', (tbody, data) => data.filter((r) => itemVisible(r, statePick, q)).forEach((r) => {
+    const tr = document.createElement('tr');
+    cell(tr, r.id);
+    chip(cell(tr, ''), r.state, stateTone(r.state));
+    cell(tr, r.lane, 'hb-hide-narrow');
+    cell(tr, r.blocked_by, 'hb-hide-narrow');
+    cell(tr, r.size);
+    tbody.appendChild(tr);
+  }));
+</script>

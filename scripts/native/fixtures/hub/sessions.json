@@ -1,0 +1,13 @@
+[
+ {"sessionId": "local_aaaa", "title": "MARK-SESSION альфа: робота над PR", "cwd": "/Users/x/secret-path", "isArchived": false, "isRunning": true,
+  "prNumber": 290, "prState": "OPEN", "lastActivityAt": "2026-10-28T08:30:00.123Z", "group": {"id": "cg-1", "name": "STRW"},
+  "link": "claude://claude.ai/epitaxy/local_aaaa", "remoteControlActive": true, "name": "alpha", "startedBy": "local_hub"},
+ {"sessionId": "local_bbbb", "title": "бета: тиша 25 годин", "cwd": "/Users/x", "isArchived": false, "isRunning": false,
+  "lastActivityAt": "2026-10-27T08:00:00.000Z", "group": null, "link": "claude://x", "remoteControlActive": false},
+ {"sessionId": "local_cccc", "title": "гамма: архівна", "cwd": "/Users/x", "isArchived": true, "isRunning": false,
+  "lastActivityAt": "2026-10-20T08:00:00.000Z", "group": null},
+ {"sessionId": "local_dddd", "title": "дельта: рівно 24 години", "cwd": "/Users/x", "isArchived": false, "isRunning": false,
+  "prNumber": 41, "prState": "MERGED", "lastActivityAt": "2026-10-27T09:00:00.000Z", "group": {"id": "cg-2", "name": "Pact App"}},
+ {"sessionId": "local_eeee", "title": "епсилон: щойно", "cwd": "/Users/x", "isArchived": false, "isRunning": true,
+  "lastActivityAt": "2026-10-28T08:59:59.999Z"}
+]

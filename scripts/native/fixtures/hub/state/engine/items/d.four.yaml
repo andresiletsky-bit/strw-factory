@@ -1,0 +1,10 @@
+schema_version: 1
+id: d.four
+product: pact-001
+loop: L3-build
+lane: lane-two
+state: blocked
+autonomy: unattended
+blocked_by: ["item:c.three"]
+repo: pact-ios
+size: M

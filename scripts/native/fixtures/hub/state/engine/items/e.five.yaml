@@ -1,0 +1,12 @@
+schema_version: 1
+id: e.five
+product: factory
+loop: L3-build
+lane: lane-one
+state: done
+autonomy: with-ceo
+blocked_by: []
+repo: strw-factory
+size: S
+evidence:
+  pr: 38
