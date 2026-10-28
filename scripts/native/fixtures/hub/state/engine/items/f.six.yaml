@@ -1,0 +1,10 @@
+schema_version: 1
+id: f.six
+product: factory
+loop: L3-build
+lane: lane-two
+state: gated
+autonomy: with-ceo
+blocked_by: []
+repo: strw-factory
+size: S

@@ -26,7 +26,7 @@ Docs, Slides. Типи задає акаунт: зміна — перевимі�
 `type_url` типу, `title`, без файлів; наповнення — документи власного сховища (`dash/meta`, `datasets/<id>`,
 `files/index.html`) через `ArtifactData`. Оновлення файлового датасету — нове завантаження (`asset: true`) і `update`
 його `url`/`name`/`updated`. Не робити: числа в розмітці замість датасету; живий запит до конектора з даними
-користувачів без рішення CEO; перенос дошки хаба (strw-ops `reports/2026-10-20-status-board.md`) без рішення CEO.
+користувачів без рішення CEO; прозу дошки хаба (лишається в strw-ops); числа дошки — `references/hub-dashboard.md`.
 
 ### Design
 Полотно з артбордами (екрани, макети, візуали). Не робити: робити полотно джерелом макетів Pact — L7 хешує канваси в
@@ -64,7 +64,7 @@ git; Docs — хіба дзеркало для читання CEO, і лише �
 | `qa-release` | launch-checklist.md, build-report.md | файл | впроваджено | maker L3 → build-report · strw-qa → launch-checklist | G3 читає їх із git (`artifact-contracts.md`) |
 | `regression` | regression-report.md | файл | впроваджено | strw-qa L8 · щотижня | чекер регресії читає звіт із git |
 | `report-doc` | звіти для читання CEO (portfolio-brief, retro-note) | Docs | чекає CEO | хаб · дзеркало файла після рішення | петлі читають файли з git; Docs змінює, як CEO отримує звіт |
-| `report-dashboard` | огляд реєстру інструментів | Dashboard | впроваджено | сесія фабрики · генератор `scripts/native/tools-dashboard-data.py` | нічого не замінює, дані відтворювані; дошка хаба — окреме питання CEO |
+| `report-dashboard` | огляд реєстру інструментів; числа дошки хаба | Dashboard | впроваджено | сесія фабрики · `scripts/native/tools-dashboard-data.py`; хаб · `scripts/native/hub-dashboard-refresh.sh` | дані відтворювані генератором; числа дошки хаба — вибір CEO 28.10 (варіант C), проза дошки лишається в md |
 | `deck` | дека для CEO на його прохання | Slides | кандидат | хаб · на прохання CEO | приватна дека нічого не замінює; числа — з git |
 | `design-mockup` | макети екранів Pact | Design | кандидат | strw-designer · подання з канвасів L7 | джерело макетів — канваси в репо під L7, полотно лише показує |
 | `design-system` | дизайн-система Pact | Design System | кандидат | strw-designer · генерувати з токенів коду | токени живуть у коді; довідник — подання, не джерело |
