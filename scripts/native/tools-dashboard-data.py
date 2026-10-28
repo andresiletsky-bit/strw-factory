@@ -98,7 +98,7 @@ def build(reg, now):
         raise Refuse("vocab: немає або не мапа")
     kinds = str_list(vocab.get("kinds"), "vocab.kinds", nonempty=True)
     task_types = vocab.get("task_types")
-    if not isinstance(task_types, dict) or not task_types:
+    if not isinstance(task_types, dict):
         raise Refuse("vocab.task_types: немає або не мапа")
     tools = reg.get("tools")
     if not isinstance(tools, list):

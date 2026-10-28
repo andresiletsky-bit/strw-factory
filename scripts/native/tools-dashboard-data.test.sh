@@ -134,7 +134,7 @@ sub "${M}/idnum.yaml" "  - id: simulator" "  - id: 5";                          
 sub "${M}/ttempty.yaml" "  task_types:
 " "  task_types: {}
   task_types_off:
-";                                                                                          red "порожній vocab.task_types" "vocab.task_types" "${M}/ttempty.yaml"
+";                                                                                          red "порожній vocab.task_types (записи на нього посилаються)" "поза vocab.task_types" "${M}/ttempty.yaml"
 sub "${M}/duptask.yaml" "    tasks: [growth-queue]" "    tasks: [growth-queue, growth-queue]"; red "дубль задачі в tasks" "дубль задачі" "${M}/duptask.yaml"
 printf -- '- a\n- b\n' > "${M}/toplist.yaml";                                             red "верхній рівень — список" "не мапа" "${M}/toplist.yaml"
 sub "${M}/ttlist.yaml" "  task_types:
