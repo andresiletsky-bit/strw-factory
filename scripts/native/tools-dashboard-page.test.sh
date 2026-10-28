@@ -2,7 +2,7 @@
 # tools-dashboard-page.test.sh — логіка сторінки Dashboard реєстру (scripts/native/tools-dashboard/index.html):
 # фільтр статусу, пошук, «лише без активного» і позначка застарілого виміру — чисті функції між маркерами
 # logic:begin / logic:end, виконані node. Червоні: кожен предикат має випадок, де інвертована умова дає інше;
-# проводка — малювання таблиць викликає саме ці функції, а не власну копію умови (рев'ю codex #38: U01, U02).
+# проводка — увесь скрипт сторінки виконується із заглушками dash і DOM, фільтри — через її обробники (рев'ю codex #38).
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PAGE="${HERE}/tools-dashboard/index.html"
@@ -47,9 +47,39 @@ eq('«лише без активного»: 0 — видно', L.taskVisible({ a
 eq('«лише без активного»: рядок «0» — видно', L.taskVisible({ active: '0' }, true), true);
 eq('«лише без активного»: 2 — сховано', L.taskVisible({ active: 2 }, true), false);
 
-for (const call of ['toolVisible(r, statusPick, q)', 'taskVisible(r, gapsOnly)', 'isStale(r)']) {
-  rest.includes(call) ? ok('проводка: малювання викликає ' + call) : bad('проводка: немає виклику ' + call);
-}
+// Проводка — виконанням, не пошуком тексту (рев'ю codex #38: «!toolVisible(...)» містить «toolVisible(...)»).
+// Увесь <script> сторінки біжить із заглушками dash і DOM; фільтри вмикаються через її власні обробники подій.
+const el = () => ({ className: '', textContent: '', children: [],
+  appendChild(c) { this.children.push(c); return c; }, replaceChildren() { this.children = []; } });
+const inputs = {}, handlers = {}, draws = {}, targets = {};
+const document = { createElement: el, querySelectorAll(sel) {
+  inputs[sel] = inputs[sel] || { value: '', checked: false, addEventListener(ev, fn) { handlers[sel] = fn; } };
+  return [inputs[sel]]; } };
+const DATA = {
+  summary: [{ tools: 3 }],
+  tasks: [{ task: 'code-build', active: 1 }, { task: 'legal', active: '0' }, { task: 'deck', active: 0 }],
+  tools: [
+    { id: 'codex-cli', name: 'Codex CLI', tasks: 'code-review-6a', status: 'active', stale: true, measured_result: 'available' },
+    { id: 'figma-mcp', name: 'Figma', tasks: 'design-mockup', status: 'candidate', stale: 'false', measured_result: 'needs-auth' },
+    { id: 'metricool-mcp', name: 'Metricool', tasks: 'growth-queue', status: 'forbidden', stale: 'true', measured_result: 'available' },
+  ] };
+const dash = { data: (id) => ({ status: 'ok', data: DATA[id] }),
+  draw(name, fn) { if (fn) { draws[name] = fn; targets[name] = targets[name] || el(); } if (draws[name]) draws[name](targets[name]); } };
+const script = page.slice(page.lastIndexOf('<script>') + 8, page.lastIndexOf('</script>'));
+new Function('document', 'dash', script)(document, dash);
+const ids = (name) => (targets[name] ? targets[name].children.map((tr) => tr.children[0].textContent).join(',') : '<нема>');
+const fire = (sel, prop, v) => { inputs[sel][prop] = v; handlers[sel](); };
+eq('малювання: усі інструменти без фільтра', ids('tools-body'), 'codex-cli,figma-mcp,metricool-mcp');
+fire('#tools-status', 'value', 'active');
+eq('малювання: фільтр статусу active', ids('tools-body'), 'codex-cli');
+fire('#tools-status', 'value', ''); fire('#tools-q', 'value', '  FIGMA ');
+eq('малювання: пошук (обрізано, без регістру)', ids('tools-body'), 'figma-mcp');
+fire('#tools-q', 'value', '');
+const ageCls = targets['tools-body'].children.map((tr) => tr.children[7].className.includes('tr-stale'));
+eq('малювання: позначка застарілого — true і «true», не «false»', ageCls.join(','), 'true,false,true');
+eq('малювання: усі типи задач без фільтра', ids('tasks-body'), 'code-build,legal,deck');
+fire('#tasks-gaps', 'checked', true);
+eq('малювання: «лише без активного» (0 і «0»)', ids('tasks-body'), 'legal,deck');
 for (const copy of ['r.stale ===', 'r.status === statusPick', 'Number(r.active)']) {
   rest.includes(copy) ? bad('копія умови поза logic: ' + copy) : ok('умова «' + copy + '» живе лише в logic');
 }
