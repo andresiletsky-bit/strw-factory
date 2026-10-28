@@ -8,7 +8,7 @@ stop_condition: growth-report за контрактом + чернетки ко�
 output: growth-report.md · чернетки контенту в products/<id>/growth/ · ті самі чернетки в черзі Metricool у стані «на затвердження» (через `createScheduledPostForReview`) — лише за передумовою п. 4a; без неї черга порожня і це не FAIL
 escalation: пакет «до публікації» → gate-запит в inbox (Andrii публікує або підтверджує автопублікацію каналами з білого списку); бюджетні кампанії → завжди запит
 budget: maker — sonnet; checker — ІНША модель, ніж maker (hard rule, budget-policy); 1 запуск/тиждень/продукт · МОДЕЛІ ТУТ ПОХІДНІ — джерело strw-state/engine/lanes.yaml
-state_writes: products/<id>/state.md · metrics.md (маркетинг-метрики) · budget.md · рядок у loops-log/. Запис у git робить strw-run на Mac; у контурі C сесія пише в _outbox/
+state_writes: products/<id>/state.md · metrics.md (маркетинг-метрики) · budget.md · рядок у loops-log/. Запис у git робить strw-run на Mac; у контурі C сесія пише в _outbox/. Захід через теку пристрою (нинішня routine L4) не пише в шляхи стану нічого — результат лише в підсумку сесії, доки L4 не ходить із git-джерелами й не доставляє гілкою (state-protocol «Захід через теку пристрою»).
 ---
 
 # L4 · Growth Loop — «тижневий ринок»
