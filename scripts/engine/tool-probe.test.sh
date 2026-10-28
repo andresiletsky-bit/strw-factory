@@ -40,7 +40,7 @@ tool() { # tool <id> <probe-yaml-рядки> [measured-рядок]
         cmd: "test -f only-in-state"
         cwd: strw-factory'
   tool hang     "        kind: shell
-        cmd: \"sleep 3; touch ${TMP}/survivor\""
+        cmd: \"(sleep 3; touch ${TMP}/survivor) & wait\""
   tool lanes-ok '        kind: lanes-tool
         ref: bashv'
   tool lanes-ghost '        kind: lanes-tool
@@ -88,7 +88,8 @@ mkdir -p "${TMP}/bare/strw-state"; cp -R "${E}" "${TMP}/bare/strw-state/"
 out="$(STRW_ROOT="${TMP}/bare" STRW_TOOLS_NOW=2026-10-28T12:00Z bash "${TOOL}" "${TMP}/bare/strw-state/engine" in-fact 2>&1)"; rc=$?
 if [ "${rc}" -eq 3 ] && printf '%s' "${out}" | grep -qF "немає теки strw-factory"; then ok "немає теки cwd → unavailable з причиною"; else bad "немає теки cwd" "rc=${rc} ${out}"; fi
 
-# --- таймаут: убито всю групу, а не лише bash ------------------------------------------------
+# --- таймаут: убито всю групу, а не лише bash (свідок — нащадок у фоновій підоболонці: `touch` у самому
+# bash помер би разом із ним і при p.kill(), мутант M5 6a-проби це показав) ------------------------------------------------
 t0=$(date +%s); TO=1 expect "зависла проба → timeout, 3" 3 "hang · timeout · shell (cwd strw-ops): проба" hang; t1=$(date +%s)
 if [ $((t1 - t0)) -le 3 ]; then ok "таймаут спрацював за ≤3 с"; else bad "таймаут не спрацював вчасно" "$((t1 - t0)) с"; fi
 sleep 3
