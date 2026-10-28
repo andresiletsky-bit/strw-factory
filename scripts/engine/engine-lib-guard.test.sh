@@ -14,7 +14,7 @@ printf 'units: []\n' > "$TMP/index.yaml"
 # копія скриптів у теку БЕЗ lib/ (як у фікстурах тестів strw-ops); fallback через STRW_ROOT
 # теж перевіряється: (в) копія без lib + STRW_ROOT з парасолькою → читач знайдено
 NOLIB="$TMP/nolib"; mkdir -p "$NOLIB"
-cp "$HERE"/validate-items.sh "$HERE"/repo-dir.sh "$HERE"/toolchain-filter.sh "$HERE"/design-emit.py "$HERE"/design-hash.py "$HERE"/design_tokens.py "$HERE"/validate-design-index.py "$NOLIB"/
+cp "$HERE"/validate-items.sh "$HERE"/repo-dir.sh "$HERE"/toolchain-filter.sh "$HERE"/tool-probe.sh "$HERE"/tool-select.sh "$HERE"/design-emit.py "$HERE"/design-hash.py "$HERE"/design_tokens.py "$HERE"/validate-design-index.py "$NOLIB"/
 WITHLIB="$TMP/withlib"; cp -R "$NOLIB" "$WITHLIB"; cp -R "$HERE/lib" "$WITHLIB/lib"
 
 probe() { # probe <назва> <тека> <очікуваний: nolib|withlib> <cmd...>
@@ -35,6 +35,8 @@ for mode in nolib withlib; do
     D="$TMP/$mode"
     probe "validate-items.sh"        "$D" $mode bash ./validate-items.sh "$E"
     probe "toolchain-filter.sh"      "$D" $mode bash ./toolchain-filter.sh "$E"
+    probe "tool-probe.sh"            "$D" $mode bash ./tool-probe.sh "$E" x
+    probe "tool-select.sh"           "$D" $mode bash ./tool-select.sh "$E" t r M
     probe "design-emit.py --help"    "$D" $mode python3 ./design-emit.py --help
     probe "design-hash.py"           "$D" $mode python3 ./design-hash.py "$TMP/index.yaml"
     probe "validate-design-index.py" "$D" $mode python3 ./validate-design-index.py "$TMP/index.yaml"
