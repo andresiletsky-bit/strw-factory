@@ -78,6 +78,23 @@ sub "${M}/nosep.md" "|---|---|---|---|---|---|
 " "";                                                                                       red "таблиця без роздільника" "без заголовка" "${M}/nosep.md"
 sub "${M}/notick.md" "| \`legal\` |" "| legal |";                                           red "task_type без бектиків" "не в бектиках" "${M}/notick.md"
 sub "${M}/reg-novocab.yaml" "  task_types:" "  task_types_off:" "${FIX}";                    red "реєстр без vocab.task_types" "без vocab.task_types" "${MAP}" "${M}/reg-novocab.yaml"
+sub "${M}/outdash.md" "| \`legal\` | юридичні документи |" "| \`legal\` | — |";           red "«Вихід» = —" "legal: порожній «Вихід»" "${M}/outdash.md"
+sub "${M}/whodash.md" "| — · не підключено | джерела немає |" "| — | джерела немає |";     red "«Хто» = —" "порожнє «Хто створює»" "${M}/whodash.md"
+sub "${M}/cols7.md" "| \`legal\` | юридичні документи | — | — | — · не підключено | джерела немає |" "| \`legal\` | юридичні документи | — | — | — · не підключено | джерела немає | зайве |"; red "рядок із 7 колонок" "не з 6 колонок" "${M}/cols7.md"
+sub "${M}/nowhere.md" "| \`legal\` | юридичні документи | — | — |" "| \`legal\` | юридичні документи |  | — |"; red "порожнє «Куди»" "legal: «Куди» «»" "${M}/nowhere.md"
+sub "${M}/twomark.md" "<!-- map:end -->" "<!-- map:end -->
+<!-- map:begin -->";                                                                         red "подвоєний маркер" "маркери" "${M}/twomark.md"
+sub "${M}/chaturl.md" "**Приватний Dashboard «Реєстр інструментів STRW»:** https://claude.ai/artifact/" "**Приватний Dashboard «Реєстр інструментів STRW»:** https://claude.ai/chat/"; red "посилання не на artifact" "без посилання" "${M}/chaturl.md"
+sub "${M}/tickx.md" "| \`legal\` |" "| \`legal\` (див.) |";                               red "task_type з хвостом після бектиків" "не в бектиках" "${M}/tickx.md"
+sub "${M}/urlelse.md" "**Приватний Dashboard «Реєстр інструментів STRW»:** https://claude.ai/artifact/" "**Приватний Dashboard «Реєстр інструментів STRW»:** artifact/"
+sub "${M}/urlelse2.md" "### Dashboard
+" "### Dashboard
+Приклад: https://claude.ai/artifact/ELmCJXr9kRpguLCwSN8qs7
+" "${M}/urlelse.md";                                                                          red "посилання лише поза розділом живого Dashboard" "без посилання" "${M}/urlelse2.md"
+sub "${M}/reg-ttempty.yaml" "  task_types:
+" "  task_types: {}
+  task_types_off:
+" "${FIX}";                                                                                  red "реєстр із порожнім vocab.task_types" "без vocab.task_types" "${MAP}" "${M}/reg-ttempty.yaml"
 out="$(python3 "${CHK}" --map "${TMP}/nope.md" --registry "${FIX}" 2>&1)"; rc=$?
 [ "${rc}" -eq 2 ] && printf '%s' "${out}" | /usr/bin/grep -q "не читається" && ok "карти немає → 2 «не читається» (не поміряти)" || bad "карти немає мало дати 2" "rc=${rc} ${out}"
 

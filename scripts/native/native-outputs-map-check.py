@@ -72,7 +72,7 @@ def check(text, reg):
             found.append("рядок не з 6 колонок: %s" % " | ".join(r))
             continue
         tid, out, where, status, who, why = r
-        m = re.fullmatch(r"`([a-z0-9-]+)`", tid)
+        m = re.fullmatch(r"`([a-z0-9-]+)`", tid)  # fullmatch: «`legal` (див.)» — не task_type
         if not m:
             found.append("task_type не в бектиках: %s" % tid)
             continue
@@ -91,7 +91,7 @@ def check(text, reg):
             found.append("%s: порожній «Вихід»" % tid)
         if not why or why == "—":
             found.append("%s: порожнє «Чому»" % tid)
-        if not who:
+        if not who or who == "—":
             found.append("%s: порожнє «Хто створює»" % tid)
 
     for x in sorted(set(vocab) - set(seen)):

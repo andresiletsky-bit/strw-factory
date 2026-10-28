@@ -34,7 +34,7 @@ if [ "${RC}" -eq 0 ]; then
     [ "${s}" = "10 7 2 1 7 1 0 2 1 44 37 1" ] && ok "summary: точні числа фікстури" || bad "summary розійшовся" "got: ${s}"
     [ "$(jget "${G}/summary.json" 'len(d)')" = "1" ] && ok "summary — рівно один рядок" || bad "summary не один рядок"
     [ "$(jget "${G}/summary.json" 'd[0]["generated_at"]')" = "${NOW}" ] && ok "generated_at = --now" || bad "generated_at не --now"
-    want_sha="$(shasum -a 256 "${FIX}" | awk '{print $1}')"
+    want_sha="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "${FIX}")"
     [ "$(jget "${G}/summary.json" 'd[0]["registry_sha256"]')" = "${want_sha}" ] && ok "registry_sha256 = sha256 вхідного файлу" || bad "registry_sha256 не того файлу"
     [ "$(jget "${G}/tools.json" 'len(d)')" = "10" ] && ok "tools.json: рядків = інструментів (10)" || bad "tools.json загубив рядки"
     [ "$(jget "${G}/tools.json" '",".join(r["id"] for r in d)')" = "codex-cli,claude-cli,pptx-skill,artifact-slides,artifact-dashboard,artifact-docs,figma-mcp,metricool-mcp,simulator,strw-code-reviewer" ] \
@@ -62,6 +62,17 @@ if [ "${RC}" -eq 0 ]; then
         && ok "колонки tools.json — рівно явний перелік" || bad "колонки tools.json" "got: ${cols}"
     if /usr/bin/grep -q NOEXPORT "${G}"/*.json; then bad "cmd/how/by/source просочились у вихід" "$(/usr/bin/grep -o 'NOEXPORT[a-z-]*' "${G}"/*.json | sort -u)"
     else ok "probe.cmd/how, measured.by, source не експортуються"; fi
+    # повні рядки: кожна колонка експорту — значенням, не лише назвою (рев'ю #38: user_data/enabled_by обнулювались непомітно)
+    r="$(jget "${G}/tools.json" 'json.dumps([x for x in d if x["id"]=="metricool-mcp"][0], ensure_ascii=False, sort_keys=True)')"
+    [ "${r}" = '{"contours": "M", "cost": "paid", "enabled_by": "ceo", "id": "metricool-mcp", "kind": "mcp", "loops": "L4-growth", "measured_age_days": 9, "measured_at": "2026-10-19T09:00Z", "measured_result": "available", "name": "Metricool", "probe_kind": "session", "provides": "", "rank": 50, "roles": "strw-growth", "stale": false, "status": "forbidden", "tasks": "growth-queue", "user_data": "reads", "why": "прямий розклад заборонено, лише ForReview"}' ] \
+        && ok "рядок metricool-mcp — кожне значення" || bad "рядок metricool-mcp" "got: ${r}"
+    r="$(jget "${G}/tools.json" 'json.dumps([x for x in d if x["id"]=="claude-cli"][0], ensure_ascii=False, sort_keys=True)')"
+    [ "${r}" = '{"contours": "M, C", "cost": "subscription", "enabled_by": "preinstalled", "id": "claude-cli", "kind": "cli", "loops": "", "measured_age_days": null, "measured_at": "", "measured_result": "unmeasured", "name": "Claude CLI", "probe_kind": "lanes-tool", "provides": "", "rank": 10, "roles": "", "stale": false, "status": "active", "tasks": "code-review-6a, code-build", "user_data": "none", "why": ""}' ] \
+        && ok "рядок claude-cli — кожне значення" || bad "рядок claude-cli" "got: ${r}"
+    r="$(jget "${G}/tasks.json" 'json.dumps([x for x in d if x["task"]=="code-review-6a"][0], ensure_ascii=False, sort_keys=True)')"
+    [ "${r}" = '{"active": 3, "active_by_rank": "strw-code-reviewer, claude-cli, codex-cli", "candidate": 0, "description": "незалежне рев'"'"'ю PR за правилом 6/6a", "forbidden": 0, "task": "code-review-6a"}' ] \
+        && ok "рядок задачі code-review-6a — кожне значення" || bad "рядок задачі code-review-6a" "got: ${r}"
+    [ "$(jget "${G}/summary.json" 'd[0]["source"]')" = "${FIX}" ] && ok "summary.source без --label — шлях реєстру" || bad "summary.source без --label"
     r="$(jget "${G}/tools.json" '[x for x in d if x["id"]=="figma-mcp"][0]["provides"]')"
     [ "${r}" = "use_figma, get_screenshot" ] && ok "provides — рядком через кому" || bad "provides" "got: ${r}"
 fi
@@ -119,6 +130,22 @@ sub "${M}/future.yaml" "at: 2026-10-13T09:00Z" "at: 2026-10-29T09:00Z";         
 red "--now без Z" "--now" "${FIX}" --now "2026-10-28T09:00"
 red "--now не дата" "--now" "${FIX}" --now "сьогодні"
 red "реєстру немає" "не читається" "${TMP}/nope.yaml"
+sub "${M}/idnum.yaml" "  - id: simulator" "  - id: 5";                                    red "id не рядок" "немає id" "${M}/idnum.yaml"
+sub "${M}/ttempty.yaml" "  task_types:
+" "  task_types: {}
+  task_types_off:
+";                                                                                          red "порожній vocab.task_types" "vocab.task_types" "${M}/ttempty.yaml"
+sub "${M}/duptask.yaml" "    tasks: [growth-queue]" "    tasks: [growth-queue, growth-queue]"; red "дубль задачі в tasks" "дубль задачі" "${M}/duptask.yaml"
+printf -- '- a\n- b\n' > "${M}/toplist.yaml";                                             red "верхній рівень — список" "не мапа" "${M}/toplist.yaml"
+sub "${M}/ttlist.yaml" "  task_types:
+" "  task_types: [code-build]
+  task_types_off:
+";                                                                          red "task_types списком" "vocab.task_types" "${M}/ttlist.yaml"
+printf '  - just-a-string\n' | cat "${FIX}" - > "${M}/toolstr.yaml";                      red "запис tools не мапа" "не мапа" "${M}/toolstr.yaml"
+sub "${M}/probe.yaml" "probe: {kind: lanes-tool, ref: simulator}" "probe: {ref: simulator}"; red "без probe.kind" "probe.kind" "${M}/probe.yaml"
+sub "${M}/constr.yaml" "constraints: {cost: free, user_data: none, enabled_by: preinstalled}" "constraints: free"; red "constraints не мапа" "constraints" "${M}/constr.yaml"
+sub "${M}/meas.yaml" 'measured: {at: 2026-10-19T09:00Z, result: available, by: "fixture"}' "measured: yes"; red "measured не мапа" "measured" "${M}/meas.yaml"
+python3 -c 'import sys; open(sys.argv[2],"wb").write(open(sys.argv[1],"rb").read().replace(b"Metricool", b"Metr\xffcool", 1))' "${FIX}" "${M}/badbyte.yaml"; red "нечитний байт (не UTF-8)" "не читається" "${M}/badbyte.yaml"
 printf 'schema_version: 1\nvocab: [\n' > "${M}/broken.yaml";                             red "зламаний YAML" "не читається" "${M}/broken.yaml"
 
 # --- 3b. форми часу measured.at і --now: усі дають той самий вік -------------------------------------
@@ -132,13 +159,48 @@ age_of() { # age_of <назва> <заміна рядка at figma-mcp> [очі�
 age_of "YAML-час із секундами і Z (aware)" "2026-10-20T09:00:00Z"
 age_of "рядок із секундами" "\"2026-10-20T09:00:00Z\""
 age_of "YAML-час без поясу (UTC)" "2026-10-20 09:00:00"
+age_of "YAML-час зі зсувом +03:00 (→ UTC)" "2026-10-20T12:00:00+03:00"
 age_of "рядок-дата (північ UTC)" "\"2026-10-20\"" "2026-10-20T00:00Z"
+# --label → summary.source; name відсутній → id; задача-підрядок іншої не рахується; unavailable рахується
+NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; run "${X}" "${FIX}" --label "strw-state engine/tools.yaml @ abc1234"
+[ "${RC}" -eq 0 ] && [ "$(jget "${X}/summary.json" 'd[0]["source"]')" = "strw-state engine/tools.yaml @ abc1234" ] && ok "--label → summary.source" || bad "--label" "rc=${RC} ${OUT}"
+NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; mkdir -p "${X}"; sub "${X}.yaml" '    name: "iOS Simulator"
+' ""; run "${X}" "${X}.yaml"
+[ "${RC}" -eq 0 ] && [ "$(jget "${X}/tools.json" '[x for x in d if x["id"]=="simulator"][0]["name"]')" = "simulator" ] && ok "без name → name = id" || bad "без name" "rc=${RC} ${OUT}"
+NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; mkdir -p "${X}"; sub "${X}.yaml" '    code-build: "збірка коду в L3"' '    code-build: "збірка коду в L3"
+    code: "підрядок code-build"'; run "${X}" "${X}.yaml"
+r=""; [ "${RC}" -eq 0 ] && r="$(jget "${X}/tasks.json" '"%(active)s %(active_by_rank)s" % [x for x in d if x["task"]=="code"][0]')"
+[ "${r}" = "0 " ] && ok "задача «code» не збігається з «code-build» підрядком" || bad "підрядок задачі" "rc=${RC} got: ${r}"
+# задача з candidate І forbidden: лічильники не плутаються (рев'ю #38: «!= active» рахував заборонених кандидатами)
+NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; mkdir -p "${X}"; sub "${X}.yaml" "    tasks: [design-mockup, design-system]" "    tasks: [design-mockup, design-system, growth-queue]"; run "${X}" "${X}.yaml"
+r=""; [ "${RC}" -eq 0 ] && r="$(jget "${X}/tasks.json" '"%(active)s %(candidate)s %(forbidden)s" % [x for x in d if x["task"]=="growth-queue"][0]')"
+[ "${r}" = "0 1 1" ] && ok "growth-queue: 1 candidate і 1 forbidden — окремо" || bad "candidate проти forbidden" "rc=${RC} got: ${r}"
+# межа застарілості в секундах: 14 діб і 1 год — застарілий; застарілий forbidden теж рахується
+NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; mkdir -p "${X}"; sub "${X}.yaml" "at: 2026-10-13T09:00Z" "at: 2026-10-14T08:00Z"; run "${X}" "${X}.yaml"
+r=""; [ "${RC}" -eq 0 ] && r="$(jget "${X}/tools.json" '"%(measured_age_days)s %(stale)s" % [x for x in d if x["id"]=="figma-mcp"][0]')"
+[ "${r}" = "14 True" ] && ok "14 діб і 1 год — застарілий" || bad "межа в секундах" "rc=${RC} got: ${r}"
+NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; mkdir -p "${X}"; sub "${X}.yaml" "at: 2026-10-19T09:00Z" "at: 2026-10-01T09:00Z"; run "${X}" "${X}.yaml"
+r=""; [ "${RC}" -eq 0 ] && r="$(jget "${X}/summary.json" 'd[0]["stale"]')"
+[ "${r}" = "2" ] && ok "застарілий forbidden рахується в summary.stale" || bad "stale forbidden" "rc=${RC} got: ${r}"
+# без constraints → порожні значення, не вигадане «none»
+NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; mkdir -p "${X}"; sub "${X}.yaml" "    constraints: {cost: free, user_data: none, enabled_by: preinstalled}
+" ""; run "${X}" "${X}.yaml"
+r=""; [ "${RC}" -eq 0 ] && r="$(jget "${X}/tools.json" '"[%(cost)s|%(user_data)s|%(enabled_by)s]" % [x for x in d if x["id"]=="simulator"][0]')"
+[ "${r}" = "[||]" ] && ok "без constraints — порожні, не «none»" || bad "без constraints" "rc=${RC} got: ${r}"
+NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; mkdir -p "${X}"; sub "${X}.yaml" "result: needs-auth" "result: unavailable"; run "${X}" "${X}.yaml"
+r=""; [ "${RC}" -eq 0 ] && r="$(jget "${X}/summary.json" '"%(unavailable)s %(needs_auth)s %(available)s" % d[0]')"
+[ "${r}" = "1 0 7" ] && ok "unavailable рахується окремо від needs-auth" || bad "лічильник unavailable" "rc=${RC} got: ${r}"
 S="${TMP}/now-sec"; run "${S}" "${FIX}" --now "2026-10-28T09:00:00Z"
 if [ "${RC}" -eq 0 ] && cmp -s "${G}/tools.json" "${S}/tools.json"; then ok "--now із секундами = без секунд"; else bad "--now із секундами" "rc=${RC} ${OUT}"; fi
 : > "${TMP}/a-file"
 OUT="$(python3 "${GEN}" --registry "${FIX}" --out "${TMP}/a-file" --now "${NOW}" 2>&1)"; RC=$?
-if [ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q -- "не тека" && ! printf '%s' "${OUT}" | /usr/bin/grep -q Traceback; then ok "червоний: --out не тека → rc 2"
+if [ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q -- "не порожня тека" && ! printf '%s' "${OUT}" | /usr/bin/grep -q Traceback; then ok "червоний: --out не тека → rc 2"
 else bad "червоний: --out не тека" "rc=${RC} ${OUT}"; fi
+# тека з попереднього прогону: відмова не лишає старих файлів, які можна прийняти за нові
+NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; mkdir -p "${X}"; printf '[]\n' > "${X}/summary.json"
+OUT="$(python3 "${GEN}" --registry "${FIX}" --out "${X}" --now "${NOW}" 2>&1)"; RC=$?
+if [ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q -- "не порожня тека" && [ "$(cat "${X}/summary.json")" = "[]" ]; then ok "червоний: --out не порожня → rc 2, чужих файлів не чіпає"
+else bad "червоний: --out не порожня" "rc=${RC} ${OUT}"; fi
 
 # --- 4. немає читача YAML без дублікатів → rc 2 з назвою, без трейсбека --------------------------
 NL="${TMP}/nolib/scripts/native"; mkdir -p "${NL}" "${TMP}/nolib-out"

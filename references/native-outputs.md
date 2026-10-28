@@ -1,7 +1,7 @@
 # Нативні виходи — карта виходів фабрики → типи Artifact застосунку Claude
 
 Звідки: слова CEO 28.10 («по типу Doc, Slides, Design, Dashboard»), елемент strw-state `factory.native-outputs`. Підбір
-інструмента — у `strw-state/engine/tools.yaml` і `scripts/engine/tool-select.sh`; тут — який вихід яким типом стає.
+інструмента — `strw-state/engine/tools.yaml` і елемент `factory.tool-select`; тут — який вихід яким типом стає.
 
 **Виміряно 28.10** (`Artifact` · `action: list` · `scope: types`): рівно п'ять типів — Dashboard, Design, Design System,
 Docs, Slides. Типи задає акаунт: зміна — перевиміряти, оновити файл і реєстр. `scripts/native/native-outputs-map.test.sh`
@@ -26,7 +26,7 @@ Docs, Slides. Типи задає акаунт: зміна — перевимі�
 `type_url` типу, `title`, без файлів; наповнення — документи власного сховища (`dash/meta`, `datasets/<id>`,
 `files/index.html`) через `ArtifactData`. Оновлення файлового датасету — нове завантаження (`asset: true`) і `update`
 його `url`/`name`/`updated`. Не робити: числа в розмітці замість датасету; живий запит до конектора з даними
-користувачів без рішення CEO; перенос дошки хаба (`reports/2026-10-20-status-board.md`) без рішення CEO.
+користувачів без рішення CEO; перенос дошки хаба (strw-ops `reports/2026-10-20-status-board.md`) без рішення CEO.
 
 ### Design
 Полотно з артбордами (екрани, макети, візуали). Не робити: робити полотно джерелом макетів Pact — L7 хешує канваси в
@@ -108,7 +108,7 @@ git; Docs — хіба дзеркало для читання CEO, і лише �
 
 **Оновлення з реєстру** (сесія, після кожної зміни `strw-state/engine/tools.yaml`):
 1. `python3 scripts/native/tools-dashboard-data.py --registry ~/Developer/STRW/strw-state/engine/tools.yaml
-   --out <тека> --now <UTC зараз, YYYY-MM-DDTHH:MMZ> --label "strw-state engine/tools.yaml @ <sha коміту>"`.
+   --out "$(mktemp -d)" --now <UTC зараз, YYYY-MM-DDTHH:MMZ> --label "strw-state engine/tools.yaml @ <sha коміту>"`.
    Код 2 — відмова з причиною й без файлів: дашборд не чіпати, причину — в реєстр (tool-registry).
 2. Кожен із трьох JSON — `Artifact` · `asset: true` · `url` цього дашборда · `file_path` (окремим викликом на файл);
    sha256 у відповіді звірити з `shasum -a 256` виходу.

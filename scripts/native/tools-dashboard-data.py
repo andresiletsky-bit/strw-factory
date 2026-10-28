@@ -11,7 +11,8 @@ Dashboard застосунку Claude: tools.json (рядок на інстру�
 
 Не валідатор реєстру (це strw-state/scripts/tools-registry-check.sh). Відмовляє (код 2, причина
 одним рядком, жодного файла у виході) лише там, де дашборд збрехав би: загубив рядок, порахував
-невідоме значення, переставив порядок, назвав старий вимір свіжим.
+невідоме значення, переставив порядок, назвав старий вимір свіжим. `--out` — порожня тека (mktemp -d):
+у теці з попереднього прогону відмова лишила б старі файли, які легко прийняти за нові.
 
 Експорт — ЯВНИЙ перелік полів (EXPORT нижче): probe.cmd/how, measured.by, source у дашборд не
 йдуть — це службові команди, а не те, що читає людина.
@@ -60,7 +61,8 @@ class Refuse(Exception):
 def parse_time(v, what):
     """ISO-UTC рядок, YAML date або datetime → aware datetime UTC. Інше — відмова."""
     if isinstance(v, dt.datetime):
-        return v if v.tzinfo else v.replace(tzinfo=dt.timezone.utc)
+        # aware з будь-яким зсувом → UTC: fmt_time дописує літерал Z (рев'ю #38: +03:00 показувався як Z)
+        return v.astimezone(dt.timezone.utc) if v.tzinfo else v.replace(tzinfo=dt.timezone.utc)
     if isinstance(v, dt.date):
         return dt.datetime(v.year, v.month, v.day, tzinfo=dt.timezone.utc)
     if isinstance(v, str):
@@ -102,14 +104,14 @@ def build(reg, now):
     if not isinstance(tools, list):
         raise Refuse("tools: немає або не список")
 
-    rows, seen = [], set()
+    rows, seen, row_tasks = [], set(), {}
     for i, t in enumerate(tools):
         where = "tools[%d]" % i
         if not isinstance(t, dict):
             raise Refuse("%s: не мапа" % where)
         tid = t.get("id")
         if not isinstance(tid, str) or not tid:
-            raise Refuse("%s: немає id" % where)
+            raise Refuse("%s: немає id (або не рядок)" % where)
         where = "tools[%d] %s" % (i, tid)
         if tid in seen:
             raise Refuse("%s: дубль id" % where)
@@ -121,6 +123,9 @@ def build(reg, now):
         if t["status"] not in STATUSES:
             raise Refuse("%s: status «%s» поза %s" % (where, t["status"], "|".join(STATUSES)))
         tasks = str_list(t.get("tasks"), where + ": tasks", nonempty=True)
+        if len(set(tasks)) != len(tasks):
+            raise Refuse("%s: дубль задачі в tasks %s" % (where, tasks))
+        row_tasks[tid] = set(tasks)
         for x in tasks:
             if x not in task_types:
                 raise Refuse("%s: task «%s» поза vocab.task_types" % (where, x))
@@ -143,7 +148,7 @@ def build(reg, now):
                 raise Refuse("%s: measured.at %s у майбутньому відносно --now %s" % (where, fmt_time(at), fmt_time(now)))
             at_s, result = fmt_time(at), m["result"]
             age = int((now - at).total_seconds() // 86400)
-            stale = age > STALE_DAYS
+            stale = (now - at).total_seconds() > STALE_DAYS * 86400  # 14 діб і 1 год — уже застарілий
         c = t.get("constraints") or {}
         if not isinstance(c, dict):
             raise Refuse("%s: constraints не мапа" % where)
@@ -172,7 +177,7 @@ def build(reg, now):
 
     tasks_rows = []
     for task, desc in task_types.items():
-        mine = [(r["rank"], r["id"], r["status"]) for r in rows if task in r["tasks"].split(", ")]
+        mine = [(r["rank"], r["id"], r["status"]) for r in rows if task in row_tasks[r["id"]]]
         active = sorted((rk, i) for rk, i, s in mine if s == "active")
         tasks_rows.append({
             "task": task,
@@ -209,6 +214,9 @@ def main():
     ap.add_argument("--now", required=True)
     ap.add_argument("--label", default="", help="звідки реєстр, для summary.source (типово — шлях)")
     a = ap.parse_args()
+    if not os.path.isdir(a.out) or os.listdir(a.out):
+        sys.stderr.write("ERROR: --out %s — не порожня тека (потрібна свіжа: mktemp -d); дашборд не оновлено (код 2)\n" % a.out)
+        return RC_REFUSE
     try:
         try:
             now = dt.datetime.strptime(a.now, "%Y-%m-%dT%H:%MZ")
@@ -230,14 +238,15 @@ def main():
     summary[0]["generated_at"] = fmt_time(now)
     summary[0]["registry_sha256"] = hashlib.sha256(raw).hexdigest()
     summary[0]["source"] = a.label or a.registry
-    if not os.path.isdir(a.out):
-        sys.stderr.write("ERROR: --out %s — не тека; дашборд не оновлено (код 2)\n" % a.out)
-        return RC_REFUSE
-    # усе пораховано до першого запису: відмова вище не лишає у виході напівнабору
-    for name, data in (("tools.json", rows), ("tasks.json", tasks_rows), ("summary.json", summary)):
-        with open(os.path.join(a.out, name), "w", encoding="utf-8") as f:
+    # усе пораховано до першого запису: відмова вище не лишає у виході напівнабору; файли — через тимчасові й
+    # os.replace, тож збій запису посередині не лишає старого файла поруч із новим
+    outs = (("tools.json", rows), ("tasks.json", tasks_rows), ("summary.json", summary))
+    for name, data in outs:
+        with open(os.path.join(a.out, "." + name + ".tmp"), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=1)
             f.write("\n")
+    for name, _ in outs:
+        os.replace(os.path.join(a.out, "." + name + ".tmp"), os.path.join(a.out, name))
     print("tools-dashboard-data: %d інструментів · %d типів задач · %s" % (len(rows), len(tasks_rows), a.out))
     return 0
 
