@@ -238,8 +238,8 @@ def main():
     summary[0]["generated_at"] = fmt_time(now)
     summary[0]["registry_sha256"] = hashlib.sha256(raw).hexdigest()
     summary[0]["source"] = a.label or a.registry
-    # усе пораховано до першого запису: відмова вище не лишає у виході напівнабору; файли — через тимчасові й
-    # os.replace, тож збій запису посередині не лишає старого файла поруч із новим
+    # усе пораховано до першого запису: відмова вище не лишає у виході напівнабору. Тимчасовий файл і os.replace —
+    # щоб не лишити обрізаного JSON під справжнім іменем; набір із трьох файлів атомарним від цього не стає
     outs = (("tools.json", rows), ("tasks.json", tasks_rows), ("summary.json", summary))
     for name, data in outs:
         with open(os.path.join(a.out, "." + name + ".tmp"), "w", encoding="utf-8") as f:
