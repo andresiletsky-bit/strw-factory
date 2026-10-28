@@ -8,7 +8,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GEN="${HERE}/tools-dashboard-data.py"
 FIX="${HERE}/fixtures/tools.v1.yaml"
 NOW="2026-10-28T09:00Z"
-pass=0; fail=0
+pass=0; fail=0; NCASE=0
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/tdd-test.XXXXXX")"; trap 'rm -rf "${TMP}"' EXIT
 ok()  { pass=$((pass+1)); printf 'PASS · %s\n' "$1"; }
 bad() { fail=$((fail+1)); printf 'FAIL · %s\n%s\n' "$1" "${2:-}"; }
@@ -76,7 +76,7 @@ else bad "вихід недетермінований" "rc=${RC}"; fi
 # mutate <назва> <python-вираз над рядками фікстури як текстом> — підставляє заміну одного рядка
 red() { # red <назва> <очікуваний фрагмент причини> <файл реєстру> [extra args]
     local name=$1 want=$2 reg=$3; shift 3
-    local out="${TMP}/red-$(printf '%s' "${name}" | tr -c 'a-zA-Z0-9' '_')"
+    NCASE=$((NCASE+1)); local out="${TMP}/red-${NCASE}"
     run "${out}" "${reg}" "$@"
     if [ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q -- "${want}" && [ -z "$(ls -A "${out}")" ] && ! printf '%s' "${OUT}" | /usr/bin/grep -q Traceback; then
         ok "червоний: ${name} → rc 2, «${want}», тека порожня"
@@ -120,6 +120,25 @@ red "--now без Z" "--now" "${FIX}" --now "2026-10-28T09:00"
 red "--now не дата" "--now" "${FIX}" --now "сьогодні"
 red "реєстру немає" "не читається" "${TMP}/nope.yaml"
 printf 'schema_version: 1\nvocab: [\n' > "${M}/broken.yaml";                             red "зламаний YAML" "не читається" "${M}/broken.yaml"
+
+# --- 3b. форми часу measured.at і --now: усі дають той самий вік -------------------------------------
+age_of() { # age_of <назва> <заміна рядка at figma-mcp> [очікуваний measured_at] — вік 8, не застарілий
+    NCASE=$((NCASE+1)); local out="${TMP}/age-${NCASE}"; mkdir -p "${out}"
+    sub "${out}.yaml" "at: 2026-10-13T09:00Z" "at: $2"
+    run "${out}" "${out}.yaml"
+    local r=""; [ "${RC}" -eq 0 ] && r="$(jget "${out}/tools.json" '"%(measured_age_days)s %(stale)s %(measured_at)s" % [x for x in d if x["id"]=="figma-mcp"][0]')"
+    [ "${r}" = "8 False ${3:-2026-10-20T09:00Z}" ] && ok "measured.at $1 → вік 8" || bad "measured.at $1" "rc=${RC} got: ${r} ${OUT}"
+}
+age_of "YAML-час із секундами і Z (aware)" "2026-10-20T09:00:00Z"
+age_of "рядок із секундами" "\"2026-10-20T09:00:00Z\""
+age_of "YAML-час без поясу (UTC)" "2026-10-20 09:00:00"
+age_of "рядок-дата (північ UTC)" "\"2026-10-20\"" "2026-10-20T00:00Z"
+S="${TMP}/now-sec"; run "${S}" "${FIX}" --now "2026-10-28T09:00:00Z"
+if [ "${RC}" -eq 0 ] && cmp -s "${G}/tools.json" "${S}/tools.json"; then ok "--now із секундами = без секунд"; else bad "--now із секундами" "rc=${RC} ${OUT}"; fi
+: > "${TMP}/a-file"
+OUT="$(python3 "${GEN}" --registry "${FIX}" --out "${TMP}/a-file" --now "${NOW}" 2>&1)"; RC=$?
+if [ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q -- "не тека" && ! printf '%s' "${OUT}" | /usr/bin/grep -q Traceback; then ok "червоний: --out не тека → rc 2"
+else bad "червоний: --out не тека" "rc=${RC} ${OUT}"; fi
 
 # --- 4. немає читача YAML без дублікатів → rc 2 з назвою, без трейсбека --------------------------
 NL="${TMP}/nolib/scripts/native"; mkdir -p "${NL}" "${TMP}/nolib-out"

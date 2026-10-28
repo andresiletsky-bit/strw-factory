@@ -65,6 +65,16 @@ sub "${M}/cols.md" "| \`legal\` | юридичні документи | — | �
 sub "${M}/reg-type.yaml" "    name: \"Docs\"" "    name: \"Doc\"" "${FIX}";               red "artifact-type реєстру не з карти" "зветься «Doc»" "${MAP}" "${M}/reg-type.yaml"
 sub "${M}/reg-vocab.yaml" "    automation: \"автоматизації\"" "    automation: \"автоматизації\"
     voice: \"голос\"" "${FIX}";                                                          red "новий task_type у реєстрі без рядка карти" "немає task_type реєстру: voice" "${MAP}" "${M}/reg-vocab.yaml"
+sub "${M}/who.md" "| — · не підключено | джерела немає |" "|  | джерела немає |";   red "порожнє «Хто створює»" "порожнє «Хто створює»" "${M}/who.md"
+sub "${M}/dupsec.md" "### Slides" "### Slides
+
+### Docs";                                                                                  red "дубль розділу типу" "розділи типів" "${M}/dupsec.md"
+sub "${M}/nottable.md" "| \`legal\` |" "просто текст
+| \`legal\` |";                                                                               red "рядок поза таблицею" "не є рядком таблиці" "${M}/nottable.md"
+sub "${M}/nosep.md" "|---|---|---|---|---|---|
+" "";                                                                                       red "таблиця без роздільника" "без заголовка" "${M}/nosep.md"
+sub "${M}/notick.md" "| \`legal\` |" "| legal |";                                           red "task_type без бектиків" "не в бектиках" "${M}/notick.md"
+sub "${M}/reg-novocab.yaml" "  task_types:" "  task_types_off:" "${FIX}";                    red "реєстр без vocab.task_types" "без vocab.task_types" "${MAP}" "${M}/reg-novocab.yaml"
 out="$(python3 "${CHK}" --map "${TMP}/nope.md" --registry "${FIX}" 2>&1)"; rc=$?
 [ "${rc}" -eq 2 ] && printf '%s' "${out}" | /usr/bin/grep -q "не читається" && ok "карти немає → 2 «не читається» (не поміряти)" || bad "карти немає мало дати 2" "rc=${rc} ${out}"
 
