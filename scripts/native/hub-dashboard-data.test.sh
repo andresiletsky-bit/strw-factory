@@ -235,6 +235,10 @@ OUT="$(python3 "${GEN}" --state "${FX}/state" --sessions "${FX}/sessions.json" -
 NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; mkdir -p "${X}"; printf '[]\n' > "${X}/hub.json"
 OUT="$(python3 "${GEN}" --state "${FX}/state" --sessions "${FX}/sessions.json" --prs-dir "${FX}/prs" --out "${X}" --now "${NOW}" 2>&1 < /dev/null)"; RC=$?
 [ "${RC}" -eq 2 ] && [ "$(cat "${X}/hub.json")" = "[]" ] && ok "червоний: --out не порожня → rc 2, старий hub.json не чіпає" || bad "--out не порожня" "rc=${RC} ${OUT}"
+# невідомий conclusion (STALE) — не зелений: «йде», доки GitHub не скаже SUCCESS/NEUTRAL/SKIPPED
+NCASE=$((NCASE+1)); M="${TMP}/m-${NCASE}"; fx_copy "${M}"; mut "${M}" prs/strw-factory.json '"conclusion":"SUCCESS"' '"conclusion":"STALE"'; run "${M}/out" "${M}"
+r=""; [ "${RC}" -eq 0 ] && r="$(jget "${M}/out/hub.json" '[x for x in T("prs") if x["key"]=="strw-factory#40"][0]["checks"]')"
+[ "${r}" = "pending" ] && ok "CheckRun conclusion STALE → pending, не pass" || bad "невідомий conclusion" "rc=${RC} got: ${r}"
 # неповна година не округлюється: 23 год 40 хв — 23, ще не «тихо»
 NCASE=$((NCASE+1)); M="${TMP}/m-${NCASE}"; fx_copy "${M}"; mut "${M}" sessions.json '"lastActivityAt": "2026-10-27T08:00:00.000Z"' '"lastActivityAt": "2026-10-27T09:20:00.000Z"'; run "${M}/out" "${M}"
 r=""; [ "${RC}" -eq 0 ] && r="$(jget "${M}/out/hub.json" '"%(idle_hours)s %(idle)s" % [x for x in T("sessions") if x["id"]=="local_bbbb"][0]')"
