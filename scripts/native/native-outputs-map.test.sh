@@ -98,6 +98,10 @@ sub "${M}/reg-ttempty.yaml" "  task_types:
 " "${FIX}";                                                                                  red "реєстр із порожнім vocab.task_types" "без vocab.task_types" "${MAP}" "${M}/reg-ttempty.yaml"
 out="$(python3 "${CHK}" --map "${TMP}/nope.md" --registry "${FIX}" 2>&1)"; rc=$?
 [ "${rc}" -eq 2 ] && printf '%s' "${out}" | /usr/bin/grep -q "не читається" && ok "карти немає → 2 «не читається» (не поміряти)" || bad "карти немає мало дати 2" "rc=${rc} ${out}"
+sub "${M}/reg-feb30.yaml" "at: 2026-10-13T09:00Z" "at: 2026-02-30" "${FIX}"
+out="$(python3 "${CHK}" --map "${MAP}" --registry "${M}/reg-feb30.yaml" 2>&1)"; rc=$?
+[ "${rc}" -eq 2 ] && printf '%s' "${out}" | /usr/bin/grep -q "не читається" && ! printf '%s' "${out}" | /usr/bin/grep -q Traceback \
+    && ok "реєстр із датою 30 лютого → 2 «не читається», без трейсбеку" || bad "неіснуюча YAML-дата мала дати 2" "rc=${rc} ${out}"
 
 LIVE="${STRW_ROOT:-${HOME}/Developer/STRW}/strw-state/engine/tools.yaml"
 if [ -f "${LIVE}" ]; then

@@ -150,6 +150,11 @@ sub "${M}/constr.yaml" "constraints: {cost: free, user_data: none, enabled_by: p
 sub "${M}/meas.yaml" 'measured: {at: 2026-10-19T09:00Z, result: available, by: "fixture"}' "measured: yes"; red "measured не мапа" "measured" "${M}/meas.yaml"
 python3 -c 'import sys; open(sys.argv[2],"wb").write(open(sys.argv[1],"rb").read().replace(b"Metricool", b"Metr\xffcool", 1))' "${FIX}" "${M}/badbyte.yaml"; red "нечитний байт (не UTF-8)" "не читається" "${M}/badbyte.yaml"
 printf 'schema_version: 1\nvocab: [\n' > "${M}/broken.yaml";                             red "зламаний YAML" "не читається" "${M}/broken.yaml"
+# рев'ю codex #38: менша версія схеми, порожній measured, неіснуюча YAML-дата (конструктор кидає ValueError, не YAMLError)
+sub "${M}/schema0.yaml" "schema_version: 1" "schema_version: 0";                     red "schema_version 0" "schema_version" "${M}/schema0.yaml"
+sub "${M}/measempty.yaml" 'measured: {at: 2026-10-19T09:00Z, result: available, by: "fixture"}' "measured: {}"; red "measured — порожня мапа" "measured.result" "${M}/measempty.yaml"
+sub "${M}/feb30.yaml" "at: 2026-10-13T09:00Z" "at: 2026-02-30";                         red "YAML-дата 30 лютого" "не читається" "${M}/feb30.yaml"
+sub "${M}/h25.yaml" "at: 2026-10-13T09:00Z" "at: 2026-10-13T25:00:00Z";                 red "YAML-час 25:00" "не читається" "${M}/h25.yaml"
 
 # --- 3b. форми часу measured.at і --now: усі дають той самий вік -------------------------------------
 age_of() { # age_of <назва> <заміна рядка at figma-mcp> [очікуваний measured_at] — вік 8, не застарілий
@@ -164,6 +169,7 @@ age_of "рядок із секундами" "\"2026-10-20T09:00:00Z\""
 age_of "YAML-час без поясу (UTC)" "2026-10-20 09:00:00"
 age_of "YAML-час зі зсувом +03:00 (→ UTC)" "2026-10-20T12:00:00+03:00"
 age_of "рядок-дата (північ UTC)" "\"2026-10-20\"" "2026-10-20T00:00Z"
+age_of "8 діб 23 год — неповна доба відкидається, не округлюється" "2026-10-19T10:00Z" "2026-10-19T10:00Z"
 # --label → summary.source; name відсутній → id; задача-підрядок іншої не рахується; unavailable рахується
 NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; run "${X}" "${FIX}" --label "strw-state engine/tools.yaml @ abc1234"
 [ "${RC}" -eq 0 ] && [ "$(jget "${X}/summary.json" 'd[0]["source"]')" = "strw-state engine/tools.yaml @ abc1234" ] && ok "--label → summary.source" || bad "--label" "rc=${RC} ${OUT}"
