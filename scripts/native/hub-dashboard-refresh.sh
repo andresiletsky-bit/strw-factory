@@ -8,7 +8,8 @@
 #     його дерево буває замороженим або на чужій гілці (tri-194/195); у summary.state_source — sha знімка;
 #   · PR п'яти репо — `gh pr list` (hub-dashboard-data.py --gh).
 # Друкує шлях hub.json і його sha256. Код 2 — відмова (fetch не вдався, генератор відмовив): дашборд не чіпати.
-# Нічого не публікує: завантаження в Dashboard — крок сесії, references/native-outputs.md § «Живий Dashboard хаба».
+# Знімок сесій, старший за SESSIONS_MAX_MIN хвилин, — відмова: забутий /tmp/hub-sessions.json дав би старі сесії
+# під свіжим часом генерації. Нічого не публікує: завантаження в Dashboard — крок сесії, references/hub-dashboard.md.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${STRW_ROOT:-${HOME}/Developer/STRW}"
@@ -18,6 +19,11 @@ if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
     exit 2
 fi
 SESSIONS="$1"
+SESSIONS_MAX_MIN=30
+if [ -n "$(find "${SESSIONS}" -mmin +"${SESSIONS_MAX_MIN}" 2>/dev/null)" ]; then
+    printf 'ERROR: знімок сесій %s старший за %s хв — зніми list_sessions (limit: 200) заново; дашборд не оновлено (код 2)\n' "${SESSIONS}" "${SESSIONS_MAX_MIN}" >&2
+    exit 2
+fi
 if ! git -C "${STATE_REPO}" fetch -q origin main < /dev/null; then
     printf 'ERROR: git fetch origin main у %s не вдався — знімок state був би старим; дашборд не оновлено (код 2)\n' "${STATE_REPO}" >&2
     exit 2
@@ -25,7 +31,15 @@ fi
 SHA="$(git -C "${STATE_REPO}" rev-parse origin/main)"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/hub-dashboard.XXXXXX")"
 mkdir "${WORK}/state" "${WORK}/out"
-git -C "${STATE_REPO}" archive "${SHA}" triage/open engine/items | tar -x -C "${WORK}/state"
+if ! git -C "${STATE_REPO}" cat-file -e "${SHA}:engine/items" 2>/dev/null; then
+    printf 'ERROR: у strw-state %s немає engine/items; дашборд не оновлено (код 2)\n' "${SHA:0:7}" >&2
+    exit 2
+fi
+# triage/open без жодної картки git не зберігає — це справжні «0 відкритих», а не відмова
+PATHS="engine/items"
+if git -C "${STATE_REPO}" cat-file -e "${SHA}:triage/open" 2>/dev/null; then PATHS="${PATHS} triage/open"; else mkdir -p "${WORK}/state/triage/open"; fi
+# shellcheck disable=SC2086 — PATHS: два відомі шляхи без пробілів
+git -C "${STATE_REPO}" archive "${SHA}" ${PATHS} | tar -x -C "${WORK}/state"
 NOW="$(date -u +%Y-%m-%dT%H:%MZ)"
 python3 "${HERE}/hub-dashboard-data.py" --state "${WORK}/state" --sessions "${SESSIONS}" --gh \
     --out "${WORK}/out" --now "${NOW}" --state-label "strw-state origin/main @ ${SHA:0:7}" < /dev/null

@@ -113,7 +113,7 @@ for (const [, t, key, body] of tables) {
   eq('ключ ' + t + '.' + key + ' унікальний', new Set(keys).size, keys.length);
 }
 const sumFields = [...html.matchAll(/data-source="summary" data-field="([^"]+)"/g)].map((m) => m[1]);
-eq('позначок summary у розмітці', sumFields.length, 19);
+eq('позначок summary у розмітці', sumFields.length, 20);
 eq('кожне поле summary з розмітки є в даних', sumFields.filter((f) => !cols('summary').has(f)).join(','), '');
 const drawNames = [...html.matchAll(/data-draw="([^"]+)"/g)].map((m) => m[1]);
 eq('кожен data-draw має dash.draw', drawNames.filter((n) => !draws[n]).join(','), '');
@@ -131,6 +131,7 @@ eq('шапка: сесій 4', targets['h-sessions'].textContent, '4');
 eq('плитка: червоних PR 2', targets['t-fail'].textContent, '2');
 eq('поріг тиші — з summary', targets['s-idle-limit'].textContent, '24');
 eq('поріг PR — з summary', targets['p-stale-limit'].textContent, '7');
+eq('підвал: сесії станом на найсвіжішу активність', targets['f-sess-at'].textContent, '2026-10-28T08:59Z');
 eq('repos: п\'ять репо', col0('repos-body'), 'strw-ops,strw-factory,strw-state,pact-ios,pact-backend');
 eq('PR: усі шість', keysOf('prs-body'), 'strw-ops#12,strw-ops#36,strw-factory#40,pact-ios#240,pact-backend#71,pact-backend#72');
 eq('PR: текст посилання = ключ', targets['prs-body'].children[0].children[0].children[0].textContent, 'strw-ops#12');

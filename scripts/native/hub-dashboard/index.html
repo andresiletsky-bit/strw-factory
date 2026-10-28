@@ -2,7 +2,7 @@
 <!-- Сторінка приватного Dashboard «Дошка хаба STRW» (factory.hub-dashboard).
      Джерело в git: strw-factory/scripts/native/hub-dashboard/index.html → документ files/index.html.
      Дані — один датасет `hub` (hub.json з scripts/native/hub-dashboard-data.py); таблиці ділить dash.calc за полем table.
-     Процедура оновлення — references/native-outputs.md § «Живий Dashboard хаба». Проза дошки — у strw-ops, не тут. -->
+     Процедура оновлення — references/hub-dashboard.md. Проза дошки — у strw-ops, не тут. -->
 <style>
   .hb-page { display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); }
   .hb-head h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
@@ -188,6 +188,7 @@
 
   <footer class="hb-foot" id="source">
     Згенеровано <span data-draw="f-at" data-source="summary" data-field="generated_at" data-row="0">—</span> ·
+    сесії станом на <span data-draw="f-sess-at" data-source="summary" data-field="sessions_latest_activity" data-row="0">—</span> ·
     стан: <code data-draw="f-state" data-source="summary" data-field="state_source" data-row="0">—</code> ·
     sha256 сесій <code data-draw="f-sess" data-source="summary" data-field="sessions_sha256" data-row="0">—</code> ·
     sha256 PR <code data-draw="f-prs" data-source="summary" data-field="prs_sha256" data-row="0">—</code>.
@@ -234,7 +235,7 @@
    ['h-triage', 'triage_open'], ['h-overdue', 'triage_overdue'], ['h-ceo', 'items_on_ceo'],
    ['t-running', 'sessions_running'], ['t-prs', 'prs_open'], ['t-fail', 'prs_checks_fail'], ['t-overdue', 'triage_overdue'],
    ['t-ready', 'items_ready'], ['t-ceo', 'items_on_ceo'], ['p-stale-limit', 'pr_stale_limit_days'], ['s-idle-limit', 'idle_limit_hours'],
-   ['f-at', 'generated_at'], ['f-state', 'state_source'], ['f-sess', 'sessions_sha256'], ['f-prs', 'prs_sha256']]
+   ['f-at', 'generated_at'], ['f-sess-at', 'sessions_latest_activity'], ['f-state', 'state_source'], ['f-sess', 'sessions_sha256'], ['f-prs', 'prs_sha256']]
     .forEach(([name, field]) => dash.draw(name, one(field)));
 
   const cell = (tr, value, cls) => {

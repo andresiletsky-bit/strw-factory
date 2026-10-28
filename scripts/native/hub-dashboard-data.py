@@ -16,7 +16,7 @@
 
 Вихід — один файл <out>/hub.json: масив рядків, кожен із полем `table` (summary, sessions, prs, repos,
 triage, items, lanes). Сторінка ділить його на таблиці через dash.calc; один файл = одне завантаження
-при оновленні (`references/native-outputs.md` § «Живий Dashboard хаба»).
+при оновленні (`references/hub-dashboard.md`).
 
 Не валідатор джерел. Відмовляє (код 2, причина одним рядком, hub.json не пишеться) лише там, де дашборд
 збрехав би: загубив рядок (дубль id, репо без знімка, обрізаний список), порахував невідоме значення
@@ -64,7 +64,7 @@ TRIAGE_KINDS = ("question", "finding", "error")
 CHECK_FAIL = {"FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE", "ERROR"}
 CHECK_OK = {"SUCCESS", "NEUTRAL", "SKIPPED"}
 IDLE_HOURS = 24
-# Назву сесії пише людина; адреса тестувальника в ній — персональні дані, дашборду не потрібні.
+# Назви сесій і PR, суть карток пише людина; адреса тестувальника в них — персональні дані, дашборду не потрібні.
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 PR_STALE_DAYS = 7
 
@@ -233,7 +233,7 @@ def build_prs(raws, now):
                 "key": "%s#%d" % (repo, n),
                 "repo": repo,
                 "number": n,
-                "title": need_str(p, "title", where),
+                "title": EMAIL.sub("[email]", need_str(p, "title", where)),
                 "draft": p["isDraft"],
                 "author": text(a.get("login")) if isinstance(a, dict) else "",
                 "branch": text(p.get("headRefName")),
@@ -306,7 +306,7 @@ def build_triage(state, today):
             "date": parse_day(fm.get("date"), where + ": date").isoformat(),
             "decide_by": due.isoformat() if due else "",
             "overdue_days": (today - due).days if due and today > due else 0,
-            "summary": text(fm.get("summary")),
+            "summary": EMAIL.sub("[email]", text(fm.get("summary"))),
         })
     rows.sort(key=lambda r: (r["decide_by"] or "9999", r["id"]))
     return rows
@@ -351,6 +351,8 @@ def build_items(state):
             "on_ceo": any(x.startswith("ceo:") for x in bb),
             "pr": pr if isinstance(pr, int) and not isinstance(pr, bool) else None,
         })
+    if not rows:
+        raise Refuse("%s: жодного елемента — реєстр не буває порожнім, знімок неповний" % d)
     rows.sort(key=lambda r: r["id"])
     lanes = []
     for lane in sorted({r["lane"] for r in rows}):
@@ -378,6 +380,8 @@ def build(state, sessions_raw, pr_raws, now):
         "sessions_idle_24h": n(sessions, lambda r: r["idle"]),
         "sessions_pr_open": n(sessions, lambda r: r["pr_state"] == "OPEN"),
         "sessions_archived_skipped": archived,
+        # найсвіжіша активність у знімку ≈ коли хаб його зняв: старий знімок видно в підвалі, а не як «зараз»
+        "sessions_latest_activity": max((r["last_activity"] for r in sessions), default=""),
         "prs_open": len(prs),
         "prs_draft": n(prs, lambda r: r["draft"]),
         "prs_checks_fail": n(prs, lambda r: r["checks"] == "fail"),

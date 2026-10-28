@@ -45,6 +45,7 @@ if [ "${RC}" -eq 0 ]; then
     [ "$(jget "${G}/hub.json" '"|".join(sorted({r["table"] for r in d}))')" = "items|lanes|prs|repos|sessions|summary|triage" ] \
         && ok "рівно сім таблиць" || bad "набір таблиць" "$(jget "${G}/hub.json" 'sorted({r["table"] for r in d})')"
     [ "$(jget "${G}/hub.json" 'T("summary")[0]["generated_at"]')" = "${NOW}" ] && ok "generated_at = --now" || bad "generated_at"
+    [ "$(jget "${G}/hub.json" 'T("summary")[0]["sessions_latest_activity"]')" = "2026-10-28T08:59Z" ] && ok "sessions_latest_activity — найсвіжіша активність знімка (архівна не рахується)" || bad "sessions_latest_activity"
     want="$(shasum -a 256 "${FX}/sessions.json" | cut -d' ' -f1)"
     [ "$(jget "${G}/hub.json" 'T("summary")[0]["sessions_sha256"]')" = "${want}" ] && ok "sessions_sha256 = sha256 файла сесій" || bad "sessions_sha256"
     [ "$(jget "${G}/hub.json" 'T("summary")[0]["state_source"]')" = "${FX}/state" ] && ok "state_source без --state-label — шлях" || bad "state_source"
@@ -235,6 +236,15 @@ OUT="$(python3 "${GEN}" --state "${FX}/state" --sessions "${FX}/sessions.json" -
 NCASE=$((NCASE+1)); X="${TMP}/x-${NCASE}"; mkdir -p "${X}"; printf '[]\n' > "${X}/hub.json"
 OUT="$(python3 "${GEN}" --state "${FX}/state" --sessions "${FX}/sessions.json" --prs-dir "${FX}/prs" --out "${X}" --now "${NOW}" 2>&1 < /dev/null)"; RC=$?
 [ "${RC}" -eq 2 ] && [ "$(cat "${X}/hub.json")" = "[]" ] && ok "червоний: --out не порожня → rc 2, старий hub.json не чіпає" || bad "--out не порожня" "rc=${RC} ${OUT}"
+# email маскується і в назві PR, і в суті картки
+NCASE=$((NCASE+1)); M="${TMP}/m-${NCASE}"; fx_copy "${M}"; mut "${M}" prs/pact-ios.json '"title":"MARK-IOS екран"' '"title":"MARK-IOS для qa.two@example.org"'
+mut "${M}" state/triage/open/2026-10-21-002-finding.md 'summary: "знахідка зі строком сьогодні"' 'summary: "знахідка від a.b@example.net"'; run "${M}/out" "${M}"
+[ "${RC}" -eq 0 ] && ! /usr/bin/grep -q '@example' "${M}/out/hub.json" && /usr/bin/grep -q 'MARK-IOS для \[email\]' "${M}/out/hub.json" && /usr/bin/grep -q 'знахідка від \[email\]' "${M}/out/hub.json" \
+    && ok "email у назві PR і в суті картки замасковано" || bad "email у PR/тріажі" "rc=${RC} ${OUT}"
+# порожня тека елементів — відмова; тріаж без карток — справжні 0
+NCASE=$((NCASE+1)); M="${TMP}/m-${NCASE}"; fx_copy "${M}"; rm "${M}"/state/engine/items/*.yaml; red "engine/items без жодного елемента" "жодного елемента" "${M}"
+NCASE=$((NCASE+1)); M="${TMP}/m-${NCASE}"; fx_copy "${M}"; rm "${M}"/state/triage/open/*.md; run "${M}/out" "${M}"
+[ "${RC}" -eq 0 ] && [ "$(jget "${M}/out/hub.json" '"%(triage_open)s %(triage_overdue)s" % T("summary")[0]')" = "0 0" ] && ok "triage/open без карток → 0, rc 0" || bad "порожній тріаж" "rc=${RC} ${OUT}"
 # невідомий conclusion (STALE) — не зелений: «йде», доки GitHub не скаже SUCCESS/NEUTRAL/SKIPPED
 NCASE=$((NCASE+1)); M="${TMP}/m-${NCASE}"; fx_copy "${M}"; mut "${M}" prs/strw-factory.json '"conclusion":"SUCCESS"' '"conclusion":"STALE"'; run "${M}/out" "${M}"
 r=""; [ "${RC}" -eq 0 ] && r="$(jget "${M}/out/hub.json" '[x for x in T("prs") if x["key"]=="strw-factory#40"][0]["checks"]')"
@@ -288,8 +298,10 @@ WR="${TMP}/wrap"; mkdir -p "${WR}/root"
     git -C "${WR}/seed" push -q "${WR}/origin.git" HEAD:main
 ) < /dev/null >/dev/null 2>&1 || bad "обгортка: не зібрано фікстуру git"
 REMOTE_SHA="$(git -C "${WR}/seed" rev-parse HEAD)"
+# свіжа копія знімка: mtime фікстури — час checkout, а обгортка відкидає знімки, старші за 30 хв
+FRESH="${TMP}/fresh-sessions.json"; cp "${FX}/sessions.json" "${FRESH}"
 : > "${TMP}/gh.log"
-OUT="$(PATH="${FAKE}:${PATH}" GH_LOG="${TMP}/gh.log" GH_FIXTURES="${FX}/prs" STRW_ROOT="${WR}/root" STRW_ENGINE_LIB="${HERE}/../engine/lib" TMPDIR="${WR}" bash "${REFRESH}" "${FX}/sessions.json" 2>&1 < /dev/null)"; RC=$?
+OUT="$(PATH="${FAKE}:${PATH}" GH_LOG="${TMP}/gh.log" GH_FIXTURES="${FX}/prs" STRW_ROOT="${WR}/root" STRW_ENGINE_LIB="${HERE}/../engine/lib" TMPDIR="${WR}" bash "${REFRESH}" "${FRESH}" 2>&1 < /dev/null)"; RC=$?
 HJ="$(printf '%s\n' "${OUT}" | sed -n 's/^hub.json: //p')"
 if [ "${RC}" -eq 0 ] && [ -f "${HJ}" ]; then
     ids="$(jget "${HJ}" '",".join(r["id"] for r in T("items"))')"
@@ -300,8 +312,31 @@ if [ "${RC}" -eq 0 ] && [ -f "${HJ}" ]; then
     printf '%s' "${OUT}" | /usr/bin/grep -q "sha256: ${want}" && ok "обгортка: друкує sha256 hub.json" || bad "обгортка: sha256" "${OUT}"
     [ -z "$(git -C "${WR}/root/strw-state" status --porcelain --untracked-files=all | /usr/bin/grep -v y.dirty)" ] && ok "обгортка: робоче дерево спільної копії не змінено" || bad "обгортка змінила дерево" "$(git -C "${WR}/root/strw-state" status --porcelain)"
 else bad "обгортка мала дати rc 0 і hub.json" "rc=${RC} ${OUT}"; fi
+# знімок сесій старший за 30 хв — обгортка відмовляє до будь-якої роботи
+cp "${FX}/sessions.json" "${TMP}/old-sessions.json"; touch -t 202610280800 "${TMP}/old-sessions.json"
+OUT="$(PATH="${FAKE}:${PATH}" GH_LOG="${TMP}/gh.log" GH_FIXTURES="${FX}/prs" STRW_ROOT="${WR}/root" STRW_ENGINE_LIB="${HERE}/../engine/lib" TMPDIR="${WR}" bash "${REFRESH}" "${TMP}/old-sessions.json" 2>&1 < /dev/null)"; RC=$?
+[ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q "старший за 30 хв" && ! printf '%s' "${OUT}" | /usr/bin/grep -q "^hub.json:" && ok "червоний: старий знімок сесій → обгортка rc 2" || bad "старий знімок сесій" "rc=${RC} ${OUT}"
+# origin/main без triage/open (жодної картки) → 0 карток, rc 0; без engine/items → rc 2, не 128
+(
+    set -e
+    git -C "${WR}/seed" rm -q -r triage/open
+    git -C "${WR}/seed" -c user.name=t -c user.email=t@t commit -q -m no-triage
+    git -C "${WR}/seed" push -q "${WR}/origin.git" HEAD:main
+) < /dev/null >/dev/null 2>&1 || bad "обгортка: не прибрано triage/open у фікстурі"
+OUT="$(PATH="${FAKE}:${PATH}" GH_LOG="${TMP}/gh.log" GH_FIXTURES="${FX}/prs" STRW_ROOT="${WR}/root" STRW_ENGINE_LIB="${HERE}/../engine/lib" TMPDIR="${WR}" bash "${REFRESH}" "${FRESH}" 2>&1 < /dev/null)"; RC=$?
+HJ="$(printf '%s\n' "${OUT}" | sed -n 's/^hub.json: //p')"
+[ "${RC}" -eq 0 ] && [ -f "${HJ}" ] && [ "$(jget "${HJ}" 'T("summary")[0]["triage_open"]')" = "0" ] && ok "обгортка: origin/main без triage/open → 0 карток, rc 0" || bad "обгортка без triage/open" "rc=${RC} ${OUT}"
+(
+    set -e
+    git -C "${WR}/seed" rm -q -r engine/items
+    printf 'x\n' > "${WR}/seed/keep.txt"; git -C "${WR}/seed" add keep.txt
+    git -C "${WR}/seed" -c user.name=t -c user.email=t@t commit -q -m no-items
+    git -C "${WR}/seed" push -q "${WR}/origin.git" HEAD:main
+) < /dev/null >/dev/null 2>&1 || bad "обгортка: не прибрано engine/items у фікстурі"
+OUT="$(PATH="${FAKE}:${PATH}" GH_LOG="${TMP}/gh.log" GH_FIXTURES="${FX}/prs" STRW_ROOT="${WR}/root" STRW_ENGINE_LIB="${HERE}/../engine/lib" TMPDIR="${WR}" bash "${REFRESH}" "${FRESH}" 2>&1 < /dev/null)"; RC=$?
+[ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q "немає engine/items" && ok "червоний: origin/main без engine/items → обгортка rc 2 (не 128)" || bad "обгортка без engine/items" "rc=${RC} ${OUT}"
 git -C "${WR}/root/strw-state" remote set-url origin "${WR}/nope.git"
-OUT="$(PATH="${FAKE}:${PATH}" GH_LOG="${TMP}/gh.log" GH_FIXTURES="${FX}/prs" STRW_ROOT="${WR}/root" STRW_ENGINE_LIB="${HERE}/../engine/lib" TMPDIR="${WR}" bash "${REFRESH}" "${FX}/sessions.json" 2>&1 < /dev/null)"; RC=$?
+OUT="$(PATH="${FAKE}:${PATH}" GH_LOG="${TMP}/gh.log" GH_FIXTURES="${FX}/prs" STRW_ROOT="${WR}/root" STRW_ENGINE_LIB="${HERE}/../engine/lib" TMPDIR="${WR}" bash "${REFRESH}" "${FRESH}" 2>&1 < /dev/null)"; RC=$?
 [ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q "fetch origin main" && ! printf '%s' "${OUT}" | /usr/bin/grep -q "^hub.json:" && ok "червоний: fetch не вдався → обгортка rc 2" || bad "червоний: fetch" "rc=${RC} ${OUT}"
 OUT="$(STRW_ROOT="${WR}/root" bash "${REFRESH}" 2>&1 < /dev/null)"; RC=$?
 [ "${RC}" -eq 2 ] && printf '%s' "${OUT}" | /usr/bin/grep -q usage && ok "червоний: обгортка без файла сесій → rc 2, usage" || bad "обгортка без аргументу" "rc=${RC} ${OUT}"
