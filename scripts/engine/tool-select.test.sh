@@ -38,8 +38,9 @@ printf 'нотатка\nname: strw-not-frontmatter\n' > "${A}/notes.md"
 printf -- '---\nname: strw-unclosed\nтіло без закриття\n' > "${A}/unclosed.md"
 printf -- 'вступ\nname: strw-noopen\n---\nтіло після лінії\n' > "${A}/noopen.md"
 printf -- '---\nnames: strw-prefix\nname: strw-engineer\n---\n' > "${A}/prefix.md"
+printf -- '---\nmetadata:\n  name: strw-nested\nname: strw-engineer\n---\n' > "${A}/nested.md"
 L="${TMP}/loops"; mkdir -p "${L}"
-printf -- '---\nid: L3-build\ntrigger: x\n---\n' > "${L}/L3-build.md"
+printf -- '---\nid: L3-build\ntrigger: x\n---\nтіло\nid: L9-ghost\n' > "${L}/L3-build.md"
 tool() { # tool <id> <kind> <status> <rank> <tasks> <roles> <loops> <contours> <probe-рядки> [measured]
     printf '  - id: %s\n    kind: %s\n    name: "%s"\n    tasks: [%s]\n    roles: [%s]\n    loops: [%s]\n    contours: [%s]\n    status: %s\n    rank: %s\n' "$1" "$2" "$1" "$5" "$6" "$7" "$8" "$3" "$4"
     [ "$3" = active ] || printf '    why: "фікстура: %s"\n' "$3"
@@ -109,6 +110,8 @@ run "${E}" code-review-6a strw-code-reviewer C --loop L3-build; rc=$?
 if [ "${rc}" -eq 0 ] && first claude-p && [ "$(ids)" = "claude-p " ]; then ok "контур C: лише записи з C"; else bad "контур C" "$(show ${rc})"; fi
 run "${E}" code-review-6a strw-code-reviewer M --loop L33; rc=$?
 if [ "${rc}" -eq 2 ] && [ ! -s "${TMP}/out" ] && grep -qF "невідома петля 'L33'; словник: L3-build" "${TMP}/err"; then ok "петля поза loops/ плагіна → 2 (не тихе відкидання)"; else bad "невідома петля" "$(show ${rc})"; fi
+run "${E}" code-review-6a strw-code-reviewer M --loop L9-ghost; rc=$?
+if [ "${rc}" -eq 2 ] && grep -qF "невідома петля 'L9-ghost'" "${TMP}/err"; then ok "id: з тіла паспорта — не петля"; else bad "id: з тіла паспорта" "$(show ${rc})"; fi
 LD="${TMP}/no-loops" run "${E}" code-review-6a strw-code-reviewer M --loop L3-build; rc=$?
 if [ "${rc}" -eq 2 ] && grep -qF 'loops/ плагіна не знайдено' "${TMP}/err"; then ok "без loops/ петля невідома → 2 з підказкою"; else bad "без loops/" "$(show ${rc})"; fi
 
@@ -131,7 +134,7 @@ done
 AG="${TMP}/no-agents" run "${E}" code-review-6a strw-code-reviewer M --loop L3-build; rc=$?
 if [ "${rc}" -eq 2 ] && grep -qF 'agents/ плагіна не знайдено' "${TMP}/err"; then ok "без agents/ роль-агент невідома → 2 з підказкою"; else bad "без agents/" "$(show ${rc})"; fi
 run "${E}" code-review-6a strw-nobody M; rc=$?
-if [ "${rc}" -eq 2 ] && grep -qF "словник: hub, master, child, strw-code-reviewer, strw-engineer" "${TMP}/err" && ! grep -qE "strw-not-frontmatter|strw-ghost|strw-unclosed|strw-noopen|strw-prefix" "${TMP}/err"; then ok "словник ролей: лише name: закритого frontmatter (не тіло, не файл без відкриття ---, не незакритий, не names:)"; else bad "словник ролей" "$(show ${rc})"; fi
+if [ "${rc}" -eq 2 ] && grep -qF "словник: hub, master, child, strw-code-reviewer, strw-engineer" "${TMP}/err" && ! grep -qE "strw-not-frontmatter|strw-ghost|strw-unclosed|strw-noopen|strw-prefix|strw-nested" "${TMP}/err"; then ok "словник ролей: лише name: закритого frontmatter (не тіло, не файл без відкриття ---, не незакритий, не names:)"; else bad "словник ролей" "$(show ${rc})"; fi
 out="$(STRW_ROOT="${R}" STRW_TOOLS_NOW=2026-10-28T12:00Z env -u STRW_AGENTS_DIR -u STRW_LOOPS_DIR bash "${TOOL}" "${E}" code-review-6a strw-code-reviewer M --loop L3-build 2>&1)"; rc=$?
 if [ "${rc}" -eq 0 ]; then ok "типово agents/ і loops/ — цього плагіна (strw-code-reviewer і L3-build відомі)"; else bad "типові теки agents/ і loops/" "rc=${rc} ${out}"; fi
 run "${E}" schedule child M; rc=$?
@@ -148,9 +151,10 @@ for o in --kind --loop; do
 done
 
 # --- 6. проводка: виклик із паспорта ВИКОНУЄТЬСЯ ----------------------------------------------
-# файл | тип задачі | роль | петля | опції після --loop | контури, якими підставляється <контур>
-WIRED="loops/L3-build.md|code-review-6a|strw-code-reviewer|L3-build|--kind cli|M
-agents/engineer.md|code-rescue|strw-engineer|L3-build||M C"
+# файл | тип задачі | роль | петля | опції після --loop | контури, якими підставляється <контур> | дія на коди ≠0 (у тому ж рядку)
+# L3 6a — контур M буквально: правило 6a — про мерж, а мержі робить контур M (раннер на Mac).
+WIRED="loops/L3-build.md|code-review-6a|strw-code-reviewer|L3-build|--kind cli|M|коди 2 і 4 рев'ю теж не зупиняють
+agents/engineer.md|code-rescue|strw-engineer|L3-build||M C|коди 2/3/4 — причина в trace (2 — ще \`finding\`: реєстр зламаний), далі сам — цикл не зупиняється"
 # Живий двійник фікстури: та сама проводка мусить проходити й на живому реєстрі.
 LIVE="${STRW_ROOT:-$HOME/Developer/STRW}/strw-state/engine"
 WIRE_OUT="$(STRW_ROOT="${R}" STRW_TOOLS_NOW=2026-10-28T12:00Z WIRED="${WIRED}" LIVE="${LIVE}" FIXTURE="${E}" FACTORY="${FACTORY}" python3 - <<'PY'
@@ -178,7 +182,7 @@ for p in glob.glob(os.path.join(F, "loops", "*.md")) + glob.glob(os.path.join(F,
 listed = {w[0] for w in wired} | {"skills/strw-loop-run/SKILL.md"}
 say(callers == listed, f"зворотне покриття: виклики tool-select.sh = WIRED ∪ SKILL ({len(callers)})",
     f"кличуть: {sorted(callers)}; у WIRED: {sorted(listed)}")
-for path, task, role, loop, opts, contours in wired:
+for path, task, role, loop, opts, contours, action in wired:
     raw, txt = open(os.path.join(F, path), encoding="utf-8").read(), text(os.path.join(F, path))
     calls = CALL.findall(txt)
     mentions = raw.count("tool-select.sh")
@@ -191,6 +195,8 @@ for path, task, role, loop, opts, contours in wired:
     say(argv[2:5] == want and argv[6:] == tail, f"{path}: виклик — {task} · {role} · {' '.join(tail)}", f"{argv}")
     cs = contours.split()
     say(argv[5] == ("<контур>" if len(cs) > 1 else cs[0]), f"{path}: контур — {'<контур> (ходить у ' + ', '.join(cs) + ')' if len(cs) > 1 else cs[0]}", f"{argv[5]}")
+    line = next((l for l in txt.split("\n") if "tool-select.sh" in l), "")
+    say(action in line, f"{path}: дія на коди ≠0 названа поруч із викликом", f"немає «{action}»")
     if path.startswith("loops/"):
         m = re.search(r"^id:\s*(\S+)", txt, re.M)
         say(bool(m) and m.group(1) == loop, f"{path}: --loop = id паспорта", f"id {m and m.group(1)}")
@@ -202,6 +208,9 @@ for path, task, role, loop, opts, contours in wired:
         for c in cs:
             rc, out, err = run(calls[0], live, c, {"STRW_ROOT": os.path.dirname(os.path.dirname(live)), "STRW_TOOLS_NOW": ""})
             say(rc in (0, 3, 4), f"{path} (контур {c}): живий реєстр знає тип задачі, роль і вид → {rc}", f"rc={rc}\n{out}\n{err}")
+            # проба, що не вкладається в таймаут, на живому реєстрі — дефект запису (factory.tool-registry:
+            # codex-cli → `codex login status`, рішення майстра 28.10), не «недоступний»
+            say("(timeout)" not in out, f"{path} (контур {c}): жодна проба живого реєстру не впала в таймаут", out)
     else:
         print(f"SKIP · {path}: немає {live}/tools.yaml — живий прогін після мержу factory.tool-registry")
 # SKILL Step 3a: шаблон виклику з ${CLAUDE_PLUGIN_ROOT} і чотири коди — словами, якими їх друкує скрипт,
@@ -212,6 +221,8 @@ say(len(sk) == 1 and '`bash "${CLAUDE_PLUGIN_ROOT}/scripts/engine/tool-select.sh
 for code, words in (("0", "обрано"), ("3", "немає доступного"), ("4", "немає інструмента в реєстрі"), ("2", "не поміряти")):
     say(bool(sk) and f"{code} «{words}»" in sk[0], f"SKILL Step 3a називає код {code} «{words}»")
 say(bool(sk) and re.search(r"2 «не поміряти»[^;]*→ STOP \+ `finding`", sk[0]) is not None, "SKILL Step 3a: код 2 → STOP + finding")
+say(bool(sk) and "крім місць, де паспорт чи агент поруч із викликом називає гучну деградацію (L3 6a, engineer п.9)" in sk[0],
+    "SKILL Step 3a: виняток для гучної деградації названо (L3 6a, engineer п.9)")
 PY
 )"
 printf '%s\n' "${WIRE_OUT}"

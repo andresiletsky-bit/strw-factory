@@ -170,6 +170,9 @@ broken "${TMP}/b19" '1,/    kind: cli/s/    kind: cli/    kindx: cli/';  expect2
 broken "${TMP}/b20" 's/contours: \[M, C, I\]/contours: M/';            expect2 "vocab.contours рядком → 2" "vocab.contours — список рядків" real-sh "${TMP}/b20"
 broken "${TMP}/b21" 's/session_roles: \[hub, master, child\]/session_roles: hub/'; expect2 "vocab.session_roles рядком → 2" "vocab.session_roles — список рядків" real-sh "${TMP}/b21"
 broken "${TMP}/b22" 's/^  - id: exit7$/  - id: ""/';                    expect2 "порожній id → 2" "немає \`id\`" real-sh "${TMP}/b22"
+broken "${TMP}/b23" 's/contours: \[M, C, I\]/contours: {M: x, C: y}/';   expect2 "vocab.contours мапою → 2 (мапа лише для task_types)" "vocab.contours — список рядків" real-sh "${TMP}/b23"
+broken "${TMP}/b24" 's/session_roles: \[hub, master, child\]/session_roles: [1, 2]/'; expect2 "vocab.session_roles не рядками → 2" "vocab.session_roles — список рядків" real-sh "${TMP}/b24"
+broken "${TMP}/b25" '1,/    kind: cli/s/    kind: cli/    kind: CLI/';   expect2 "kind запису поза vocab.kinds → 2 (не тихе випадання з --kind)" "kind 'CLI' поза vocab.kinds" real-sh "${TMP}/b25"
 # зламаний ІНШИЙ запис теж зупиняє: реєстр або читається весь, або «не поміряти»
 expect2 "зламаний сусідній запис → 2 (fail-closed)" "інструмент sess-auth" real-sh "${TMP}/b4"
 expect2 "зламана дата сусіда → 2 ще при читанні, не при пробі" "measured.at 'yesterday'" real-sh "${TMP}/b5"

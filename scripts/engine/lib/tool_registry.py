@@ -114,6 +114,8 @@ def load(engine, load_nodup):
     seen = set()
     for i, t in enumerate(tools):
         _check_tool(t, i)
+        if t["kind"] not in doc["_vocab"]["kinds"]:   # kind читається фільтром --kind: `CLI` випав би мовчки
+            raise RegistryError(f"інструмент {t['id']}: kind {t['kind']!r} поза vocab.kinds")
         if t["id"] in seen:
             raise RegistryError(f"дубль id {t['id']}")
         seen.add(t["id"])
