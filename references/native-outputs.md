@@ -61,7 +61,7 @@ git; Docs — хіба дзеркало для читання CEO, і лише �
 | `ios-build` | збірка й тести iOS | — | — | maker L3 · xcodebuild | дія, не документ |
 | `backend-ops` | операції бекенду | — | — | maker L3 · у сесії | дія, не документ |
 | `vcs-pr` | гілки, PR, мерж | — | — | сесія · gh | дія, не документ |
-| `qa-release` | launch-checklist.md, build-report.md | файл | впроваджено | strw-qa · за артефакт-контрактом | G3 читає їх із git (`artifact-contracts.md`) |
+| `qa-release` | launch-checklist.md, build-report.md | файл | впроваджено | maker L3 → build-report · strw-qa → launch-checklist | G3 читає їх із git (`artifact-contracts.md`) |
 | `regression` | regression-report.md | файл | впроваджено | strw-qa L8 · щотижня | чекер регресії читає звіт із git |
 | `report-doc` | звіти для читання CEO (portfolio-brief, retro-note) | Docs | чекає CEO | хаб · дзеркало файла після рішення | петлі читають файли з git; Docs змінює, як CEO отримує звіт |
 | `report-dashboard` | огляд реєстру інструментів | Dashboard | впроваджено | сесія фабрики · генератор `scripts/native/tools-dashboard-data.py` | нічого не замінює, дані відтворювані; дошка хаба — окреме питання CEO |

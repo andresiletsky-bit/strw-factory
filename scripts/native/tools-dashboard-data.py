@@ -229,7 +229,7 @@ def main():
         try:
             raw = open(a.registry, "rb").read()
             reg = load_nodup(raw.decode("utf-8"))
-        except (OSError, UnicodeDecodeError, yaml.YAMLError) as e:
+        except (OSError, UnicodeDecodeError, yaml.YAMLError, ValueError) as e:  # ValueError: YAML-дата 2026-02-30
             raise Refuse("реєстр %s не читається: %s" % (a.registry, str(e).splitlines()[0] if str(e) else type(e).__name__))
         rows, tasks_rows, summary = build(reg, now)
     except Refuse as e:

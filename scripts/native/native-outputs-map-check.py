@@ -119,7 +119,7 @@ def main():
     try:
         text = open(a.map, encoding="utf-8").read()
         reg = load_nodup(open(a.registry, encoding="utf-8").read())
-    except (OSError, UnicodeDecodeError, yaml.YAMLError) as e:
+    except (OSError, UnicodeDecodeError, yaml.YAMLError, ValueError) as e:  # ValueError: YAML-дата 2026-02-30
         sys.stderr.write("ERROR: не читається: %s (код 2)\n" % (str(e).splitlines()[0] if str(e) else type(e).__name__))
         return 2
     found = check(text, reg)

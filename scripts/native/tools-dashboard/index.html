@@ -117,6 +117,13 @@
 </div>
 
 <script>
+  // logic:begin — чисті предикати таблиць; їх виконує scripts/native/tools-dashboard-page.test.sh
+  const isStale = (r) => r.stale === true || r.stale === 'true';
+  const toolVisible = (r, statusPick, q) =>
+    (!statusPick || r.status === statusPick) && (!q || [r.id, r.name, r.tasks].join(' ').toLowerCase().includes(q));
+  const taskVisible = (r, gapsOnly) => !gapsOnly || Number(r.active) === 0;
+  // logic:end
+
   // Один рядок summary → кожне число — окрема drawing; рядок summary завжди один (генератор).
   const one = (field, fmt) => (el) => {
     const s = dash.data('summary');
@@ -150,7 +157,7 @@
     const t = dash.data('tasks');
     tbody.replaceChildren();
     if (t.status !== 'ok') return;
-    t.data.filter((r) => !gapsOnly || Number(r.active) === 0).forEach((r) => {
+    t.data.filter((r) => taskVisible(r, gapsOnly)).forEach((r) => {
       const tr = document.createElement('tr');
       cell(tr, r.task);
       cell(tr, r.description, 'tr-hide-narrow');
@@ -170,8 +177,7 @@
     tbody.replaceChildren();
     if (t.status !== 'ok') return;
     t.data
-      .filter((r) => !statusPick || r.status === statusPick)
-      .filter((r) => !q || [r.id, r.name, r.tasks].join(' ').toLowerCase().includes(q))
+      .filter((r) => toolVisible(r, statusPick, q))
       .forEach((r) => {
         const tr = document.createElement('tr');
         cell(tr, r.id);
@@ -182,8 +188,7 @@
         cell(tr, r.tasks);
         const m = cell(tr, '');
         if (r.measured_result === 'unmeasured') m.textContent = 'не виміряно'; else chip(m, r.measured_result);
-        const stale = r.stale === true || r.stale === 'true';
-        cell(tr, r.measured_age_days, 'tr-num' + (stale ? ' tr-stale' : ''));
+        cell(tr, r.measured_age_days, 'tr-num' + (isStale(r) ? ' tr-stale' : ''));
         cell(tr, r.contours, 'tr-hide-narrow');
         cell(tr, r.user_data, 'tr-hide-narrow');
         cell(tr, r.enabled_by, 'tr-hide-narrow');

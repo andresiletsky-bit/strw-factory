@@ -21,7 +21,7 @@ if (nb !== 1 || ne !== 1) {
   bad('маркери logic:begin / logic:end — рівно по одному', 'begin=' + nb + ' end=' + ne);
   console.log('\n' + pass + ' PASS · ' + fail + ' FAIL'); process.exit(1);
 }
-const src = page.slice(page.indexOf(B) + B.length, page.indexOf(E));
+const src = page.slice(page.indexOf('\n', page.indexOf(B)) + 1, page.indexOf(E)); // від рядка після маркера
 const rest = page.slice(0, page.indexOf(B)) + page.slice(page.indexOf(E));
 const L = new Function(src + '\nreturn { isStale, toolVisible, taskVisible };')();
 const eq = (name, got, want) => (got === want ? ok(name) : bad(name, 'got ' + got + ', want ' + want));
