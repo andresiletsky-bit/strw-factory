@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # validate-design-index.test.sh — схема design/index.yaml (крок 2 strw-design-sync).
 # Своїх тестів у валідатора не було (свідком був лише engine-lib-guard на дублі ключа). Поверхню
-# `ds-artifact` (дизайн-система в Claude, dec-117) додано з цим файлом: кожен випадок міняє ОДНУ
+# `ds-artifact` (дизайн-система в Claude, dec-118) додано з цим файлом: кожен випадок міняє ОДНУ
 # річ у зеленому індексі й звіряє ПРИЧИНУ, не лише код.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
