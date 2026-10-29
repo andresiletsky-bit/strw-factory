@@ -381,6 +381,16 @@ for path in item_files:
     if plan is not None:
         for m in plan_errors(plan):
             err(f"{name}: {m}")
+
+    # `human_checklist:` — шлях до чекліста ручної перевірки CEO в репо елемента (стандарт
+    # references/human-test-checklist.md). Раннер strw-ops читає цей файл із дерева агента, тож форма
+    # тут — перша лінія: відносний `docs/smoke/<…>.md`, без `..` (друга — realpath і симлінки в раннері).
+    hc = it.get("human_checklist")
+    if hc is not None and not (isinstance(hc, str)
+                               and re.fullmatch(r"docs/smoke/(?:[^/\s]+/)*[^/\s]+\.md", hc)
+                               and ".." not in hc.split("/")):
+        err(f"{name}: human_checklist: {hc!r} — мусить бути відносним шляхом docs/smoke/<…>.md без «..» "
+            f"(стандарт references/human-test-checklist.md)")
     elif st == "ready" and str(it.get("size")) in ("M", "L"):
         # WARN, а не ERROR — свідомо. ERROR зробив би елемент `blocked`, тобто
         # черга спинилась би на кожному елементі M/L разом, а це рівно та шкода,

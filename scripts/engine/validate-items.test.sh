@@ -191,5 +191,22 @@ PY
     else echo "SKIP · 7e: у фікстурі немає вузлів рішень (decisions/*.md) — проба не ганялась"; fi
 else echo "SKIP · 7e: у фікстурі немає decisions/ — проба не ганялась"; fi
 
+# 8. `human_checklist:` — форма шляху до чекліста ручної перевірки CEO (factory.human-test-checklist).
+# Свідок — рядок ERROR про поле, не rc: фікстура = живий реєстр, і його STALE дає rc≠0 з чужої причини.
+HC_ITEM="$(ls "$FX/engine/items/"*.yaml | head -1)"
+cp "$HC_ITEM" "$TMP/hc-orig.yaml"
+for bad_hc in "../secret.md" "/etc/passwd" "docs/smoke/../../x.md" "docs/other/a.md" "docs/smoke/a.txt"; do
+    cp "$TMP/hc-orig.yaml" "$HC_ITEM"; printf 'human_checklist: "%s"\n' "$bad_hc" >> "$HC_ITEM"
+    out="$(run_v)"
+    if printf '%s' "$out" | grep -q "human_checklist: '$bad_hc' — мусить бути"; then
+        ok "human_checklist: $bad_hc → ERROR"
+    else bad "human_checklist: $bad_hc мав би бути ERROR" "$out"; fi
+done
+cp "$TMP/hc-orig.yaml" "$HC_ITEM"; printf 'human_checklist: docs/smoke/testflight-full.md\n' >> "$HC_ITEM"
+out="$(run_v)"
+if ! printf '%s' "$out" | grep -q "human_checklist:"; then ok "human_checklist: docs/smoke/testflight-full.md — без ERROR (контроль)"
+else bad "правильна форма human_checklist не мала б давати ERROR" "$out"; fi
+cp "$TMP/hc-orig.yaml" "$HC_ITEM"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

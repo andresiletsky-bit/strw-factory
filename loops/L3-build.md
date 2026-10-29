@@ -21,7 +21,7 @@ state_writes: products/<id>/state.md · budget.md · рядок у loops-log/. �
 
 Вісім гейтів: `tests · lint · contract · kmp · deps · secrets · tracking · human_smoke`.
 
-**`human_smoke` — повноцінний гейт.** Година живого користування 06.08 дала три дефекти, яких автотести не ловлять за побудовою. Коли до екрана руками не дійти — двоактовий XCTest проти живого стеку, зі `skippedTests: 0`, перевіреним через `xcresulttool` (04.08).
+**`human_smoke` — повноцінний гейт.** Година живого користування 06.08 дала три дефекти, яких автотести не ловлять за побудовою. **Запит до CEO на ручну перевірку — лише чеклістом** (`references/human-test-checklist.md`, слова CEO 29.10): елемент несе `human_checklist: docs/smoke/<…>.md`, без нього `strw-run` не стартує; чекліст, що не пройшов `scripts/human-checklist-check.py`, — `finding` замість gate-request (код 11), повтор — `strw-run.sh … --human-request`. Коли до екрана руками не дійти — двоактовий XCTest проти живого стеку, зі `skippedTests: 0`, перевіреним через `xcresulttool` (04.08).
 
 ## Правила циклу
 

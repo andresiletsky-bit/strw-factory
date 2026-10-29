@@ -4,6 +4,15 @@
 ## [Unreleased]
 
 ### Added
+- **Чекліст ручної перевірки CEO — стандарт і валідатор (factory.human-test-checklist, слова CEO 29.10 «ти готуєш
+  покрокові чеклісти, як мені потрібно пройти»).** Стандарт `references/human-test-checklist.md`: українською;
+  передумови першими (збірка, пристрої, акаунти, **Покриває:** `id` → номери кроків, джерело підписів); кроки
+  `**N.M (A)**` з тим, хто діє; підписи екрана жирним у «» дослівно з локалізації продукту; очікування `- [ ]` під
+  кожним кроком; те, що стирає дані, — наостанок; «Не входить» із причиною; CEO відповідає лише ✅ / ❌.
+  Валідатор `scripts/human-checklist-check.py <файл> [--repo] [--item]` (rc 0/1/2) — 42 проби, кожне правило
+  вбивається мутацією; живий корпус: тест-план хаба 29.10 — 6 порушень, `pact-ios/docs/smoke/human-smoke-full.md` — 8.
+  `validate-items.sh` — форма `human_checklist:`. Паспорт L3, `strw-loop-run`, `strw-triage`, `engineer`, `qa`,
+  `state-protocol.md`, `templates/AGENTS.md` — запит до CEO лише посиланням на чекліст. До сесій доїде з релізом.
 - **Підбір інструмента з реєстру: `scripts/engine/tool-select.sh` і `tool-probe.sh` (factory.tool-select, слова CEO 28.10
   «фабрика підбирає найоптимальніші інструменти для тої чи іншої задачі»).** Реєстр — `strw-state/engine/tools.yaml`
   (схема v1, елемент factory.tool-registry); логіка — `scripts/engine/lib/tool_registry.py`, одна на обидва входи.
