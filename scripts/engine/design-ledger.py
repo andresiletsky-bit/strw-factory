@@ -223,12 +223,20 @@ def report(doc, features, by_id):
            "_Згенеровано `design-ledger.py --report` з `design/ledger.yaml`; руками не редагується._", ""]
     def line(e, extra=""):
         return f"- {e['id']} — {e.get('title', '')}{extra}"
+    live = sorted((e for e in by_id.values() if e.get("status") == "live"), key=lambda x: x["id"])
     out += ["## Зараз у проді", ""]
-    for eid, e in sorted(by_id.items(), key=lambda kv: (kv[1].get("features") or [""])[0]):
-        if e.get("status") == "live":
-            for f in e.get("features") or []:
-                out.append(f"- {features.get(f, f)} · {e.get('kind')}: {eid} ({e.get('date')}) — "
-                           f"{e.get('title', '')} · {e.get('live_evidence', '')}")
+    for fid, ftitle in features.items():   # порядок фіч — як оголошено в реєстрі
+        for e in live:
+            if fid in (e.get("features") or []):
+                out.append(f"- {ftitle} · {e.get('kind')}: {e['id']}")
+    if live:
+        out += ["", "Докази проду:", ""]
+        out += [f"- {e['id']} ({e.get('date')}) — {e.get('title', '')} · {e.get('live_evidence', '')}" for e in live]
+    else:
+        out.append("- немає")
+    holes = sorted((e for e in by_id.values() if e.get("snapshot_pending")), key=lambda x: str(x["snapshot_pending"].get("by")))
+    out += ["", "## Дірки архіву (знімка ще немає)", ""]
+    out += [f"- {e['id']} — {e['snapshot_pending'].get('what')} · до {e['snapshot_pending'].get('by')}" for e in holes] or ["- немає"]
     for title, st, field in (("В роботі", "in-work", "items"), ("Заплановано", "planned", "plan_ref"),
                              ("Не взяте (з умовою повернення)", "not-taken", "return_if")):
         out += ["", f"## {title}", ""]

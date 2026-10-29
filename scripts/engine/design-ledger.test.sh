@@ -221,12 +221,18 @@ run "реєстр не парситься" 2 "не парситься" "$TMP/bro
 printf 'schema_version: 1\nproduct: p\nentries: []\nproduct: q\n' > "$TMP/dup.yaml"
 run "дубль ключа — читач рушія" 2 "дубльований ключ \`product\`" "$TMP/dup.yaml"
 
+# звіт: дірки архіву — окремим розділом, з терміном
+out="$(python3 "$L" "$TMP/f16.yaml" --repo-root "$R" --items "$R/strw-state/engine/items" --today 2026-10-29 --report 2>/dev/null)"
+if printf '%s' "$out" | grep -qF -- '- p-001.review@2026-08-19 — експорт з Claude Design · до 2026-12-14'; then ok "звіт: дірка архіву названа з терміном"
+else bad "звіт без дірки архіву" "$out"; fi
+
 # звіт: що в проді, в роботі, заплановано, історія — з того самого реєстру
 out="$(python3 "$L" "$TMP/green.yaml" --repo-root "$R" --items "$R/strw-state/engine/items" --today 2026-10-29 --report 2>&1)"; rc=$?
 if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -qF '## Зараз у проді' \
    && printf '%s' "$out" | grep -qF -- '- Б.1 Головна · screens: p-001.canvas@2026-10-20' \
    && printf '%s' "$out" | grep -qF -- '- p-001.home@v3 — Головна v3 · елементи: p-001.design.home-v3' \
-   && printf '%s' "$out" | grep -qF '| 2026-07-21 | p-001.canvas@2026-07-21 | superseded → p-001.canvas@2026-10-20 |'; then ok "звіт: прод, робота, історія з наступником"
+   && printf '%s' "$out" | grep -qF '| 2026-07-21 | p-001.canvas@2026-07-21 | superseded → p-001.canvas@2026-10-20 |' \
+   && [ "$(printf '%s' "$out" | grep -cF -- '- p-001.canvas@2026-10-20 (2026-10-20) — Canvas після back-sync · p-ios main@')" -eq 1 ]; then ok "звіт: прод, доказ один раз, робота, історія з наступником"
 else bad "звіт" "rc=$rc · $out"; fi
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
