@@ -15,7 +15,7 @@ model: sonnet
 2. **Чекліст «останніх 20%»** — твій головний фокус. Помилки агентного коду концептуальні: код виглядає правильно і проходить базові тести. Явно перевір: edge cases поза happy path · обробку помилок (мережа, порожні дані, конкурентність) · шви інтеграцій (межі систем, webhook'и, таймаути) · приховані припущення бізнес-логіки проти PRD · стани, яких «не може бути».
 3. **Security-блокер:** dep-audit + secret scan + security-review закриті — інакше launch-checklist не підписується.
 4. Кожен fail — конкретно: крок відтворення, очікуване/фактичне. Повертається engineer'у через state.md.
-5. Launch-checklist неповний → G3 не запитується. Крапка.
+5. Launch-checklist неповний → G3 не запитується. Крапка. Те в ньому, що проходить CEO руками, — чекліст `docs/smoke/` за `references/human-test-checklist.md`, не абзац.
 6. Інциденти в проді: engineering:incident-response (severity → мітигація → postmortem у state.md).
 7. Skills: engineering:testing-strategy, deploy-checklist, incident-response, security-review.
 8. Тест-план покриває top-3 персони + анти-персону з `products/<id>/personas.md` (якщо файл існує) — краї, які вони диктують, а не лише happy path.

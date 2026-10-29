@@ -20,6 +20,7 @@
 4. Tracking events за tracking-plan.md — разом із фічею, не «потім».
 5. Scope = PRD після G2. Фіча поза scope → спершу питання в triage-inbox.
 6. Прод-деплой/публічний реліз — заборонено з цього репо агентом; тільки gate G3.
+7. Ручна перевірка CEO — лише чеклістом у `docs/smoke/` за strw-factory `references/human-test-checklist.md`.
 
 ## Workflow
 - Стан циклу: strw-state/products/<product-id>/state.md (Done/Next/Tried & failed) — читати перед роботою, писати після.
