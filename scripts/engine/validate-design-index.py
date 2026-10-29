@@ -9,6 +9,13 @@
 `tokens.json`), а не в канвас-артефакті чи claude.ai/design. Хешується тією
 самою машинерією: `watched`, `working_files`, `hash`, `tokens`.
 
+`surface: ds-artifact` — дизайн-система продукту в Claude (артефакт типу Design
+System, рішення CEO 29.10, dec-115). `working_files` — закріплена копія в
+репозиторії продукту (`design-system/` з `UPSTREAM.lock`), бо артефакт приватний
+і CI його не прочитає. Обов'язкові `url` (`https://claude.ai/artifact/…`) і
+`version` — версія артефакту, з якої знято копію: без неї крок 1 скіла не може
+сказати, чи копія свіжа, і «звірено» означало б «звірено з чимось».
+
 Необов'язковий блок `figma` на будь-якій одиниці описує дублікат у Figma —
 `file_key` (обов'язково), `node_id` (необов'язково), `rendered_from` (хеш, з
 якого малювався дублікат; обов'язково, `sha256:…`). `figma` на `unwatched`-
@@ -32,7 +39,8 @@ except ImportError:
     sys.exit(2)
 
 ALLOWED_STATE = {"watched", "unwatched"}
-ALLOWED_SURFACE = {"canvas-artifact", "claude-design", "code"}
+ALLOWED_SURFACE = {"canvas-artifact", "claude-design", "code", "ds-artifact"}
+DS_ARTIFACT_URL = "https://claude.ai/artifact/"
 ALLOWED_FIGMA_KEYS = {"file_key", "node_id", "rendered_from"}
 
 def main(path):
@@ -69,6 +77,15 @@ def main(path):
         if u.get("surface") not in ALLOWED_SURFACE:
             errors.append(f"{where}: surface={u.get('surface')!r}, "
                           f"дозволені {sorted(ALLOWED_SURFACE)}")
+
+        if u.get("surface") == "ds-artifact":
+            url = str(u.get("url") or "")
+            if not url.startswith(DS_ARTIFACT_URL) or not url[len(DS_ARTIFACT_URL):].strip("/"):
+                errors.append(f"{where}: ds-artifact без url виду {DS_ARTIFACT_URL}<id> — "
+                              f"крок 1 скіла читає артефакт саме за ним")
+            if not str(u.get("version") or "").strip():
+                errors.append(f"{where}: ds-artifact без version — без версії артефакту, з якої "
+                              f"знято копію, свіжість копії не поміряти")
 
         state = u.get("state")
         if state not in ALLOWED_STATE:

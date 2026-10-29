@@ -10,3 +10,6 @@ scripts/release.conf
 # офлайн-знімок, щоб було з чим порівняти червоний прогін.
 references/evals/results/*
 !references/evals/results/latest-offline.json
+
+# Python bytecode — читач YAML рушія (scripts/engine/lib) імпортується щопрогону
+__pycache__/
