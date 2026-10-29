@@ -142,7 +142,7 @@ def check_archive(root, eid, rel, p, errors):
         errors.append(f"{eid}: MANIFEST теки {rel} не називає ledger={eid}")
     listed = {}
     for line in text.splitlines():
-        if line.startswith("sha256") and not SUM_RE.match(line.strip()):
+        if line.strip().lower().startswith("sha256") and not SUM_RE.match(line.strip()):
             errors.append(f"{eid}: MANIFEST теки {rel}: рядок не у формі `sha256  <сума>  <файл>`: {line.strip()}")
             continue
         m = SUM_RE.match(line.strip())
@@ -190,8 +190,9 @@ def check_source(root, eid, src, unread, errors):
         if unsafe(repo) or unsafe(path):
             errors.append(f"{eid}: git-джерело {src['git']!r} виходить за межі парасольки")
             return False
-        if path.endswith("/") or "//" in path:
-            errors.append(f"{eid}: git-джерело {src['git']!r} — шлях на теку чи з «//»; знімок версії — файл")
+        if path.endswith("/") or "//" in path or path.startswith(":"):
+            errors.append(f"{eid}: git-джерело {src['git']!r} — шлях на теку, з «//» чи з магією pathspec «:»; "
+                          f"знімок версії — файл за буквальним шляхом")
             return False
         if root is None:
             unread.append(f"{eid}: {src['git']} не звірено — немає --repo-root")
@@ -327,6 +328,8 @@ def validate(doc, root, items_dir, today):
                           f"історія, що живе лише за посиланням чи в робочому дереві, зникає разом із ним; "
                           f"або snapshot_pending")
 
+        if st == "superseded" and e.get("live_evidence") is not None and not str(e["live_evidence"]).strip():
+            errors.append(f"{eid}: live_evidence порожній — або доказ, що версія була в проді, або без поля")
         if st not in ("live", "superseded") and e.get("live_evidence") is not None:
             errors.append(f"{eid}: live_evidence у стані {st} — доказ проду має лише live-версія (чи superseded, "
                           f"що була live)")
@@ -351,8 +354,9 @@ def validate(doc, root, items_dir, today):
                 if eid not in (by_id[nxt].get("supersedes") or []):
                     errors.append(f"{eid}: superseded_by {nxt}, а той не має його в supersedes")
                 nx = by_id[nxt]
-                if e.get("live_evidence") and not (nx.get("status") == "live" or
-                                                   nx.get("status") == "superseded" and nx.get("live_evidence")):
+                was_live = str(e.get("live_evidence") or "").strip()
+                if was_live and not (nx.get("status") == "live" or
+                                     nx.get("status") == "superseded" and str(nx.get("live_evidence") or "").strip()):
                     errors.append(f"{eid}: була live (live_evidence), а замінена версією у стані {nx.get('status')} — "
                                   f"live-версію замінює лише та, що дійшла до проду")
                 if by_id[nxt].get("status") == "not-taken":

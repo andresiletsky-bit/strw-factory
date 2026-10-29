@@ -371,7 +371,7 @@ run "id фічі не рядок: форма (2)" 2 "features[0].id має бу�
 edit "$TMP/t1.yaml" "E['p-001.canvas@2026-10-20']['sources']=[{'git':'p-ios@${V2}:design-reference/'}]"
 run "git-джерело — тека зі скісною в кінці" 1 "p-001.canvas@2026-10-20: git-джерело 'p-ios@${V2}:design-reference/' — шлях на теку" "$TMP/t1.yaml"
 edit "$TMP/t2.yaml" "E['p-001.canvas@2026-10-20']['sources']=[{'git':'p-ios@${V2}:design-reference//Canvas.dc.html'}]"
-run "git-шлях з подвійною скісною" 1 "p-001.canvas@2026-10-20: git-джерело 'p-ios@${V2}:design-reference//Canvas.dc.html' — шлях на теку чи з «//»" "$TMP/t2.yaml"
+run "git-шлях з подвійною скісною" 1 "p-001.canvas@2026-10-20: git-джерело 'p-ios@${V2}:design-reference//Canvas.dc.html' — шлях на теку, з «//»" "$TMP/t2.yaml"
 edit "$TMP/t2c.yaml" "E['p-001.canvas@2026-10-20']['sources']=[{'git':'p-ios@${V2}:design-reference/*.dc.html'}]"
 run "git-шлях-маска: pathspec знайшов би файл, але це не той шлях" 3 "p-001.canvas@2026-10-20: p-ios@${V2}:design-reference/*.dc.html не читається" "$TMP/t2c.yaml"
 edit "$TMP/t2b.yaml" "E['p-001.canvas@2026-10-20']['sources']=[{'git':'p-ios@${V2}:design-reference'}]"
@@ -391,6 +391,15 @@ edit "$TMP/t5.yaml" "E['p-001.canvas@2026-07-21']['live_evidence']='main@old'; E
 run "колишню live замінила версія в роботі" 1 "p-001.canvas@2026-07-21: була live (live_evidence), а замінена версією у стані in-work" "$TMP/t5.yaml"
 edit "$TMP/t6.yaml" "E['p-001.canvas@2026-07-21']['live_evidence']='main@old'"
 run "колишня live, замінена live — зелено (контроль)" 0 "реєстр макетів у формі" "$TMP/t6.yaml"
+
+# фінальне рев'ю (29.10): примітки — свідками
+edit "$TMP/u1.yaml" "E['p-001.canvas@2026-10-20']['sources']=[{'git':'p-ios@${V2}::/design-reference/Canvas.dc.html'}]"
+run "git-шлях з магією pathspec" 1 "з магією pathspec «:»" "$TMP/u1.yaml"
+edit "$TMP/u2.yaml" "E['p-001.canvas@2026-07-21']['live_evidence']='   '"
+run "порожній live_evidence на superseded" 1 "p-001.canvas@2026-07-21: live_evidence порожній" "$TMP/u2.yaml"
+cp "${OB}/MANIFEST" "$TMP/ob.manifest"; printf '  SHA256  %s  index.html\n' "$(sum "${OB}/index.html")" >> "${OB}/MANIFEST"
+run "рядок SHA256 з відступом — не мовчки пропущений" 1 "рядок не у формі" "$TMP/green.yaml"
+cp "$TMP/ob.manifest" "${OB}/MANIFEST"
 
 printf 'schema_version: 1\nproduct: p\nentries: [\n' > "$TMP/broken.yaml"
 run "реєстр не парситься" 2 "не парситься" "$TMP/broken.yaml"
