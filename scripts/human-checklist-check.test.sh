@@ -42,7 +42,10 @@ mkrepo() { # mkrepo <тека>
   "delete.count": { "localizations": { "uk": { "variations": { "plural": {
       "one":   { "stringUnit": { "state": "translated", "value": "Видалити %lld договір" } },
       "other": { "stringUnit": { "state": "translated", "value": "Видалити %lld договорів" } } } } } } },
-  "Вітаю, %@": {}
+  "Вітаю, %@": {},
+  "settings.title": { "localizations": {
+      "uk": { "stringUnit": { "state": "translated", "value": "Налаштування" } },
+      "en": { "stringUnit": { "state": "translated", "value": "Settings" } } } }
 } }
 JSON
 }
@@ -205,6 +208,11 @@ case_ destroy-sotr 's.replace("**1.1 (A)** Головна", "**1.1 (A)** Сот�
 case_ destroy-reinstall 's.replace("**1.1 (A)** Головна", "**1.1 (A)** Перевстановіть застосунок, тоді Головна")' 1 destructive "«Перевстановіть застосунок» стирає локальні дані → червоно"
 case_ label-en 's.replace("**«Створити перший простір»**", "**«Create your first space»**")' 1 label "підпис іншої мови (en) не зараховується — CEO бачить uk"
 case_ label-key 's.replace("**«Приєднатись за кодом»**", "**«join.code»**")' 1 label "технічний ключ каталогу (join.code) — не підпис екрана"
+# Ключ з uk І en: en-значення в каталозі Є — червоне мусить бути саме від вибору локалі (чекер #41 р.2, Important 1).
+case_ label-en-present 's.replace("**«Створити перший простір»**", "**«Settings»**")' 1 label "en-значення наявного ключа (Settings) не зараховується — лише uk"
+case_ label-uk-value 's.replace("**«Створити перший простір»**", "**«Налаштування»**")' 0 "" "uk-значення того самого ключа (Налаштування) → зелено (контроль)"
+case_ mark-short 's.replace("(не зачіпає наступних кроків: стирає лише чернетку з цього кроку)", "(не зачіпає наступних кроків: коротко)")' 1 destructive "позначка з поясненням коротшим за 10 символів не звільняє"
+case_ destroy-en 's.replace("**1.1 (A)** Головна", "**1.1 (A)** Tap Delete, тоді Головна")' 1 destructive "англійське «Delete» у дії кроку не наостанок → червоно"
 f="${R}/docs/smoke/args2.md"; good "${f}"
 want 2 "" "два файли замість одного → 2 (не поміряно), не «чисто»" "${f}" "${G}" --repo "${R}"
 want 2 "" "--repo без значення → 2" "${f}" --repo
