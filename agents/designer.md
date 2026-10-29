@@ -25,5 +25,5 @@ model: sonnet
 1. WCAG 2.1 AA — blocker для handoff (a11y-checklist design-bridge).
 2. Skills: design:ux-copy, design-critique, accessibility-review, design-handoff; Figma MCP (figma-generate-design) для прототипів; grow-product-manager:design-bridge як оркестратор.
 3. Працюй тільки в scope MVP з PRD — прототип «на виріст» = порушення принципу №4.
-4. Можеш працювати паралельно з Engineering (fan-out): дизайн-система/токени спершу, екрани — інкрементально.
+4. Можеш працювати паралельно з Engineering (fan-out): дизайн-система/токени спершу, екрани — інкрементально. **Дизайн-система продукту живе в Claude** (артефакт Design System, одиниця `surface: ds-artifact`; dec-115): чого бракує задачі — спершу в артефакт (опублікувати, перечитати), потім PR перезакріплення в репо продукту (`strw-design-sync` крок 0); значення — з коду кіта і спеки, не з голови. **Кожна версія макета — запис у `design/ledger.yaml`** (крок 7): нова — `in-work` з елементом, у проді — `live`, замінена — `superseded` в обидва боки, програшний варіант — `not-taken` з `return_if`; знімок — `design-archive/<id>/` (write-once) або `git:`, бо посилання на claude.ai історією не є.
 5. Кожен цикл — запис у state.md (зроблено/далі).

@@ -14,7 +14,7 @@ printf 'units: []\n' > "$TMP/index.yaml"
 # копія скриптів у теку БЕЗ lib/ (як у фікстурах тестів strw-ops); fallback через STRW_ROOT
 # теж перевіряється: (в) копія без lib + STRW_ROOT з парасолькою → читач знайдено
 NOLIB="$TMP/nolib"; mkdir -p "$NOLIB"
-cp "$HERE"/validate-items.sh "$HERE"/repo-dir.sh "$HERE"/toolchain-filter.sh "$HERE"/tool-probe.sh "$HERE"/tool-select.sh "$HERE"/design-emit.py "$HERE"/design-hash.py "$HERE"/design_tokens.py "$HERE"/validate-design-index.py "$NOLIB"/
+cp "$HERE"/validate-items.sh "$HERE"/repo-dir.sh "$HERE"/toolchain-filter.sh "$HERE"/tool-probe.sh "$HERE"/tool-select.sh "$HERE"/design-emit.py "$HERE"/design-hash.py "$HERE"/design_tokens.py "$HERE"/validate-design-index.py "$HERE"/design-ledger.py "$NOLIB"/
 WITHLIB="$TMP/withlib"; cp -R "$NOLIB" "$WITHLIB"; cp -R "$HERE/lib" "$WITHLIB/lib"
 
 probe() { # probe <назва> <тека> <очікуваний: nolib|withlib> <cmd...>
@@ -40,6 +40,7 @@ for mode in nolib withlib; do
     probe "design-emit.py --help"    "$D" $mode python3 ./design-emit.py --help
     probe "design-hash.py"           "$D" $mode python3 ./design-hash.py "$TMP/index.yaml"
     probe "validate-design-index.py" "$D" $mode python3 ./validate-design-index.py "$TMP/index.yaml"
+    probe "design-ledger.py"         "$D" $mode python3 ./design-ledger.py "$TMP/index.yaml"
 done
 
 # (в) fallback: копія без lib/, але STRW_ROOT указує на парасольку зі strw-factory → не 2
@@ -52,7 +53,7 @@ if ! printf '%s' "$out" | grep -q 'yaml_nodup.py'; then ok "fallback STRW_ROOT/s
 # (г) читачі design-індексу СПРАВДІ читають load_nodup: дубль ключа → rc≠0 і назва ключа
 # (мутація «назад на safe_load» у будь-якому з двох лишала б усе зеленим — 6a #28 р.2)
 printf 'schema_version: 1\nunits: []\nschema_version: 1\n' > "$TMP/dupindex.yaml"
-for s in "design-hash.py" "validate-design-index.py"; do
+for s in "design-hash.py" "validate-design-index.py" "design-ledger.py"; do
     out="$(cd "$WITHLIB" && python3 "./$s" "$TMP/dupindex.yaml" 2>&1)"; rc=$?
     if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'дубльований ключ `schema_version`'; then ok "$s на індексі з дублем → rc=$rc і назва ключа"
     else bad "$s мав би відмовити на дублі з назвою ключа" "rc=$rc $out"; fi

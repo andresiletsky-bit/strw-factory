@@ -1,14 +1,14 @@
 ---
 id: L7-design
-trigger: event — хеш дизайн-одиниці розійшовся з index.yaml; або команда Andrii
-scope: від зміни дизайну до заведених елементів беклогу. НЕ робить: реалізацію (L3), рішення про обсяг (гейт).
+trigger: event — хеш дизайн-одиниці розійшовся з index.yaml; версія ds-artifact розійшлась з UPSTREAM.lock продукту; UI-задачі бракує токена чи компонента дизайн-системи (dec-115); або команда Andrii
+scope: від зміни дизайну до заведених елементів беклогу — і допрацювання дизайн-системи під задачу ДО її реалізації (dec-115), і облік версій макетів (реєстр design/ledger.yaml). НЕ робить: реалізацію (L3), рішення про обсяг (гейт).
 maker: strw-designer (інструменти: скіл strw-design-sync — виявлення; design-emit.py — пояснення діфу і --write-elements — заведення елементів)
 checker: strw-design-critic (adversarial: «чому ця зміна макета бреше») · шкала і формат вердикту — `references/review-policy.md`
-stop_condition: "design-hash.py <index> --verify → 0: у кожної watched-одиниці є hash, є tokens, усі working_files читаються, і немає непереглянутої зміни — пораховний хеш збігається з базовою лінією"
-output: design-delta звіт (контракт) + design-handoff, коли різницю домальовує дизайнер + нові елементи реєстру з design_sources + оновлений index.yaml
+stop_condition: "design-hash.py <index> --verify → 0: у кожної watched-одиниці є hash, є tokens, усі working_files читаються, і немає непереглянутої зміни — пораховний хеш збігається з базовою лінією · design-ledger.py <ledger> → 0 (4 — названа дірка архіву зі строком, не зелене)"
+output: design-delta звіт (контракт) + design-handoff, коли різницю домальовує дизайнер + нові елементи реєстру з design_sources + оновлений index.yaml + PR перезакріплення дизайн-системи в репо продукту, коли артефакт змінився + записи design/ledger.yaml і знімки design-archive/ на кожну прийняту версію
 escalation: потоп (>5 непояснених груп, rc=4 від емітера) → question; суперечність усередині спеки → gate-request; unwatched-одиниця не звірялась понад build-цикл → finding
 budget: maker — sonnet; checker — opus (ІНША модель, ніж maker — hard rule budget-policy) · МОДЕЛІ ТУТ ПОХІДНІ — джерело strw-state/engine/lanes.yaml
-state_writes: products/<id>/design/index.yaml · engine/items/<product>.design.*.yaml · рядок у loops-log/
+state_writes: products/<id>/design/index.yaml · products/<id>/design/ledger.yaml · engine/items/<product>.design.*.yaml · рядок у loops-log/ · у репо продукту лише PR-ом: design-system/ (копія) і design-archive/ (write-once)
 ---
 
 # L7 · Design Loop — «макет, що доходить до реєстру»
@@ -55,3 +55,19 @@ state_writes: products/<id>/design/index.yaml · engine/items/<product>.design.*
 
    Рішення CEO №81 діє тут одразу: елемент у стані `done` не протухає від
    дизайну — валідатор виходить із перевірки до дизайн-гілки.
+
+7. **Дизайн-система — перша, і її допрацьовують під задачу, а не обходять** (рішення CEO 29.10,
+   dec-115: «сінкаємось з дизайн системою, якщо потрібно допрацьовуємо її під фічі і задачі, потім
+   робимо задачі»). Джерело — артефакт Design System у Claude; репо продукту тримає закріплену копію
+   (`design-system/` + `UPSTREAM.lock`), детермінований гейт продукту (`ds-drift` у pact-ios) звіряє її з
+   кітом. Ця петля відповідає за свіжість копії (крок 0 скіла) і за допрацювання артефакту: UI-задача,
+   якій бракує токена чи компонента, приходить сюди ДО коду, дизайнер змінює й публікує артефакт,
+   критик дивиться на зміну, PR перезакріплення несе нову `version`. Кіт, змінений раніше за дизайн-систему,
+   — розбіжність, а не швидкий шлях: гейт продукту червоніє на ній.
+
+8. **Версії макетів — історія, не хеш.** `index.yaml` пам'ятає лише останній стан одиниці. Що в проді,
+   що замінено (старий дизайн), що в роботі і що буде — у `design/ledger.yaml` (контракт
+   `artifact-contracts.md` §design-ledger, валідатор `design-ledger.py`, крок 7 скіла). Кожна прийнята
+   зміна (крок 5) рухає реєстр: нова версія входить, попередня стає `superseded` з посиланням в обидва
+   боки. Знімок — незмінний (`git:` чи `design-archive/` репо продукту); посилання на claude.ai змінне й
+   історією не є. Варіант, що програв у `design-options`, лишається в реєстрі `not-taken` з `return_if`.

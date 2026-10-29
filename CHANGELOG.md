@@ -22,6 +22,26 @@
   (ранжування, червоні випадки, пін на досяжність: рядок виклику з паспорта виконується дослівно; зворотне
   покриття; живий прогін на `tools.yaml` — коли він є); `engine-lib-guard.test.sh` знає обидва скрипти.
 
+- **Спершу дизайн-система, і реєстр версій макетів (рішення CEO 29.10, dec-115: «сінкаємось з дизайн системою,
+  якщо потрібно допрацьовуємо її під фічі і задачі, потім робимо задачі» · «що в проді зараз, що вже змінено і це
+  старий дизайн, що в роботі і що ще буде»).** Нова поверхня одиниці `surface: ds-artifact` у
+  `validate-design-index.py` — артефакт Design System у Claude; обов'язкові `url` (`https://claude.ai/artifact/…`) і
+  `version` (з якої версії знято закріплену копію в репо продукту). Перший власний тест валідатора —
+  `validate-design-index.test.sh` (9 випадків; 5 червоні на старому валідаторі). Новий
+  `scripts/engine/design-ledger.py` — реєстр `products/<id>/design/ledger.yaml`: п'ять станів з обов'язковою підставою
+  кожного (`live`+`live_evidence`, одна на фічу й вид · `superseded`+`superseded_by` в обидва боки, не старший за
+  наступника · `in-work`+`items`, що існують · `planned`+`plan_ref` · `not-taken`+`return_if`), незмінне джерело
+  (`git: repo@sha:шлях` з `git show`, за бажання `sha256`; `path:` у `design-archive/` з MANIFEST) для live/superseded/
+  not-taken, `snapshot_pending` з терміном — код 4, прострочений — 1, нечитане джерело — 3, форма — 2; `--report` —
+  markdown «прод · робота · план · не взяте · історія за фічами». Тест `design-ledger.test.sh` — 40 випадків на
+  фікстурі з живим git-репо; мутаційний прогін 38 guard'ів — усі вбиті. `engine-lib-guard.test.sh` знає скрипт.
+  Проводка: `strw-design-sync` крок 0 (дизайн-система першою: `Artifact read` → `version` проти `UPSTREAM.lock` →
+  PR перезакріплення; допрацювання артефакту ДО кіта) і крок 7 (реєстр версій), тіло — 60 рядків;
+  `references/design-sync-rationale.md` (причини обох кроків); паспорт L7 — тригер, обсяг, стоп-умова (+ реєстр),
+  вихід, `state_writes`, правила 7–8; L3 правило 4 (UI-задача починається з дизайн-системи; мерж рухає реєстр);
+  `agents/designer.md` п.4; `agents/validators/design-critic.md` перевірки 7–8; `artifact-contracts.md`
+  §design-ledger.
+
 ## [0.11.1] — 2026-10-23
 
 ### Added
