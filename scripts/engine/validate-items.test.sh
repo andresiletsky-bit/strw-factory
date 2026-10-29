@@ -191,5 +191,78 @@ PY
     else echo "SKIP · 7e: у фікстурі немає вузлів рішень (decisions/*.md) — проба не ганялась"; fi
 else echo "SKIP · 7e: у фікстурі немає decisions/ — проба не ганялась"; fi
 
+# 8. `human_checklist:` — форма шляху до чекліста ручної перевірки CEO (factory.human-test-checklist).
+# Свідок — рядок ERROR про поле, не rc: фікстура = живий реєстр, і його STALE дає rc≠0 з чужої причини.
+HC_ITEM="$(ls "$FX/engine/items/"*.yaml | head -1)"
+cp "$HC_ITEM" "$TMP/hc-orig.yaml"
+for bad_hc in "../secret.md" "/etc/passwd" "docs/smoke/../../x.md" "docs/other/a.md" "docs/smoke/a.txt" \
+              "docs/smoke/./a.md" "docs/smoke/x/./a.md" "docs/smoke/a.md.txt" "docs/smoke/my file.md" ""; do
+    cp "$TMP/hc-orig.yaml" "$HC_ITEM"; printf 'human_checklist: "%s"\n' "$bad_hc" >> "$HC_ITEM"
+    out="$(run_v)"
+    if printf '%s' "$out" | grep -q "human_checklist: '$bad_hc' — мусить бути"; then
+        ok "human_checklist: $bad_hc → ERROR"
+    else bad "human_checklist: $bad_hc мав би бути ERROR" "$out"; fi
+done
+for good_hc in "docs/smoke/testflight-full.md" "docs/smoke/ios/a.md" "docs/smoke/v1..2.md"; do
+    cp "$TMP/hc-orig.yaml" "$HC_ITEM"; printf 'human_checklist: "%s"\n' "$good_hc" >> "$HC_ITEM"
+    out="$(run_v)"
+    if ! printf '%s' "$out" | grep -q "human_checklist:"; then ok "human_checklist: $good_hc — без ERROR (контроль)"
+    else bad "правильна форма human_checklist: $good_hc не мала б давати ERROR" "$out"; fi
+done
+for odd in "[docs/smoke/a.md]" "7"; do
+    cp "$TMP/hc-orig.yaml" "$HC_ITEM"; printf 'human_checklist: %s\n' "$odd" >> "$HC_ITEM"
+    out="$(run_v)"
+    if printf '%s' "$out" | grep -q "human_checklist: .* — мусить бути" && ! printf '%s' "$out" | grep -q Traceback; then
+        ok "human_checklist: $odd (не рядок) → ERROR, не трасування"
+    else bad "human_checklist: $odd мав би бути ERROR без трасування" "$out"; fi
+done
+cp "$TMP/hc-orig.yaml" "$HC_ITEM"
+
+# 8b. Поле стоїть ДО ланцюга `if plan … elif`: усередині нього воно розірвало ланцюг — WARN «без plan» видавався
+# елементу З планом і мовчав для елемента без (чекер #41, B1). Свідок — рядок WARN про ЦЕЙ елемент.
+PL_ITEM="$FX/engine/items/zz-probe-plan.yaml"
+cat > "$PL_ITEM" <<'YAML'
+schema_version: 1
+id: zz-probe-plan
+product: factory
+loop: L3-build
+lane: factory-tooling
+state: ready
+autonomy: with-ceo
+lease: {run_id: null, epoch: 0, heartbeat: null}
+blocked_by: []
+repo: strw-factory
+branch: cycle/zz-probe-plan
+size: M
+acceptance: |
+  - проба
+acceptance_basis:
+  verified_against_decisions_log_at: 2099-01-01T00:00Z
+  decisions_log_entries: 100000
+  sources: ["проба"]
+attempts: 0
+evidence: {run_id: null, commit_sha: null, cwd: null}
+human_checklist: docs/smoke/a.md
+plan:
+  files: [scripts/x.sh]
+  order: ["1. x"]
+  risks: []
+  risks_none_because: "проба"
+  proof: "проба"
+YAML
+out="$(run_v)"
+if ! printf '%s' "$out" | grep -q "zz-probe-plan.yaml: size=M і state=ready, а \`plan\` немає"; then
+    ok "ready M З планом і human_checklist — без WARN «plan немає»"
+else bad "ready M з планом не мав би давати WARN «plan немає»" "$(printf '%s' "$out" | grep zz-probe-plan)"; fi
+python3 - "$PL_ITEM" <<'PY2'
+import sys; p = sys.argv[1]; s = open(p, encoding="utf-8").read()
+open(p, "w", encoding="utf-8").write(s[:s.index("plan:\n")])
+PY2
+out="$(run_v)"
+if printf '%s' "$out" | grep -q "zz-probe-plan.yaml: size=M і state=ready, а \`plan\` немає"; then
+    ok "ready M БЕЗ плану (з human_checklist) — WARN «plan немає» є (контроль)"
+else bad "ready M без плану мав би давати WARN «plan немає»" "$(printf '%s' "$out" | grep zz-probe-plan)"; fi
+rm -f "$PL_ITEM"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

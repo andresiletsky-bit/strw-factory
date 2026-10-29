@@ -366,6 +366,19 @@ for path in item_files:
                 if h and not (isinstance(h, str) and h.startswith("sha256:")):
                     err(f"{at} — hash має починатись із 'sha256:', отримано {h!r}")
 
+    # ---------- `human_checklist` (factory.human-test-checklist, CEO 29.10) ----------
+    # `human_checklist:` — шлях до чекліста ручної перевірки CEO в репо елемента (стандарт
+    # references/human-test-checklist.md). Раннер strw-ops читає цей файл із дерева агента, тож форма
+    # тут — перша лінія: відносний `docs/smoke/<…>.md`, сегменти без пробілів, без `.`/`..`, один рядок
+    # (друга — симлінки в раннері). Та сама форма, що human_checklist_form_ok у bin/strw-run.sh.
+    # Стоїть ДО ланцюга `if plan … elif` — усередині нього розірвала б його (чекер #41, B1).
+    hc = it.get("human_checklist")
+    if hc is not None and not (isinstance(hc, str)
+                               and re.fullmatch(r"docs/smoke/(?:[^/\s]+/)*[^/\s]+\.md", hc)
+                               and not ({".", ".."} & set(hc.split("/")))):
+        err(f"{name}: human_checklist: {hc!r} — мусить бути відносним шляхом docs/smoke/<…>.md без «.»/«..» "
+            f"(стандарт references/human-test-checklist.md)")
+
     # ---------- схема `plan` (аудит 2026-09-03, П1.4) ----------
     # ЧОМУ ПОЛЕ. 30 із 60 PR — «великі» за критерієм L3 6a, раунди чекера 2–6,
     # до 11. Без плану, який рецензують ДО коду, рев'ю читає диф, а не рішення,
