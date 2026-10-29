@@ -32,10 +32,11 @@
 3 джерело нечитане (НЕ «без змін») · 4 архів неповний (є snapshot_pending). Старшинство 2 > 1 > 3 > 4:
 порушене правило не ховає нечитаного джерела — обидва рядки друкуються, код — старший.
 `path:` читається з робочої копії репо продукту — звіряти на тій гілці, де лежить історія (main).
-Live-версію замінює лише live-версія: поки нова `in-work`, стара лишається `live`; `superseded` з
-наступником `in-work`/`planned` — це стара версія макета, яка в прод не дійшла. Цього правила скрипт не
-бачить (чи була версія колись live, реєстр не зберігає) — його звіряє критик L7; скрипт тримає лише
-форму: live_evidence — тільки в live, items — тільки в in-work, snapshot_pending — не в live.
+Live-версію замінює лише live-версія: поки нова `in-work`, стара лишається `live`. Замінена live-версія
+лишає свій `live_evidence` («була в проді») — і тоді її наступник мусить бути live (чи такою ж колишньою
+live); `superseded` без `live_evidence` з наступником `in-work`/`planned` — стара версія макета, що в прод
+не дійшла. Чи прибрали `live_evidence` при заміні, скрипт не бачить — це звіряє критик L7 (перевірка 8).
+Форма: live_evidence — лише в live/superseded, items — лише в in-work, snapshot_pending — не в live.
 `--report` друкує markdown: що в проді, що в роботі, що заплановано, не взяте, історія за фічами.
 """
 import argparse, datetime, hashlib, os, re, subprocess, sys
@@ -60,7 +61,7 @@ RC_RULE, RC_SHAPE, RC_UNREAD, RC_PENDING = 1, 2, 3, 4
 GIT_RE = re.compile(r"^([A-Za-z0-9_][A-Za-z0-9_.-]*)@([0-9a-f]{7,40}):(.+)$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 IGNORED_NAMES = (".DS_Store",)   # Finder пише їх у робочу копію; у git їх немає
-SUM_RE = re.compile(r"^sha256\s+([0-9a-f]{64})\s+(\S.*)$")
+SUM_RE = re.compile(r"^sha256\s+([0-9a-f]{64})\s+(\S+)$")   # як гейт продукту: ім'я без пробілів
 # Поля запису й тип, якого вони мусять бути. Поле не того типу — «не в формі» (код 2), а не трейсбек,
 # що виходить кодом 1 і читається як «порушено правило».
 FIELD_TYPES = {"id": str, "title": str, "kind": str, "status": str, "features": list, "sources": list,
@@ -124,9 +125,6 @@ def check_archive(root, eid, rel, p, errors):
     """Тека design-archive/<id>/: ім'я = id запису, MANIFEST з ledger=<id> і сумою КОЖНОГО файла (шляхи
     відносні, підтеки дозволені — як у гейті продукту); симлінк у теці чи сама тека-симлінк — не знімок."""
     name = os.path.basename(p.rstrip("/"))
-    if os.path.islink(p.rstrip("/")):
-        errors.append(f"{eid}: архівна тека {rel} — симлінк; знімок живе в самій теці, не за посиланням")
-        return
     manifest = os.path.join(p, "MANIFEST")
     if not os.path.isfile(manifest):
         errors.append(f"{eid}: архівна тека {rel} без MANIFEST")
@@ -144,9 +142,14 @@ def check_archive(root, eid, rel, p, errors):
         errors.append(f"{eid}: MANIFEST теки {rel} не називає ledger={eid}")
     listed = {}
     for line in text.splitlines():
+        if line.startswith("sha256") and not SUM_RE.match(line.strip()):
+            errors.append(f"{eid}: MANIFEST теки {rel}: рядок не у формі `sha256  <сума>  <файл>`: {line.strip()}")
+            continue
         m = SUM_RE.match(line.strip())
         if m:
             f = m.group(2).strip()
+            if os.path.basename(f) in IGNORED_NAMES:
+                continue
             if f in listed:
                 errors.append(f"{eid}: MANIFEST теки {rel} називає {f} двічі — сума одна")
             listed[f] = m.group(1)
@@ -187,13 +190,17 @@ def check_source(root, eid, src, unread, errors):
         if unsafe(repo) or unsafe(path):
             errors.append(f"{eid}: git-джерело {src['git']!r} виходить за межі парасольки")
             return False
+        if path.endswith("/") or "//" in path:
+            errors.append(f"{eid}: git-джерело {src['git']!r} — шлях на теку чи з «//»; знімок версії — файл")
+            return False
         if root is None:
             unread.append(f"{eid}: {src['git']} не звірено — немає --repo-root")
             return True
         gitc = ["git", "--no-optional-locks", "-C", os.path.join(root, repo)]
         # ls-tree, не cat-file -t: симлінк теж «blob» (mode 120000) — 40 байт шляху замість знімка
-        t = subprocess.run(gitc + ["ls-tree", "-z", sha, "--", path], capture_output=True)
-        entry = t.stdout.split(b"\0")[0].decode("utf-8", "surrogateescape") if t.returncode == 0 else ""
+        t = subprocess.run(gitc + ["ls-tree", "-z", "--full-tree", sha, "--", path], capture_output=True)
+        recs = [r.decode("utf-8", "surrogateescape") for r in t.stdout.split(b"\0") if r] if t.returncode == 0 else []
+        entry = recs[0] if len(recs) == 1 else ""
         if not entry:
             unread.append(f"{eid}: {src['git']} не читається (немає коміту чи шляху; неглибока копія?) — "
                           f"це НЕ «без змін»")
@@ -215,15 +222,21 @@ def check_source(root, eid, src, unread, errors):
             errors.append(f"{eid}: path-джерело {src['path']!r} виходить за межі парасольки")
             return False
         parts = rel.split("/")
-        if "design-archive" in parts[:-1] and parts.index("design-archive") != len(parts) - 2:
+        low = [x.lower() for x in parts]   # macOS: Design-Archive/ і design-archive/ — та сама тека
+        if "design-archive" in low[:-1] and low.index("design-archive") != len(parts) - 2:
             errors.append(f"{eid}: path {src['path']!r} веде всередину архівної теки — назвіть саму теку "
                           f"design-archive/{eid}/, а не файл у ній (і не теку іншого запису)")
             return False
-        archive = len(parts) >= 2 and parts[-2] == "design-archive"
+        archive = len(parts) >= 2 and low[-2] == "design-archive"
         if root is None:
             unread.append(f"{eid}: {src['path']} не звірено — немає --repo-root")
             return bool(archive or src.get("sha256"))
         p = os.path.join(root, rel)
+        repo_real = os.path.realpath(os.path.join(root, parts[0]))
+        if os.path.lexists(p) and os.path.realpath(p) != os.path.join(repo_real, *parts[1:]):
+            errors.append(f"{eid}: {src['path']} проходить через симлінк — знімок має лежати там, куди веде шлях, "
+                          f"а не за посиланням (воно переїде, куди перевірка не дивиться)")
+            return False
         if os.path.isdir(p) and archive:
             check_archive(root, eid, rel, p, errors)
             return True
@@ -314,8 +327,9 @@ def validate(doc, root, items_dir, today):
                           f"історія, що живе лише за посиланням чи в робочому дереві, зникає разом із ним; "
                           f"або snapshot_pending")
 
-        if st != "live" and e.get("live_evidence") is not None:
-            errors.append(f"{eid}: live_evidence у стані {st} — доказ проду має лише live-версія")
+        if st not in ("live", "superseded") and e.get("live_evidence") is not None:
+            errors.append(f"{eid}: live_evidence у стані {st} — доказ проду має лише live-версія (чи superseded, "
+                          f"що була live)")
         if st != "in-work" and e.get("items") is not None:
             errors.append(f"{eid}: items у стані {st} — елементи веде лише in-work-версія (решту — в note)")
         if st == "live" and sp is not None:
@@ -336,6 +350,11 @@ def validate(doc, root, items_dir, today):
             else:
                 if eid not in (by_id[nxt].get("supersedes") or []):
                     errors.append(f"{eid}: superseded_by {nxt}, а той не має його в supersedes")
+                nx = by_id[nxt]
+                if e.get("live_evidence") and not (nx.get("status") == "live" or
+                                                   nx.get("status") == "superseded" and nx.get("live_evidence")):
+                    errors.append(f"{eid}: була live (live_evidence), а замінена версією у стані {nx.get('status')} — "
+                                  f"live-версію замінює лише та, що дійшла до проду")
                 if by_id[nxt].get("status") == "not-taken":
                     errors.append(f"{eid}: замінена варіантом not-taken ({nxt}) — невзятий варіант нічого не замінює")
                 d1, d2 = as_date(e.get("date")), as_date(by_id[nxt].get("date"))
