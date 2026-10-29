@@ -213,6 +213,18 @@ case_ label-en-present 's.replace("**«Створити перший прост�
 case_ label-uk-value 's.replace("**«Створити перший простір»**", "**«Налаштування»**")' 0 "" "uk-значення того самого ключа (Налаштування) → зелено (контроль)"
 case_ mark-short 's.replace("(не зачіпає наступних кроків: стирає лише чернетку з цього кроку)", "(не зачіпає наступних кроків: коротко)")' 1 destructive "позначка з поясненням коротшим за 10 символів не звільняє"
 case_ destroy-en 's.replace("**1.1 (A)** Головна", "**1.1 (A)** Tap Delete, тоді Головна")' 1 destructive "англійське «Delete» у дії кроку не наостанок → червоно"
+# Джерело підписів — лише відносний шлях У репо: чекліст сам його називає, і `/etc/hosts` чи `../` давали б
+# «підписи звірено» з чужим файлом і оракул «чи є рядок у файлі» (чекер strw-ops #42, I7).
+case_ src-abs 's.replace("`App/Resources/Localizable.xcstrings`", "`/etc/hosts`")' 1 label "джерело підписів — абсолютний шлях → червоно"
+case_ src-up 's.replace("`App/Resources/Localizable.xcstrings`", "`../bad.xcstrings`")' 1 label "джерело підписів поза репо (../) → червоно"
+ln -s /etc "${R}/App/Resources/etc-link"
+case_ src-link 's.replace("`App/Resources/Localizable.xcstrings`", "`App/Resources/etc-link/hosts`")' 1 label "джерело підписів через симлінк назовні → червоно"
+for n in src-abs src-up src-link; do
+  o="$(python3 "${V}" "${R}/docs/smoke/${n}.md" --repo "${R}" 2>&1 < /dev/null)"   # у змінну: grep -q під pipefail = SIGPIPE
+  if printf '%s\n' "${o}" | /usr/bin/grep -q "лише відносний шлях у репо"; then
+    printf 'ok   %s\n' "${n}: причина — саме шлях джерела, а не «підпис не знайдено»"; pass=$((pass + 1))
+  else printf 'FAIL %s\n' "${n}: червоне з чужої причини"; fail=$((fail + 1)); fi
+done
 f="${R}/docs/smoke/args2.md"; good "${f}"
 want 2 "" "два файли замість одного → 2 (не поміряно), не «чисто»" "${f}" "${G}" --repo "${R}"
 want 2 "" "--repo без значення → 2" "${f}" --repo
@@ -230,8 +242,8 @@ want 0 "" "формат %.1f і буквальний %% у джерелі — п
 
 # ── не поміряно ≠ зелено ─────────────────────────────────────────────────────
 want 2 "" "немає файла → 2" "${R}/docs/smoke/nope.md" --repo "${R}"
-printf '{ not json' > "${T}/bad.xcstrings"
-f="${R}/docs/smoke/badsrc.md"; good "${f}"; edit "${f}" 's.replace("`App/Resources/Localizable.xcstrings`", "`../bad.xcstrings`")'
+printf '{ not json' > "${R}/App/Resources/bad.xcstrings"
+f="${R}/docs/smoke/badsrc.md"; good "${f}"; edit "${f}" 's.replace("`App/Resources/Localizable.xcstrings`", "`App/Resources/bad.xcstrings`")'
 want 2 "" "джерело підписів не читається → 2" "${f}" --repo "${R}"
 printf '"Створити перший простір" = "Створити перший простір";\n"join.code" = "Приєднатись за кодом";\n"Видалити простір" = "Видалити простір";\n"Скасувати" = "Скасувати";\n"hello" = "Вітаю, %%@";\n' > "${R}/App/Resources/Localizable.strings"
 f="${R}/docs/smoke/strings.md"; good "${f}"; edit "${f}" 's.replace("Localizable.xcstrings", "Localizable.strings")'

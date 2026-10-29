@@ -312,6 +312,11 @@ def main(argv):
         m = re.search(r"`([^`]+)`", src_line[0])
         if not m:
             err("label", "**Джерело підписів:** без шляху в `…`")
+        elif os.path.isabs(m.group(1)) or ".." in m.group(1).split("/") or not os.path.realpath(
+                os.path.join(repo, m.group(1))).startswith(os.path.realpath(repo) + os.sep):
+            # Джерело називає сам чекліст: лише відносний шлях У репо, без «..» і без симлінка назовні —
+            # інакше «підписи звірено» з чужим файлом (чекер strw-ops #42, I7).
+            err("label", "**Джерело підписів:** `%s` — лише відносний шлях у репо (%s)" % (m.group(1), repo))
         else:
             src = os.path.normpath(os.path.join(repo, m.group(1)))
             if not os.path.isfile(src):
