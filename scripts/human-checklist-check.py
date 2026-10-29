@@ -41,11 +41,17 @@ CHECKBOX_OPEN = re.compile(r"^\s*- \[ \] \S")
 CHECKBOX_ANY = re.compile(r"^\s*- \[[^\]]\]")
 H2 = re.compile(r"^## (.*)$")
 LABEL = re.compile(r"\*\*«([^»\n]+)»\*\*")
-DESTROY = re.compile(r"(?i)видал(и|іть|яє|яю|ити)|стер(ти|іть)|стира|скин(ути|ьте)|очист(ити|іть)")
+# Дія, що стирає: дієслова-корені (видал/вилуч/стер/стир/сотр/скин/очист/знес/перевстанов) і англійські
+# кнопки. Іменник «Видалення» в назві розділу — не дія; дія в кроці — дієслово або жирний підпис кнопки.
+DESTROY = re.compile(r"(?i)видал(и|іть|яй|яє|яю|ити|ятиме)|вилуч|стер(ти|іть)|стира|сотр|скин(ути|ьте)"
+                     r"|очист(ити|іть)|знес(ти|іть)|перевстанов|\b(delete|remove|erase|reset)\b")
 # Назви й цитати в «» без жирного (назва договору «Тест видалення», текст на екрані) — не дія кроку.
 QUOTE = re.compile(r"«[^»\n]*»")
 SAFE_MARK = "не зачіпає наступних кроків"
-FORMAT = re.compile(r"%(?:\d+\$)?(?:@|l{0,2}[duif]|lld|s)")
+# Позначка чинна лише з поясненням: «(не зачіпає наступних кроків: <чому, ≥10 символів>)».
+SAFE = re.compile(re.escape(SAFE_MARK) + r":\s*([^)\n]{10,})")
+# Специфікатор формату Foundation/printf: %@, %lld, %1$@, %.1f, %02d, %u… («%%» — буквальний відсоток).
+FORMAT = re.compile(r"%(?:\d+\$)?[-+ #0']*\d*(?:\.\d+)?(?:hh|h|ll|l|q|z|t|j|L)?[@dDiuUxXoOfFeEgGcCsSaAp]")
 
 
 def fail_measure(msg):
@@ -65,13 +71,26 @@ def find_repo(path):
         d = up
 
 
-def load_strings(path):
-    """Усі ключі й значення джерела підписів: .xcstrings (JSON) або .strings (ключ = значення)."""
-    vals = set()
+def read_text(path, what):
+    """Текст файла; не UTF-8 / UTF-16 з BOM — «не поміряно» (rc 2), а не трасування з rc 1."""
     try:
-        text = open(path, encoding="utf-8").read()
+        raw = open(path, "rb").read()
     except OSError as e:
-        fail_measure("джерело підписів %s не читається: %s" % (path, e))
+        fail_measure("%s %s не читається: %s" % (what, path, e))
+    try:
+        if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+            return raw.decode("utf-16")
+        return raw.decode("utf-8-sig")
+    except UnicodeError as e:
+        fail_measure("%s %s — не UTF-8 і не UTF-16 з BOM: %s" % (what, path, e))
+
+
+def load_strings(path, locale="uk"):
+    """Підписи, які бачить CEO: значення локалі `locale` (типово uk) — не інших мов і не технічні ключі.
+    .xcstrings: значення uk (з варіаціями); ключ — лише коли мова джерела = uk і в ключа немає власного
+    значення uk (тоді ключ і є текст). .strings (файл однієї мови): лише значення, без коментарів."""
+    vals = set()
+    text = read_text(path, "джерело підписів")
     if path.endswith(".xcstrings"):
         try:
             data = json.loads(text)
@@ -92,23 +111,29 @@ def load_strings(path):
         strings = data.get("strings") if isinstance(data, dict) else None
         if not isinstance(strings, dict):
             fail_measure("джерело підписів %s без ключа strings" % path)
+        source = data.get("sourceLanguage")
         for k, v in strings.items():
-            vals.add(k)
-            walk(v)
+            loc = ((v or {}).get("localizations") or {}).get(locale) if isinstance(v, dict) else None
+            if loc:
+                walk(loc)
+            elif source == locale:
+                vals.add(k)
     else:
-        for k, v in re.findall(r'"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;', text):
-            vals.add(k)
-            vals.add(v)
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+        text = re.sub(r"(?m)^\s*//.*$", "", text)
+        for _k, v in re.findall(r'"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;', text):
+            vals.add(v.replace('\\"', '"').replace("\\n", "\n").replace("\\\\", "\\"))
     return vals
 
 
 def label_known(label, vals):
-    if label in vals:
+    if label in vals or label in {v.replace("%%", "%") for v in vals if "%%" in v}:
         return True
     for v in vals:
-        if "%" not in v or not FORMAT.search(v):
+        if "%" not in v or not FORMAT.search(v.replace("%%", "")):
             continue
-        parts = FORMAT.split(v)
+        parts = [p.replace("%%", "%") for p in FORMAT.split(v.replace("%%", "\0"))]
+        parts = [p.replace("\0", "%") for p in parts]
         rx = "^" + ".+".join(re.escape(p) for p in parts) + "$"
         if re.match(rx, label):
             return True
@@ -130,10 +155,7 @@ def main(argv):
         print(__doc__.split("\n\n")[1])
         sys.exit(2)
     path = args[0]
-    try:
-        lines = open(path, encoding="utf-8").read().split("\n")
-    except OSError as e:
-        fail_measure("чекліст %s не читається: %s" % (path, e))
+    lines = read_text(path, "чекліст").replace("\r\n", "\n").split("\n")
     repo = repo or find_repo(path)
     bad = []
 
@@ -257,10 +279,14 @@ def main(argv):
             err("checkbox", "крок %s: немає очікуваного результату `- [ ] …`" % n)
         # [destructive] — дія кроку: рядок кроку і рядки тіла, що не є очікуваннями
         action = " ".join([st["line"]] + [l for l in body if not CHECKBOX_ANY.match(l)])
-        if DESTROY.search(QUOTE.sub("", LABEL.sub(lambda m: m.group(1), action))) and SAFE_MARK not in action \
-                and st["section"] != last_section:
-            err("destructive", "крок %s стирає дані не в останній частині — перенеси наостанок або "
-                "познач «%s» з поясненням" % (n, SAFE_MARK))
+        # «Наостанок» = в останній частині З КРОКАМИ, і вона не єдина і не передумови: інакше правило
+        # порожнє (усі кроки в одному розділі — і видалення першим проходило б; чекер #41, I5).
+        last_ok = (st["section"] == last_section and len(step_sections) >= 2
+                   and not (0 <= st["section"] < len(sections) and re.match(r"^0\.?\s", sections[st["section"]][0])))
+        if DESTROY.search(QUOTE.sub("", LABEL.sub(lambda m: m.group(1), action))) and not SAFE.search(action) \
+                and not last_ok:
+            err("destructive", "крок %s стирає дані не в окремій останній частині — перенеси наостанок або "
+                "познач «%s: <чому>»" % (n, SAFE_MARK))
 
     # [lang] — кроки й очікування; підписи в «» і код у `` не рахуються
     text = []
@@ -312,7 +338,8 @@ def main(argv):
     for b in bad:
         print(b)
     print("не міряється: рядок verdict: зі слів CEO, а не агента; правдивість позначки «%s»; "
-          "чи кроки справді покривають зміну — це чекер і CEO, не валідатор" % SAFE_MARK)
+          "чи кроки справді покривають зміну; підписи екрана, написані НЕ як **«…»** (звіряються лише такі); "
+          "звертання на «ви»; мова кроків — лише частка кирилиці — це чекер і CEO, не валідатор" % SAFE_MARK)
     if bad:
         print("human-checklist-check: 1 · порушень %d · %s" % (len(bad), path))
         return 1
