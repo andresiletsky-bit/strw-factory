@@ -12,14 +12,16 @@
 # (WIRED нижче), береться рядок виклику ДОСЛІВНО (поза <!-- -->), підставляються лише
 # ${CLAUDE_PLUGIN_ROOT}, strw-state/engine і <контур>, і він ВИКОНУЄТЬСЯ на фікстурі — код 0/3/4,
 # не 2 і не 127. Прибрати виклик, зламати аргументи, вписати тип задачі поза словником, сховати
-# виклик у коментар, лишити другий виклик у прозі без бектиків → червоно. Зворотне покриття: файл
-# skills/ loops/ agents/, що кличе tool-select.sh, а в WIRED його немає, — червоно.
+# виклик у коментар, лишити другий виклик у прозі без бектиків → червоно. Дія на коди ≠0 — хвіст
+# рядка виклику ДОСЛІВНО (TAIL), і поза ним рядок про коди мовчить: перефразування дії — червоно.
+# Зворотне покриття: файл skills/ loops/ agents/, що кличе tool-select.sh, а в WIRED його немає, — червоно.
 # Свідомо НЕ проведено (вибору немає): L4 — канал Metricool фіксований рішенням CEO, а
 # підключення міряє живий `claude mcp get metricool` (п. 5); L7/L8 — інструменти названі
 # поіменно (скіл strw-design-sync, bin/regression-phase1.sh).
 # Живий прогін: коли strw-state/engine/tools.yaml є (після мержу factory.tool-registry), кожен
-# виклик проводки ганяється й на ньому — тип задачі, роль і вид мусять бути в живому словнику;
-# немає файла — SKIP із названою передумовою.
+# виклик проводки ганяється й на ньому — тип задачі, роль і вид мусять бути в живому словнику, а
+# гейт таймаутів обходить УСІ записи з пробою shell чи lanes-tool (таймаут, що повторився наодинці, —
+# червоно; контролі — на фікстурі); немає файла — SKIP із названою передумовою.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FACTORY="$(cd "${HERE}/../.." && pwd)"
@@ -151,16 +153,69 @@ for o in --kind --loop; do
 done
 
 # --- 6. проводка: виклик із паспорта ВИКОНУЄТЬСЯ ----------------------------------------------
-# файл | тип задачі | роль | петля | опції після --loop | контури, якими підставляється <контур> | дія на коди ≠0 (у тому ж рядку)
+# файл | тип задачі | роль | петля | опції після --loop | контури, якими підставляється <контур>
+# (дія на коди ≠0 — TAIL у python нижче: хвіст рядка виклику дослівно)
 # L3 6a — контур M буквально: правило 6a — про мерж, а мержі робить контур M (раннер на Mac).
-WIRED="loops/L3-build.md|code-review-6a|strw-code-reviewer|L3-build|--kind cli|M|коди 2 і 4 рев'ю теж не зупиняють
-agents/engineer.md|code-rescue|strw-engineer|L3-build||M C|коди 2/3/4 — причина в trace (2 — ще \`finding\`: реєстр зламаний), далі сам — цикл не зупиняється"
+WIRED="loops/L3-build.md|code-review-6a|strw-code-reviewer|L3-build|--kind cli|M
+agents/engineer.md|code-rescue|strw-engineer|L3-build||M C"
+# Негативний контроль гейта таймаутів: дві проби (shell і lanes-tool), що живуть 30 с, у записах, яких
+# не пропонує ЖОДЕН виклик проводки (задача growth-queue, контур I) — гейт мусить їх обійти й назвати.
+G="${TMP}/gate/engine"; mkdir -p "${G}"
+printf 'schema_version: 1\ntools:\n  hang: {kind: tool, probe: "sleep 30"}\n' > "${G}/lanes.yaml"
+{ cat "${E}/tools.yaml"
+  tool hang-shell cli candidate 99 "growth-queue" "" "" "I" '        kind: shell
+        cmd: "sleep 30"'
+  tool hang-lanes cli candidate 99 "growth-queue" "" "" "I" '        kind: lanes-tool
+        ref: hang'
+} > "${G}/tools.yaml"
 # Живий двійник фікстури: та сама проводка мусить проходити й на живому реєстрі.
 LIVE="${STRW_ROOT:-$HOME/Developer/STRW}/strw-state/engine"
-WIRE_OUT="$(STRW_ROOT="${R}" STRW_TOOLS_NOW=2026-10-28T12:00Z WIRED="${WIRED}" LIVE="${LIVE}" FIXTURE="${E}" FACTORY="${FACTORY}" python3 - <<'PY'
-import os, re, shlex, subprocess, glob
+WIRE_OUT="$(STRW_ROOT="${R}" STRW_TOOLS_NOW=2026-10-28T12:00Z WIRED="${WIRED}" LIVE="${LIVE}" FIXTURE="${E}" GATE_FIXTURE="${G}" FACTORY="${FACTORY}" python3 - <<'PY'
+import os, re, shlex, subprocess, glob, sys
+from concurrent.futures import ThreadPoolExecutor
 F, wired = os.environ["FACTORY"], [l.split("|") for l in os.environ["WIRED"].splitlines() if l.strip()]
 CALL = re.compile(r'`(bash "\$\{CLAUDE_PLUGIN_ROOT\}/scripts/engine/tool-select\.sh"[^`]*)`')
+# Дія на коди ≠0 — ЗМІСТ рядка виклику, не підрядок (W17b, чекер р.3 strw-factory #37): хвіст після виклику до
+# кінця його речення — дужки одразу після виклику або до крапки — дослівно; поза хвостом рядок не говорить про
+# коди чи зупинку. Перефразування зі збереженим підрядком («…не зупиняють хіба що — STOP») — червоно; свідома
+# зміна дії в паспорті — разом зі зміною TAIL тут.
+TAIL = {
+    "loops/L3-build.md": " (factory.tool-select; `--kind cli` — окремий процес, не внутрішній агент тієї ж задачі; stdout у звіт дослівно; код 3 «немає доступного» — це «зовнішній рев'юер недоступний · <причина>» з абзацу нижче; коди 2 і 4 рев'ю теж не зупиняють — «зовнішній рев'юер не поміряно · <причина зі stderr чи stdout>» + `finding`; «обрано» codex-cli — встановлено й залогінено, працездатність міряє `bin/codex-probe.sh` strw-ops перед самим рев'ю)",
+    "agents/engineer.md": "; stdout у trace; «обрано» — питаєш його про причину, код пишеш сам (`codex_maker: forbidden` смуги забороняє збірку, не читання); коди 2/3/4 — причина в trace (2 — ще `finding`: реєстр зламаний), далі сам — цикл не зупиняється.",
+}
+# форми слова «код», не «кодову»/«кодекс» (хибне червоне, Nit чекера р.1 #45)
+CODE_WORDS = re.compile(r"(?i)\bкод(?:и|у|ом|ів|ам|ами|ах|і)?\b|\bSTOP\b|зупин")
+def split_tail(line, m):
+    """→ (до виклику, хвіст, після хвоста) або None, якщо речення виклику не закрите."""
+    rest, depth = line[m.end():], 0
+    for i, ch in enumerate(rest):
+        depth += (ch == "(") - (ch == ")")
+        closed = (ch == ")" and depth == 0) if rest.startswith(" (") else \
+            (ch == "." and depth == 0 and (i + 1 == len(rest) or rest[i + 1] == " "))
+        if closed:
+            return line[:m.start()], rest[:i + 1], rest[i + 1:]
+    return None
+sys.path.insert(0, os.path.join(F, "scripts", "engine", "lib"))
+from yaml_nodup import load_nodup
+import tool_registry as tr
+PROBE = os.path.join(F, "scripts", "engine", "tool-probe.sh")
+def walk(engine, env_extra):
+    """Гейт §6: УСІ записи з пробою shell чи lanes-tool (не лише кандидати проводки) — чия проба впала в таймаут.
+    Таймаут під навантаженням (паралельні набори) — ще не дефект: такий запис пробується вдруге НАОДИНЦІ;
+    дефект — таймаут, що повторився. → (обійдено, [таймаут двічі], [не поміряно: код ∉ {0, 3}])"""
+    doc = tr.load(engine, load_nodup)
+    ids = [t["id"] for t in doc["tools"] if t["availability"]["probe"]["kind"] in ("shell", "lanes-tool")]
+    env = dict(os.environ, **env_extra)
+    def probe(tid):
+        p = subprocess.run(["bash", PROBE, engine, tid], stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env)
+        return p.returncode, (p.stdout.strip() or p.stderr.strip())
+    def timed_out(tid, r):
+        return r[0] == 3 and r[1].startswith(f"{tid} · timeout · ")
+    with ThreadPoolExecutor(4) as ex:
+        first = dict(zip(ids, ex.map(probe, ids)))
+    hung = [t for t in ids if timed_out(t, first[t]) and timed_out(t, probe(t))]
+    broken = [f"{t}: rc={first[t][0]} {first[t][1]}" for t in ids if first[t][0] not in (0, 3)]
+    return ids, hung, broken
 def say(ok, msg, det=""):
     print(("PASS · " if ok else "FAIL · ") + msg + ("" if ok else "\n" + det))
 def text(path):   # те, що агент читає: коментарі <!-- --> не рахуються
@@ -182,7 +237,7 @@ for p in glob.glob(os.path.join(F, "loops", "*.md")) + glob.glob(os.path.join(F,
 listed = {w[0] for w in wired} | {"skills/strw-loop-run/SKILL.md"}
 say(callers == listed, f"зворотне покриття: виклики tool-select.sh = WIRED ∪ SKILL ({len(callers)})",
     f"кличуть: {sorted(callers)}; у WIRED: {sorted(listed)}")
-for path, task, role, loop, opts, contours, action in wired:
+for path, task, role, loop, opts, contours in wired:
     raw, txt = open(os.path.join(F, path), encoding="utf-8").read(), text(os.path.join(F, path))
     calls = CALL.findall(txt)
     mentions = raw.count("tool-select.sh")
@@ -196,7 +251,11 @@ for path, task, role, loop, opts, contours, action in wired:
     cs = contours.split()
     say(argv[5] == ("<контур>" if len(cs) > 1 else cs[0]), f"{path}: контур — {'<контур> (ходить у ' + ', '.join(cs) + ')' if len(cs) > 1 else cs[0]}", f"{argv[5]}")
     line = next((l for l in txt.split("\n") if "tool-select.sh" in l), "")
-    say(action in line, f"{path}: дія на коди ≠0 названа поруч із викликом", f"немає «{action}»")
+    parts = split_tail(line, CALL.search(line))
+    say(parts is not None and parts[1] == TAIL[path], f"{path}: хвіст рядка виклику дослівно — дія на коди ≠0 (зміст, не підрядок)",
+        f"є:     {parts and parts[1]!r}\nмає бути: {TAIL[path]!r}")
+    say(parts is not None and not CODE_WORDS.search(parts[0] + parts[2]), f"{path}: поза хвостом рядок виклику не говорить про коди чи зупинку",
+        f"{parts and CODE_WORDS.findall(parts[0] + parts[2])}")
     if path.startswith("loops/"):
         m = re.search(r"^id:\s*(\S+)", txt, re.M)
         say(bool(m) and m.group(1) == loop, f"{path}: --loop = id паспорта", f"id {m and m.group(1)}")
@@ -208,11 +267,23 @@ for path, task, role, loop, opts, contours, action in wired:
         for c in cs:
             rc, out, err = run(calls[0], live, c, {"STRW_ROOT": os.path.dirname(os.path.dirname(live)), "STRW_TOOLS_NOW": ""})
             say(rc in (0, 3, 4), f"{path} (контур {c}): живий реєстр знає тип задачі, роль і вид → {rc}", f"rc={rc}\n{out}\n{err}")
-            # проба, що не вкладається в таймаут, на живому реєстрі — дефект запису (factory.tool-registry:
-            # codex-cli → `codex login status`, рішення майстра 28.10), не «недоступний»
-            say("(timeout)" not in out, f"{path} (контур {c}): жодна проба живого реєстру не впала в таймаут", out)
     else:
         print(f"SKIP · {path}: немає {live}/tools.yaml — живий прогін після мержу factory.tool-registry")
+# Гейт таймаутів: проба, що не вкладається в таймаут, — дефект запису (factory.tool-registry: codex-cli →
+# `codex login status`, рішення майстра 28.10), не «недоступний». Спершу контролі на фікстурі, потім живий.
+live = os.environ["LIVE"]
+ids, hung, broken = walk(os.environ["FIXTURE"], {"TOOL_PROBE_TIMEOUT": "3"})
+say(len(ids) == 10 and not hung and not broken, f"гейт таймаутів, позитивний контроль: фікстура — {len(ids)} записів shell, жоден не в таймауті",
+    f"обійдено {ids}; таймаут {hung}; не поміряно {broken}")
+ids, hung, broken = walk(os.environ["GATE_FIXTURE"], {"TOOL_PROBE_TIMEOUT": "3"})
+say(hung == ["hang-shell", "hang-lanes"] and not broken, "гейт таймаутів, негативний контроль: підроблені sleep 30 (shell і lanes-tool, поза кандидатами проводки) → названо обидва",
+    f"таймаут двічі {hung}; не поміряно {broken}")
+if os.path.isfile(os.path.join(live, "tools.yaml")):
+    ids, hung, broken = walk(live, {"STRW_ROOT": os.path.dirname(os.path.dirname(live)), "STRW_TOOLS_NOW": ""})
+    say(bool(ids) and not hung, f"живий реєстр: жодна з {len(ids)} проб shell/lanes-tool не впала в таймаут (і наодинці вдруге)", f"таймаут двічі: {hung}")
+    say(not broken, f"живий реєстр: усі {len(ids)} проб shell/lanes-tool поміряно (код 0 або 3)", "\n".join(broken))
+else:
+    print(f"SKIP · гейт таймаутів: немає {live}/tools.yaml — живий прогін після мержу factory.tool-registry")
 # SKILL Step 3a: шаблон виклику з ${CLAUDE_PLUGIN_ROOT} і чотири коди — словами, якими їх друкує скрипт,
 # і дія на код 2 — STOP (а не лише назва коду)
 sk = [l for l in text(os.path.join(F, "skills/strw-loop-run/SKILL.md")).split("\n") if "tool-select.sh" in l]

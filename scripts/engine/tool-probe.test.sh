@@ -43,7 +43,7 @@ tool() { # tool <id> <probe-yaml-рядки> [measured-рядок] [status] — 
         cmd: "test -f only-in-state"
         cwd: strw-factory'
   tool hang     "        kind: shell
-        cmd: \"(sleep 3; touch ${TMP}/survivor) & wait\""
+        cmd: \"date +%s > ${TMP}/hang-start; sleep 30 & echo \$! > ${TMP}/hang-child.pid; wait\""
   tool lanes-ok '        kind: lanes-tool
         ref: bashv'
   tool lanes-ghost '        kind: lanes-tool
@@ -71,6 +71,10 @@ tool() { # tool <id> <probe-yaml-рядки> [measured-рядок] [status] — 
         how: "mcp__x"' '{at: 2026-10-14T11:59Z, result: available}'
   tool sess-soon '        kind: session
         how: "mcp__x"' '{at: 2026-10-28T12:30Z, result: available}'
+  tool sess-1h '        kind: session
+        how: "mcp__x"' '{at: 2026-10-28T13:00Z, result: available}'
+  tool sess-1h1m '        kind: session
+        how: "mcp__x"' '{at: 2026-10-28T13:01Z, result: available}'
   tool sess-2h '        kind: session
         how: "mcp__x"' '{at: 2026-10-28T14:00Z, result: available}'
   tool sess-tomorrow '        kind: session
@@ -110,12 +114,22 @@ mkdir -p "${TMP}/bare/strw-state"; cp -R "${E}" "${TMP}/bare/strw-state/"
 out="$(STRW_ROOT="${TMP}/bare" STRW_TOOLS_NOW=2026-10-28T12:00Z bash "${TOOL}" "${TMP}/bare/strw-state/engine" in-fact 2>&1)"; rc=$?
 if [ "${rc}" -eq 3 ] && printf '%s' "${out}" | grep -qF "немає теки strw-factory"; then ok "немає теки cwd → unavailable з причиною"; else bad "немає теки cwd" "rc=${rc} ${out}"; fi
 
-# --- таймаут: убито всю групу, а не лише bash (свідок — нащадок у фоновій підоболонці: `touch` у самому
-# bash помер би разом із ним і при p.kill(), мутант M5 6a-проби це показав) ------------------------------------------------
-t0=$(date +%s); TO=1 expect "зависла проба → timeout, 3" 3 "hang · timeout · shell (cwd strw-ops): проба" hang; t1=$(date +%s)
-if [ $((t1 - t0)) -le 3 ]; then ok "таймаут спрацював за ≤3 с"; else bad "таймаут не спрацював вчасно" "$((t1 - t0)) с"; fi
-sleep 3
-if [ ! -e "${TMP}/survivor" ]; then ok "нащадок проби вбитий разом із групою"; else bad "нащадок проби пережив таймаут" ""; fi
+# --- таймаут: убито всю групу, а не лише bash. Проба живе 30 с, таймаут 1 с. Час — від СТАРТУ САМОЇ проби
+# (вона пише свій `date +%s`) до повернення tool-probe.sh: старт bash і python поза виміром, тож межа 5 с не
+# залежить від навантаження (стара «≤3 с від виклику» лишала 2 с на старт — чекер р.3 strw-factory #37 мав
+# 4 хибні червоні при ~12 паралельних наборах), а таймаут, що ігнорує TOOL_PROBE_TIMEOUT (типові 10 с),
+# множить його чи взагалі не вбиває, — червоно; «за 1 с» у виводі — що скрипт узяв саме TOOL_PROBE_TIMEOUT.
+# Свідок групи — PID фонового нащадка bash: p.kill() убив би лише bash, а сирота жив би ще 30 с (мутант M5
+# 6a-проби); живість — за PID, не за файлом, що з'являється за таймером, тож навантаження не робить свідка сліпим
+TO=1 expect "зависла проба → timeout, 3, «за 1 с»" 3 "hang · timeout · shell (cwd strw-ops): проба \`date +%s > ${TMP}/hang-start; sleep 30 & echo \$! > ${TMP}/hang-child.pid; wait\` не завершилась за 1 с" hang; t1=$(date +%s)
+t0="$(cat "${TMP}/hang-start" 2>/dev/null)"
+if [ -n "${t0}" ] && [ $((t1 - t0)) -le 5 ]; then ok "таймаут обірвав 30-секундну пробу (≤5 с від її старту)"; else bad "таймаут не обірвав пробу вчасно" "старт [${t0}], повернення ${t1}"; fi
+child="$(cat "${TMP}/hang-child.pid" 2>/dev/null)"; alive=1
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [ -n "${child}" ] && ! kill -0 "${child}" 2>/dev/null && { alive=0; break; }; sleep 1
+done
+if [ -n "${child}" ] && [ "${alive}" -eq 0 ]; then ok "нащадок проби вбитий разом із групою"
+else bad "нащадок проби пережив таймаут" "pid=[${child}]"; [ -n "${child}" ] && kill "${child}" 2>/dev/null; fi
 
 # --- lanes-tool -------------------------------------------------------------------------------
 expect "lanes-tool: проба з lanes.yaml, bash є → available"     0 "lanes-ok · available · lanes-tool bashv" lanes-ok
@@ -134,6 +148,8 @@ expect "session: наївний YAML datetime читається як UTC"      
 expect "межа давності: рівно 14 дн. — ще чинний"                 0 "sess-14d · available" sess-14d
 expect "межа давності: 14 дн. і хвилина — stale"                3 "sess-14d1m · stale" sess-14d1m
 expect "майбутнє в межах години (годинники) — чинний"           0 "sess-soon · available" sess-soon
+expect "межа майбутнього: рівно +1 год — ще чинний"              0 "sess-1h · available" sess-1h
+expect "межа майбутнього: +1 год і хвилина — stale"              3 "sess-1h1m · stale · сесійний вимір 2026-10-28T13:01Z: available — дата з майбутнього" sess-1h1m
 expect "майбутнє +2 год — уже stale (поблажка лише година)"      3 "sess-2h · stale" sess-2h
 expect "майбутнє +1 доба (одруківка дати) — stale"              3 "sess-tomorrow · stale · сесійний вимір 2026-10-29T12:00Z: available — дата з майбутнього" sess-tomorrow
 expect "багаторядковий cmd: stdout — один рядок, переноси як ⏎" 0 "multi · available · shell (cwd strw-ops): проба \`true ⏎ bash --version >/dev/null\` → код 0" multi
