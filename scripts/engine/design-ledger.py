@@ -33,7 +33,9 @@
 порушене правило не ховає нечитаного джерела — обидва рядки друкуються, код — старший.
 `path:` читається з робочої копії репо продукту — звіряти на тій гілці, де лежить історія (main).
 Live-версію замінює лише live-версія: поки нова `in-work`, стара лишається `live`; `superseded` з
-наступником `in-work`/`planned` — це стара версія макета, яка в прод не дійшла.
+наступником `in-work`/`planned` — це стара версія макета, яка в прод не дійшла. Цього правила скрипт не
+бачить (чи була версія колись live, реєстр не зберігає) — його звіряє критик L7; скрипт тримає лише
+форму: live_evidence — тільки в live, items — тільки в in-work, snapshot_pending — не в live.
 `--report` друкує markdown: що в проді, що в роботі, що заплановано, не взяте, історія за фічами.
 """
 import argparse, datetime, hashlib, os, re, subprocess, sys
@@ -57,6 +59,7 @@ IMMUTABLE_NEEDED = ("live", "superseded", "not-taken")
 RC_RULE, RC_SHAPE, RC_UNREAD, RC_PENDING = 1, 2, 3, 4
 GIT_RE = re.compile(r"^([A-Za-z0-9_][A-Za-z0-9_.-]*)@([0-9a-f]{7,40}):(.+)$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+IGNORED_NAMES = (".DS_Store",)   # Finder пише їх у робочу копію; у git їх немає
 SUM_RE = re.compile(r"^sha256\s+([0-9a-f]{64})\s+(\S.*)$")
 # Поля запису й тип, якого вони мусять бути. Поле не того типу — «не в формі» (код 2), а не трейсбек,
 # що виходить кодом 1 і читається як «порушено правило».
@@ -118,8 +121,12 @@ def shape_errors(doc):
 
 
 def check_archive(root, eid, rel, p, errors):
-    """Тека design-archive/<id>/: ім'я = id запису, MANIFEST з ledger=<id> і сумою КОЖНОГО файла."""
+    """Тека design-archive/<id>/: ім'я = id запису, MANIFEST з ledger=<id> і сумою КОЖНОГО файла (шляхи
+    відносні, підтеки дозволені — як у гейті продукту); симлінк у теці чи сама тека-симлінк — не знімок."""
     name = os.path.basename(p.rstrip("/"))
+    if os.path.islink(p.rstrip("/")):
+        errors.append(f"{eid}: архівна тека {rel} — симлінк; знімок живе в самій теці, не за посиланням")
+        return
     manifest = os.path.join(p, "MANIFEST")
     if not os.path.isfile(manifest):
         errors.append(f"{eid}: архівна тека {rel} без MANIFEST")
@@ -127,7 +134,11 @@ def check_archive(root, eid, rel, p, errors):
     if name != eid:
         errors.append(f"{eid}: архівна тека {rel} належить іншому запису ({name}) — тека пишеться під "
                       f"свій запис, позичена тека не є знімком цієї версії")
-    text = open(manifest, encoding="utf-8").read()
+    try:
+        text = open(manifest, encoding="utf-8").read()
+    except UnicodeDecodeError:
+        errors.append(f"{eid}: MANIFEST теки {rel} не UTF-8 — його рядків не прочитати")
+        return
     led = re.search(r"^ledger=(.+)$", text, re.M)
     if not led or led.group(1).strip() != eid:
         errors.append(f"{eid}: MANIFEST теки {rel} не називає ledger={eid}")
@@ -135,13 +146,24 @@ def check_archive(root, eid, rel, p, errors):
     for line in text.splitlines():
         m = SUM_RE.match(line.strip())
         if m:
-            listed[m.group(2).strip()] = m.group(1)
-    on_disk = sorted(x for x in os.listdir(p) if x != "MANIFEST")
-    for f in on_disk:
+            f = m.group(2).strip()
+            if f in listed:
+                errors.append(f"{eid}: MANIFEST теки {rel} називає {f} двічі — сума одна")
+            listed[f] = m.group(1)
+    on_disk = []
+    for dirpath, dirs, files in os.walk(p):
+        for x in sorted(dirs + files):
+            full = os.path.join(dirpath, x)
+            relx = os.path.relpath(full, p).replace(os.sep, "/")
+            if os.path.islink(full):
+                errors.append(f"{eid}: {rel}/{relx} — симлінк; знімок — це файл, не посилання на нього")
+            elif x in files and relx != "MANIFEST" and x not in IGNORED_NAMES:
+                on_disk.append(relx)
+    for f in sorted(on_disk):
         fp = os.path.join(p, f)
         if f not in listed:
             errors.append(f"{eid}: у теці {rel} файл {f}, якого MANIFEST не називає")
-        elif not os.path.isfile(fp) or sha256_bytes(open(fp, "rb").read()) != listed[f]:
+        elif sha256_bytes(open(fp, "rb").read()) != listed[f]:
             errors.append(f"{eid}: {rel}/{f} має інший вміст, ніж записано в MANIFEST — історію переписано")
     for f in sorted(set(listed) - set(on_disk)):
         errors.append(f"{eid}: MANIFEST теки {rel} називає {f}, якого в теці немає")
@@ -152,6 +174,10 @@ def check_archive(root, eid, rel, p, errors):
 def check_source(root, eid, src, unread, errors):
     """→ True, якщо джерело НЕЗМІННЕ (git-blob, тека design-archive/<id>/, файл із sha256). Нечитане
     незмінне джерело — все одно незмінне за видом: його відсутність — код 3, а не «джерела немає»."""
+    kinds = [k for k in ("git", "path", "artifact", "claude-design") if k in src]
+    if len(kinds) > 1:
+        errors.append(f"{eid}: одне джерело — один вид, а тут {', '.join(kinds)}")
+        return False
     if "git" in src:
         m = GIT_RE.match(str(src["git"]))
         if not m:
@@ -165,13 +191,17 @@ def check_source(root, eid, src, unread, errors):
             unread.append(f"{eid}: {src['git']} не звірено — немає --repo-root")
             return True
         gitc = ["git", "--no-optional-locks", "-C", os.path.join(root, repo)]
-        t = subprocess.run(gitc + ["cat-file", "-t", f"{sha}:{path}"], capture_output=True, text=True)
-        if t.returncode != 0:
+        # ls-tree, не cat-file -t: симлінк теж «blob» (mode 120000) — 40 байт шляху замість знімка
+        t = subprocess.run(gitc + ["ls-tree", "-z", sha, "--", path], capture_output=True)
+        entry = t.stdout.split(b"\0")[0].decode("utf-8", "surrogateescape") if t.returncode == 0 else ""
+        if not entry:
             unread.append(f"{eid}: {src['git']} не читається (немає коміту чи шляху; неглибока копія?) — "
                           f"це НЕ «без змін»")
             return True
-        if t.stdout.strip() != "blob":
-            errors.append(f"{eid}: {src['git']} — це {t.stdout.strip()}, а не файл; знімок версії — файл")
+        mode, kind = entry.split("\t", 1)[0].split()[:2]
+        if kind != "blob" or mode not in ("100644", "100755"):
+            what = "симлінк" if mode == "120000" else kind
+            errors.append(f"{eid}: {src['git']} — це {what}, а не файл; знімок версії — файл")
             return False
         want = src.get("sha256")
         if want:
@@ -184,12 +214,15 @@ def check_source(root, eid, src, unread, errors):
         if unsafe(rel):
             errors.append(f"{eid}: path-джерело {src['path']!r} виходить за межі парасольки")
             return False
-        archive = "/design-archive/" in f"/{rel}" and os.path.basename(os.path.dirname(rel)) == "design-archive"
-        if root is None:
-            if archive or src.get("sha256"):
-                unread.append(f"{eid}: {src['path']} не звірено — немає --repo-root")
-                return True
+        parts = rel.split("/")
+        if "design-archive" in parts[:-1] and parts.index("design-archive") != len(parts) - 2:
+            errors.append(f"{eid}: path {src['path']!r} веде всередину архівної теки — назвіть саму теку "
+                          f"design-archive/{eid}/, а не файл у ній (і не теку іншого запису)")
             return False
+        archive = len(parts) >= 2 and parts[-2] == "design-archive"
+        if root is None:
+            unread.append(f"{eid}: {src['path']} не звірено — немає --repo-root")
+            return bool(archive or src.get("sha256"))
         p = os.path.join(root, rel)
         if os.path.isdir(p) and archive:
             check_archive(root, eid, rel, p, errors)
@@ -219,9 +252,9 @@ def check_source(root, eid, src, unread, errors):
 
 def validate(doc, root, items_dir, today):
     errors, unread, pending = [], [], []
-    if doc.get("schema_version") != 1:
+    if type(doc.get("schema_version")) is not int or doc.get("schema_version") != 1:
         errors.append("schema_version має бути 1")
-    if not str(doc.get("product") or "").strip():
+    if not isinstance(doc.get("product"), str) or not doc["product"].strip():
         errors.append("немає product")
     features = {}
     for f in doc.get("features") or []:
@@ -281,6 +314,12 @@ def validate(doc, root, items_dir, today):
                           f"історія, що живе лише за посиланням чи в робочому дереві, зникає разом із ним; "
                           f"або snapshot_pending")
 
+        if st != "live" and e.get("live_evidence") is not None:
+            errors.append(f"{eid}: live_evidence у стані {st} — доказ проду має лише live-версія")
+        if st != "in-work" and e.get("items") is not None:
+            errors.append(f"{eid}: items у стані {st} — елементи веде лише in-work-версія (решту — в note)")
+        if st == "live" and sp is not None:
+            errors.append(f"{eid}: live з snapshot_pending — те, що в проді, мусить мати знімок уже зараз")
         if st == "live":
             if not str(e.get("live_evidence") or "").strip():
                 errors.append(f"{eid}: live без live_evidence (збірка чи main@sha, що це показує)")
