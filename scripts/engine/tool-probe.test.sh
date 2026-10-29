@@ -43,7 +43,7 @@ tool() { # tool <id> <probe-yaml-рядки> [measured-рядок] [status] — 
         cmd: "test -f only-in-state"
         cwd: strw-factory'
   tool hang     "        kind: shell
-        cmd: \"sleep 30 & echo \$! > ${TMP}/hang-child.pid; wait\""
+        cmd: \"date +%s > ${TMP}/hang-start; sleep 30 & echo \$! > ${TMP}/hang-child.pid; wait\""
   tool lanes-ok '        kind: lanes-tool
         ref: bashv'
   tool lanes-ghost '        kind: lanes-tool
@@ -114,14 +114,16 @@ mkdir -p "${TMP}/bare/strw-state"; cp -R "${E}" "${TMP}/bare/strw-state/"
 out="$(STRW_ROOT="${TMP}/bare" STRW_TOOLS_NOW=2026-10-28T12:00Z bash "${TOOL}" "${TMP}/bare/strw-state/engine" in-fact 2>&1)"; rc=$?
 if [ "${rc}" -eq 3 ] && printf '%s' "${out}" | grep -qF "немає теки strw-factory"; then ok "немає теки cwd → unavailable з причиною"; else bad "немає теки cwd" "rc=${rc} ${out}"; fi
 
-# --- таймаут: убито всю групу, а не лише bash. Проба живе 30 с, таймаут 1 с: межа 15 с лишає запас на
-# навантаження (стара межа ≤3 с лишала 2 с на старт bash і python — чекер р.3 strw-factory #37 мав 4 хибні
-# червоні при ~12 паралельних наборах) і все одно ловить «не вбито нічого» (p.wait() чекав би всі 30 с).
-# Свідок групи — PID фонового нащадка
-# bash: p.kill() убив би лише bash, а сирота жив би ще 30 с (мутант M5 6a-проби); живість — за PID,
-# не за файлом, що з'являється за таймером, тож навантаження не робить свідка сліпим ---------------------
-t0=$(date +%s); TO=1 expect "зависла проба → timeout, 3" 3 "hang · timeout · shell (cwd strw-ops): проба" hang; t1=$(date +%s)
-if [ $((t1 - t0)) -le 15 ]; then ok "таймаут обірвав 30-секундну пробу (≤15 с)"; else bad "таймаут не обірвав пробу" "$((t1 - t0)) с"; fi
+# --- таймаут: убито всю групу, а не лише bash. Проба живе 30 с, таймаут 1 с. Час — від СТАРТУ САМОЇ проби
+# (вона пише свій `date +%s`) до повернення tool-probe.sh: старт bash і python поза виміром, тож межа 5 с не
+# залежить від навантаження (стара «≤3 с від виклику» лишала 2 с на старт — чекер р.3 strw-factory #37 мав
+# 4 хибні червоні при ~12 паралельних наборах), а таймаут, що ігнорує TOOL_PROBE_TIMEOUT (типові 10 с),
+# множить його чи взагалі не вбиває, — червоно; «за 1 с» у виводі — що скрипт узяв саме TOOL_PROBE_TIMEOUT.
+# Свідок групи — PID фонового нащадка bash: p.kill() убив би лише bash, а сирота жив би ще 30 с (мутант M5
+# 6a-проби); живість — за PID, не за файлом, що з'являється за таймером, тож навантаження не робить свідка сліпим
+TO=1 expect "зависла проба → timeout, 3, «за 1 с»" 3 "hang · timeout · shell (cwd strw-ops): проба \`date +%s > ${TMP}/hang-start; sleep 30 & echo \$! > ${TMP}/hang-child.pid; wait\` не завершилась за 1 с" hang; t1=$(date +%s)
+t0="$(cat "${TMP}/hang-start" 2>/dev/null)"
+if [ -n "${t0}" ] && [ $((t1 - t0)) -le 5 ]; then ok "таймаут обірвав 30-секундну пробу (≤5 с від її старту)"; else bad "таймаут не обірвав пробу вчасно" "старт [${t0}], повернення ${t1}"; fi
 child="$(cat "${TMP}/hang-child.pid" 2>/dev/null)"; alive=1
 for _ in 1 2 3 4 5 6 7 8 9 10; do
     [ -n "${child}" ] && ! kill -0 "${child}" 2>/dev/null && { alive=0; break; }; sleep 1
