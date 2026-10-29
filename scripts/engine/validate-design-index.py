@@ -10,7 +10,7 @@
 самою машинерією: `watched`, `working_files`, `hash`, `tokens`.
 
 `surface: ds-artifact` — дизайн-система продукту в Claude (артефакт типу Design
-System, рішення CEO 29.10, dec-115). `working_files` — закріплена копія в
+System, рішення CEO 29.10, dec-117). `working_files` — закріплена копія в
 репозиторії продукту (`design-system/` з `UPSTREAM.lock`), бо артефакт приватний
 і CI його не прочитає. Обов'язкові `url` (`https://claude.ai/artifact/…`) і
 `version` — версія артефакту, з якої знято копію: без неї крок 1 скіла не може
