@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # design-ledger.test.sh — реєстр версій макетів продукту (dec-115: «що в проді, що вже змінено —
 # старий дизайн, що в роботі, що ще буде»). Кожен випадок міняє ОДНУ річ у зеленому реєстрі й
-# звіряє ПРИЧИНУ; коди виходу — 0 · 1 правило · 2 форма · 3 джерело нечитане · 4 архів неповний.
+# звіряє ПРИЧИНУ; коди виходу — 0 · 1 правило (значення) · 2 форма (тип, парсинг) · 3 джерело нечитане ·
+# 4 архів неповний.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 L="${HERE}/design-ledger.py"
@@ -20,13 +21,20 @@ printf '<html>v2</html>\n' > "${P}/design-reference/Canvas.dc.html"
 git -C "${P}" commit -qam v2
 V2="$(git -C "${P}" rev-parse --short HEAD)"
 V2SHA="$(git -C "${P}" show "${V2}:design-reference/Canvas.dc.html" | python3 -c 'import hashlib,sys;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
-A="${P}/design-archive/p-001.review@2026-08-19"; mkdir -p "${A}"
-printf '<html>review</html>\n' > "${A}/index.html"
-printf 'ledger=p-001.review@2026-08-19\nsource=x\nsha256  00  index.html\n' > "${A}/MANIFEST"
+sum() { python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$1"; }
+archive() { # archive <id> <вміст index.html> — тека design-archive/<id>/ з чесним MANIFEST
+    local a="${P}/design-archive/$1"; mkdir -p "${a}"
+    printf '%s\n' "$2" > "${a}/index.html"
+    printf 'ledger=%s\nsource=x\nsha256  %s  index.html\n' "$1" "$(sum "${a}/index.html")" > "${a}/MANIFEST"
+}
+archive "p-001.review@2026-08-19" '<html>review</html>'
+archive "p-001.home-option-b@2026-10-29" '<html>option b</html>'
+A="${P}/design-archive/p-001.review@2026-08-19"
 printf 'schema_version: 1\nid: p-001.design.home-v3\n' > "${R}/strw-state/engine/items/p-001.design.home-v3.yaml"
-mkdir -p "${P}/design-archive/p-001.bare@2026-01-01" "${P}/design-archive/p-001.misnamed@2026-01-01"
+mkdir -p "${P}/design-archive/p-001.bare@2026-01-01" "${P}/design-archive/p-001.misnamed@2026-01-01" "${P}/design-reference/sub"
 printf '<html>bare</html>\n' > "${P}/design-archive/p-001.bare@2026-01-01/index.html"
 printf 'ledger=p-001.other@2026-01-01\nsource=x\n' > "${P}/design-archive/p-001.misnamed@2026-01-01/MANIFEST"
+printf '<html>live working copy</html>\n' > "${P}/design-reference/sub/Live.dc.html"
 
 green() { cat <<Y
 schema_version: 1
@@ -77,9 +85,8 @@ entries:
     status: not-taken
     date: 2026-10-29
     sources:
-      - {path: "p-ios/design-archive/p-001.review@2026-08-19"}
+      - {path: "p-ios/design-archive/p-001.home-option-b@2026-10-29"}
     return_if: "якщо конверсія з порожнього стану < 20%"
-    note: "архівна тека позичена для фікстури"
   - id: p-001.review@2026-08-19
     title: "Ревʼю кнопок"
     kind: review
@@ -205,7 +212,9 @@ run "git-джерело без sha" 1 "не у формі <repo>@<sha>:<шлях
 edit "$TMP/g13.yaml" "E['p-001.review@2026-08-19']['sources']=[{'path':'p-ios/design-archive/p-001.bare@2026-01-01'}]"
 run "архівна тека без MANIFEST" 1 "p-001.review@2026-08-19: архівна тека p-ios/design-archive/p-001.bare@2026-01-01 без MANIFEST" "$TMP/g13.yaml"
 edit "$TMP/g14.yaml" "E['p-001.review@2026-08-19']['sources']=[{'path':'p-ios/design-archive/p-001.misnamed@2026-01-01'}]"
-run "MANIFEST називає іншу теку" 1 "MANIFEST теки p-ios/design-archive/p-001.misnamed@2026-01-01 не називає її" "$TMP/g14.yaml"
+run "MANIFEST називає інший запис" 1 "MANIFEST теки p-ios/design-archive/p-001.misnamed@2026-01-01 не називає ledger=p-001.review@2026-08-19" "$TMP/g14.yaml"
+edit "$TMP/g14b.yaml" "E['p-001.home-option-b@2026-10-29']['sources']=[{'path':'p-ios/design-archive/p-001.review@2026-08-19'}]"
+run "позичена архівна тека чужого запису" 1 "p-001.home-option-b@2026-10-29: архівна тека p-ios/design-archive/p-001.review@2026-08-19 належить іншому запису" "$TMP/g14b.yaml"
 edit "$TMP/g15.yaml" "E['p-001.review@2026-08-19']['sources']=[{'path':'p-ios/design-archive/p-001.review@2026-08-19/index.html','sha256':'00'}]"
 run "архівний файл з іншим вмістом" 1 "p-001.review@2026-08-19: p-ios/design-archive/p-001.review@2026-08-19/index.html має інший вміст" "$TMP/g15.yaml"
 edit "$TMP/g16.yaml" "E['p-001.home@v3']['sources']=[{'artifact':'https://example.com/x','version':'1'}]"
@@ -214,6 +223,84 @@ edit "$TMP/g17.yaml" "del E['p-001.home@v3']['sources'][0]['version']"
 run "artifact без version" 1 "p-001.home@v3: artifact-джерело без version" "$TMP/g17.yaml"
 edit "$TMP/g18.yaml" "E['p-001.home@v3']['sources']=[{'figma':'abc'}]"
 run "невідомий вид джерела" 1 "p-001.home@v3: невідомий вид джерела" "$TMP/g18.yaml"
+
+# зовнішнє рев'ю (6a, 29.10): кожна знайдена діра — свідком
+cp "${A}/index.html" "$TMP/index.bak"; printf '<html>rewritten</html>\n' > "${A}/index.html"
+run "файл архіву переписано, MANIFEST старий" 1 "p-001.review@2026-08-19: p-ios/design-archive/p-001.review@2026-08-19/index.html має інший вміст, ніж записано в MANIFEST" "$TMP/green.yaml"
+cp "$TMP/index.bak" "${A}/index.html"
+printf 'x\n' > "${A}/extra.png"
+run "файл в архіві, якого MANIFEST не називає" 1 "у теці p-ios/design-archive/p-001.review@2026-08-19 файл extra.png, якого MANIFEST не називає" "$TMP/green.yaml"
+rm -f "${A}/extra.png"
+edit "$TMP/h1.yaml" "E['p-001.canvas@2026-10-20']['sources']=[{'path':'p-ios/design-reference/sub/Live.dc.html'}]"
+run "live на робочому дереві без суми — не незмінне" 1 "p-001.canvas@2026-10-20: live без незмінного джерела" "$TMP/h1.yaml"
+edit "$TMP/h2.yaml" "E['p-001.canvas@2026-10-20']['sources']=[{'path':'p-ios/design-reference/sub/Live.dc.html','sha256':'$(sum "${P}/design-reference/sub/Live.dc.html")'}]"
+run "файл робочого дерева з sha256 — незмінний (контроль)" 0 "реєстр макетів у формі" "$TMP/h2.yaml"
+edit "$TMP/h3.yaml" "E['p-001.canvas@2026-07-21']['sources']=[{'git':'p-ios@${V1}:design-reference'}]"
+run "git-джерело на теку, а не файл" 1 "p-001.canvas@2026-07-21: p-ios@${V1}:design-reference — це tree, а не файл" "$TMP/h3.yaml"
+edit "$TMP/h4.yaml" "E['p-001.review@2026-08-19']['sources']=[{'path':'p-ios/../../etc/design-archive/x'}]"
+run "path з .. — поза парасолькою" 1 "p-001.review@2026-08-19: path-джерело 'p-ios/../../etc/design-archive/x' виходить за межі парасольки" "$TMP/h4.yaml"
+edit "$TMP/h5.yaml" "E['p-001.canvas@2026-07-21']['sources']=[{'git':'..@${V1}:design-reference/Canvas.dc.html'}]"
+run "git-репо .. — відкинуто формою (ні «..», ні «-опція» не проходять)" 1 "git-джерело '..@" "$TMP/h5.yaml"
+out="$(python3 "$L" "$TMP/green.yaml" --items "$R/strw-state/engine/items" --today 2026-10-29 2>&1)"; rc=$?
+if [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -qF "p-001.canvas@2026-07-21: p-ios@${V1}:design-reference/Canvas.dc.html не звірено — немає --repo-root" \
+   && printf '%s' "$out" | grep -qF 'p-001.review@2026-08-19: p-ios/design-archive/p-001.review@2026-08-19 не звірено — немає --repo-root'; then ok "без --repo-root — код 3 і для git, і для path, не тихий нуль"; else bad "без --repo-root" "rc=$rc · $out"; fi
+out="$(python3 "$L" "$TMP/green.yaml" --repo-root "$R" --today 2026-10-29 2>&1)"; rc=$?
+if [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -qF 'p-001.home@v3: елементи p-001.design.home-v3 не звірено — немає --items'; then ok "без --items — код 3"; else bad "без --items" "rc=$rc · $out"; fi
+edit "$TMP/h6.yaml" "E['p-001.canvas@2026-10-20']['superseded_by']='p-001.home@v3'"
+run "superseded_by у live-записі" 1 "p-001.canvas@2026-10-20: superseded_by у стані live" "$TMP/h6.yaml"
+edit "$TMP/h7.yaml" "E['p-001.review@2026-08-19']['superseded_by']='p-001.home-option-b@2026-10-29'; E['p-001.home-option-b@2026-10-29']['supersedes']=['p-001.review@2026-08-19']; E['p-001.ds@2026-10-29']['supersedes']=[]"
+run "наступник — невзятий варіант" 1 "p-001.review@2026-08-19: замінена варіантом not-taken" "$TMP/h7.yaml"
+edit "$TMP/h8.yaml" "E['p-001.canvas@2026-10-20']['status']='superseded'; E['p-001.canvas@2026-10-20']['superseded_by']='p-001.canvas@2026-07-21'; E['p-001.canvas@2026-07-21']['supersedes']=['p-001.canvas@2026-10-20']; E['p-001.canvas@2026-07-21']['date']='2026-10-20'; del E['p-001.canvas@2026-10-20']['live_evidence']"
+run "цикл замін" 1 "цикл замін" "$TMP/h8.yaml"
+edit "$TMP/h9.yaml" "E['p-001.home@v3']['date']='2026-13-45'"
+run "дата, якої не буває" 1 "p-001.home@v3: date має бути YYYY-MM-DD" "$TMP/h9.yaml"
+run "--today не дата" 2 "--today 'завтра'" "$TMP/green.yaml" --today завтра
+edit "$TMP/s1.yaml" "E['p-001.review@2026-08-19']['snapshot_pending']='скоро'"
+run "snapshot_pending рядком — не в формі (2), не трейсбек" 2 "p-001.review@2026-08-19: snapshot_pending має бути dict" "$TMP/s1.yaml"
+edit "$TMP/s2.yaml" "E['p-001.canvas@2026-07-21']['superseded_by']=['p-001.canvas@2026-10-20']"
+run "superseded_by списком — не в формі" 2 "superseded_by має бути str" "$TMP/s2.yaml"
+edit "$TMP/s3.yaml" "E['p-001.home@v3']['features']=[{'id':'home'}]"
+run "фіча мапою в записі — не в формі" 2 "p-001.home@v3: features — список рядків" "$TMP/s3.yaml"
+: > "$TMP/empty.yaml"
+run "порожній реєстр — 2, не 1" 2 "порожній" "$TMP/empty.yaml"
+
+# внутрішнє рев'ю (29.10): мутанти, що жили, — свідками
+edit "$TMP/m1.yaml" "E['p-001.home-option-b@2026-10-29']['sources']=[{'artifact':'https://claude.ai/artifact/O','version':'1'}]"
+run "not-taken без незмінного джерела" 1 "p-001.home-option-b@2026-10-29: not-taken без незмінного джерела" "$TMP/m1.yaml"
+edit "$TMP/m2.yaml" "E['p-001.review@2026-08-19']['sources']=[{'claude-design':'proj/Buttons.dc.html'}]"
+run "superseded лише з посиланням claude-design" 1 "p-001.review@2026-08-19: superseded без незмінного джерела" "$TMP/m2.yaml"
+edit "$TMP/m3.yaml" "E['p-001.canvas@2026-10-20']['date']='2026-07-21'"
+run "заміна того самого дня — дозволена (контроль)" 0 "реєстр макетів у формі" "$TMP/m3.yaml"
+edit "$TMP/m4.yaml" "E['p-001.review@2026-08-19']['sources']=[]; E['p-001.review@2026-08-19']['snapshot_pending']={'what':'експорт','by':'2026-10-29'}"
+run "термін знімка — сьогодні: ще не прострочено" 4 "до 2026-10-29" "$TMP/m4.yaml"
+edit "$TMP/m5.yaml" "E['p-001.ds@2026-10-29']['features']=['kit','home']; E['p-001.ds@2026-10-29']['kind']='screens'"
+run "дві live на ДРУГУ фічу запису" 1 "дві live-версії для home/screens: p-001.canvas@2026-10-20, p-001.ds@2026-10-29" "$TMP/m5.yaml"
+edit "$TMP/m6.yaml" "E['p-001.review@2026-08-19']['sources']=[]; E['p-001.review@2026-08-19']['snapshot_pending']={'by':'2026-12-14'}"
+run "snapshot_pending без what" 1 "p-001.review@2026-08-19: snapshot_pending потребує what і by" "$TMP/m6.yaml"
+edit "$TMP/m7.yaml" "E['p-001.home@v3']['features']=['home','home']"
+run "фіча двічі в одному записі" 1 "p-001.home@v3: фіча повторюється в features" "$TMP/m7.yaml"
+edit "$TMP/m8.yaml" "E['p-001.home@v3']['sources'][0]['version']=0"
+run "artifact version: 0 — версія є (контроль)" 0 "реєстр макетів у формі" "$TMP/m8.yaml"
+edit "$TMP/m9.yaml" "E['p-001.canvas@2026-07-21']['sources']=[{'git':'p-ios@${V1}:../outside.html'}]"
+run "git-шлях з .. — поза парасолькою" 1 "p-001.canvas@2026-07-21: git-джерело 'p-ios@${V1}:../outside.html' виходить за межі парасольки" "$TMP/m9.yaml"
+edit "$TMP/m10.yaml" "E['p-001.home@v3']['status']='archived'; E['p-001.canvas@2026-07-21']['sources']=[{'git':'p-ios@0000000:design-reference/Canvas.dc.html'}]"
+out="$(python3 "$L" "$TMP/m10.yaml" --repo-root "$R" --items "$R/strw-state/engine/items" --today 2026-10-29 2>&1)"; rc=$?
+if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -qF "ERROR: p-001.home@v3: status='archived'" && printf '%s' "$out" | grep -qF 'UNREAD: p-001.canvas@2026-07-21'; then ok "правило і нечитане джерело разом — код 1, обидва рядки"
+else bad "старшинство кодів" "rc=$rc · $out"; fi
+
+# генеративний мутаційний прогін (29.10): решта гілок — свідками
+cp "${A}/MANIFEST" "$TMP/manifest.bak"; printf 'sha256  %s  gone.html\n' "$(printf x | python3 -c 'import hashlib,sys;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')" >> "${A}/MANIFEST"
+run "MANIFEST називає файл, якого в теці немає" 1 "p-001.review@2026-08-19: MANIFEST теки p-ios/design-archive/p-001.review@2026-08-19 називає gone.html, якого в теці немає" "$TMP/green.yaml"
+cp "$TMP/manifest.bak" "${A}/MANIFEST"
+mv "${A}/index.html" "$TMP/index.keep"; grep -v '^sha256' "$TMP/manifest.bak" > "${A}/MANIFEST"
+run "архівна тека без жодного знімка" 1 "p-001.review@2026-08-19: архівна тека p-ios/design-archive/p-001.review@2026-08-19 порожня" "$TMP/green.yaml"
+mv "$TMP/index.keep" "${A}/index.html"; cp "$TMP/manifest.bak" "${A}/MANIFEST"
+edit "$TMP/n1.yaml" "E['p-001.templates@2026-10-20']['sources']=[{'path':'p-ios/design-reference/missing.html'}]"
+run "path у робоче дерево, якого немає" 3 "p-001.templates@2026-10-20: p-ios/design-reference/missing.html не читається" "$TMP/n1.yaml"
+edit "$TMP/n2.yaml" "d['features'].append({'title':'без id'})"
+run "фіча без id" 1 "features: кожна фіча — {id, title}" "$TMP/n2.yaml"
+edit "$TMP/n3.yaml" "d['entries'].append({'status':'planned'})"
+run "запис без id" 1 "entries[7]: немає id" "$TMP/n3.yaml"
 
 printf 'schema_version: 1\nproduct: p\nentries: [\n' > "$TMP/broken.yaml"
 run "реєстр не парситься" 2 "не парситься" "$TMP/broken.yaml"

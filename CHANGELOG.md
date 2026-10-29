@@ -27,14 +27,18 @@
   старий дизайн, що в роботі і що ще буде»).** Нова поверхня одиниці `surface: ds-artifact` у
   `validate-design-index.py` — артефакт Design System у Claude; обов'язкові `url` (`https://claude.ai/artifact/…`) і
   `version` (з якої версії знято закріплену копію в репо продукту). Перший власний тест валідатора —
-  `validate-design-index.test.sh` (9 випадків; 5 червоні на старому валідаторі). Новий
+  `validate-design-index.test.sh` (10 випадків; 5 червоні на старому валідаторі). Новий
   `scripts/engine/design-ledger.py` — реєстр `products/<id>/design/ledger.yaml`: п'ять станів з обов'язковою підставою
   кожного (`live`+`live_evidence`, одна на фічу й вид · `superseded`+`superseded_by` в обидва боки, не старший за
   наступника · `in-work`+`items`, що існують · `planned`+`plan_ref` · `not-taken`+`return_if`), незмінне джерело
   (`git: repo@sha:шлях` з `git show`, за бажання `sha256`; `path:` у `design-archive/` з MANIFEST) для live/superseded/
   not-taken, `snapshot_pending` з терміном — код 4, прострочений — 1, нечитане джерело — 3, форма — 2; `--report` —
-  markdown «прод · робота · план · не взяте · історія за фічами». Тест `design-ledger.test.sh` — 40 випадків на
-  фікстурі з живим git-репо; мутаційний прогін 38 guard'ів — усі вбиті. `engine-lib-guard.test.sh` знає скрипт.
+  markdown «прод · робота · план · не взяте · історія за фічами». Тест `design-ledger.test.sh` — 75 випадків на
+  фікстурі з живим git-репо; мутаційний прогін — 54 місця `errors/unread/pending.append` по черзі вимкнено
+  й 53 умовні мутації: жоден не вижив. Після рев'ю (зовнішнє 6a і внутрішнє): тека
+  архіву — лише своя (`<id>`), суми MANIFEST звіряються, git-джерело — лише blob, шлях без `..`, робоче
+  дерево без суми — змінне, без `--repo-root`/`--items` — код 3, тип поля — код 2, супровід за станами,
+  цикли замін. `engine-lib-guard.test.sh` знає скрипт.
   Проводка: `strw-design-sync` крок 0 (дизайн-система першою: `Artifact read` → `version` проти `UPSTREAM.lock` →
   PR перезакріплення; допрацювання артефакту ДО кіта) і крок 7 (реєстр версій), тіло — 60 рядків;
   `references/design-sync-rationale.md` (причини обох кроків); паспорт L7 — тригер, обсяг, стоп-умова (+ реєстр),

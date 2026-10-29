@@ -15,14 +15,25 @@
   planned     — буде: `plan_ref` (dec-NNN, tri-NNN, елемент) — без підстави «заплановано» не буває;
   not-taken   — варіант, який не взяли (design-options дизайнера): `return_if` — умова повернення.
 
-Джерела: `git: <repo>@<sha>:<шлях>` (незмінне задарма; `sha256` — за бажання) · `path: <repo>/<шлях>`
-(файл або тека `design-archive/<id>/` з MANIFEST, чий `ledger=` дорівнює id запису) — обидва
-незмінні · `artifact: <url>` + `version` · `claude-design: <проєкт>/<файл>` — змінні посилання,
-історією самі не є. Немає ще знімка — `snapshot_pending: {what, by}`: чесна дірка, код 4;
-прострочена (`by` < сьогодні) — порушення, код 1.
+Джерела. Незмінні: `git: <repo>@<sha>:<шлях>` (файл-blob у коміті; `sha256` — за бажання) ·
+`path: <repo>/design-archive/<id>/` — тека, названа САМЕ id запису, з MANIFEST (`ledger=<id>`, рядок
+`sha256  <сума>  <файл>` на КОЖЕН файл теки — суми звіряються) · `path:` на файл із `sha256`. Змінні
+(історією самі не є): `path:` на робоче дерево без `sha256`, `artifact: <url>` + `version`,
+`claude-design: <проєкт>/<файл>`. Шлях з `..` чи абсолютний — помилка: джерело поза парасолькою.
+Немає ще знімка — `snapshot_pending: {what, by}`: чесна дірка, код 4; прострочена (`by` < сьогодні) —
+порушення, код 1. Без `--repo-root` джерела не звірено, без `--items` — елементи `in-work`: обидва
+випадки — код 3 з названою причиною, не тихий нуль.
 
-Коди виходу: 0 у формі · 1 правило порушено · 2 реєстр не в формі / не парситься ·
-3 джерело нечитане (НЕ «без змін») · 4 архів неповний (є snapshot_pending).
+Супровід: `superseded_by` — лише в стані `superseded`; кожен запис із `supersedes` замінює саме
+`superseded`-записи; наступник не може бути `not-taken`; ланцюг замін без циклів.
+
+Коди виходу: 0 у формі · 1 правило порушено (неприпустиме ЗНАЧЕННЯ: стан, вид, дата, підстава…) ·
+2 не в формі — не парситься, порожній, корінь не мапа, поле не того ТИПУ ·
+3 джерело нечитане (НЕ «без змін») · 4 архів неповний (є snapshot_pending). Старшинство 2 > 1 > 3 > 4:
+порушене правило не ховає нечитаного джерела — обидва рядки друкуються, код — старший.
+`path:` читається з робочої копії репо продукту — звіряти на тій гілці, де лежить історія (main).
+Live-версію замінює лише live-версія: поки нова `in-work`, стара лишається `live`; `superseded` з
+наступником `in-work`/`planned` — це стара версія макета, яка в прод не дійшла.
 `--report` друкує markdown: що в проді, що в роботі, що заплановано, не взяте, історія за фічами.
 """
 import argparse, datetime, hashlib, os, re, subprocess, sys
@@ -44,8 +55,15 @@ STATUSES = ("live", "superseded", "in-work", "planned", "not-taken")
 KINDS = ("design-system", "screens", "component", "prototype", "review", "templates", "logo")
 IMMUTABLE_NEEDED = ("live", "superseded", "not-taken")
 RC_RULE, RC_SHAPE, RC_UNREAD, RC_PENDING = 1, 2, 3, 4
-GIT_RE = re.compile(r"^([A-Za-z0-9_.-]+)@([0-9a-f]{7,40}):(.+)$")
+GIT_RE = re.compile(r"^([A-Za-z0-9_][A-Za-z0-9_.-]*)@([0-9a-f]{7,40}):(.+)$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+SUM_RE = re.compile(r"^sha256\s+([0-9a-f]{64})\s+(\S.*)$")
+# Поля запису й тип, якого вони мусять бути. Поле не того типу — «не в формі» (код 2), а не трейсбек,
+# що виходить кодом 1 і читається як «порушено правило».
+FIELD_TYPES = {"id": str, "title": str, "kind": str, "status": str, "features": list, "sources": list,
+               "supersedes": list, "superseded_by": str, "items": list, "plan_ref": str, "return_if": str,
+               "live_evidence": str, "snapshot_pending": dict, "note": str}
+LIST_OF_STR = ("features", "supersedes", "items")
 
 
 def sha256_bytes(b):
@@ -53,59 +71,144 @@ def sha256_bytes(b):
 
 
 def as_date(v):
+    """YAML віддає `2026-07-21` як datetime.date — str() дає ту саму ISO-форму. Дата, якої не буває
+    (2026-13-45), — не дата: рядкове порівняння з нею дало б хибне «прострочено»."""
     s = str(v) if v is not None else ""
-    return s if DATE_RE.match(s) else None
+    if not DATE_RE.match(s):
+        return None
+    try:
+        datetime.date(int(s[:4]), int(s[5:7]), int(s[8:]))
+    except ValueError:
+        return None
+    return s
+
+
+def unsafe(path):
+    """Шлях, що виходить за парасольку: абсолютний або з `..`/`.` серед частин."""
+    parts = str(path).replace("\\", "/").split("/")
+    return str(path).startswith("/") or any(x in ("..", ".") for x in parts)
+
+
+def shape_errors(doc):
+    out = []
+    if not isinstance(doc.get("features", []), list):
+        out.append("features має бути списком")
+    for i, f in enumerate(doc.get("features") or []):
+        if isinstance(f, dict) and not isinstance(f.get("id", ""), str):
+            out.append(f"features[{i}].id має бути рядком")
+    entries = doc.get("entries")
+    if entries is not None and not isinstance(entries, list):
+        out.append("entries має бути списком")
+        return out
+    for i, e in enumerate(entries or []):
+        if not isinstance(e, dict):
+            out.append(f"entries[{i}]: запис має бути мапою")
+            continue
+        where = e.get("id") if isinstance(e.get("id"), str) else f"entries[{i}]"
+        for k, t in FIELD_TYPES.items():
+            if k in e and e[k] is not None and not isinstance(e[k], t):
+                out.append(f"{where}: {k} має бути {t.__name__}, а не {type(e[k]).__name__}")
+        for k in LIST_OF_STR:
+            if isinstance(e.get(k), list) and not all(isinstance(x, str) for x in e[k]):
+                out.append(f"{where}: {k} — список рядків")
+        for j, src in enumerate(e.get("sources") or [] if isinstance(e.get("sources"), list) else []):
+            if not isinstance(src, dict):
+                out.append(f"{where}: sources[{j}] має бути мапою")
+    return out
+
+
+def check_archive(root, eid, rel, p, errors):
+    """Тека design-archive/<id>/: ім'я = id запису, MANIFEST з ledger=<id> і сумою КОЖНОГО файла."""
+    name = os.path.basename(p.rstrip("/"))
+    manifest = os.path.join(p, "MANIFEST")
+    if not os.path.isfile(manifest):
+        errors.append(f"{eid}: архівна тека {rel} без MANIFEST")
+        return
+    if name != eid:
+        errors.append(f"{eid}: архівна тека {rel} належить іншому запису ({name}) — тека пишеться під "
+                      f"свій запис, позичена тека не є знімком цієї версії")
+    text = open(manifest, encoding="utf-8").read()
+    led = re.search(r"^ledger=(.+)$", text, re.M)
+    if not led or led.group(1).strip() != eid:
+        errors.append(f"{eid}: MANIFEST теки {rel} не називає ledger={eid}")
+    listed = {}
+    for line in text.splitlines():
+        m = SUM_RE.match(line.strip())
+        if m:
+            listed[m.group(2).strip()] = m.group(1)
+    on_disk = sorted(x for x in os.listdir(p) if x != "MANIFEST")
+    for f in on_disk:
+        fp = os.path.join(p, f)
+        if f not in listed:
+            errors.append(f"{eid}: у теці {rel} файл {f}, якого MANIFEST не називає")
+        elif not os.path.isfile(fp) or sha256_bytes(open(fp, "rb").read()) != listed[f]:
+            errors.append(f"{eid}: {rel}/{f} має інший вміст, ніж записано в MANIFEST — історію переписано")
+    for f in sorted(set(listed) - set(on_disk)):
+        errors.append(f"{eid}: MANIFEST теки {rel} називає {f}, якого в теці немає")
+    if not on_disk:
+        errors.append(f"{eid}: архівна тека {rel} порожня — знімка немає")
 
 
 def check_source(root, eid, src, unread, errors):
-    """→ True, якщо джерело незмінного виду (git або path). Нечитане незмінне джерело — все одно
-    незмінне за видом: його відсутність — код 3 «не поміряти», а не «джерела немає»."""
-    if not isinstance(src, dict):
-        errors.append(f"{eid}: джерело має бути мапою, а не {type(src).__name__}")
-        return False
+    """→ True, якщо джерело НЕЗМІННЕ (git-blob, тека design-archive/<id>/, файл із sha256). Нечитане
+    незмінне джерело — все одно незмінне за видом: його відсутність — код 3, а не «джерела немає»."""
     if "git" in src:
         m = GIT_RE.match(str(src["git"]))
         if not m:
             errors.append(f"{eid}: git-джерело {src['git']!r} не у формі <repo>@<sha>:<шлях>")
             return False
-        if root is None:
-            return True
         repo, sha, path = m.groups()
-        r = subprocess.run(["git", "--no-optional-locks", "-C", os.path.join(root, repo), "show", f"{sha}:{path}"],
-                           capture_output=True)
-        if r.returncode != 0:
+        if unsafe(repo) or unsafe(path):
+            errors.append(f"{eid}: git-джерело {src['git']!r} виходить за межі парасольки")
+            return False
+        if root is None:
+            unread.append(f"{eid}: {src['git']} не звірено — немає --repo-root")
+            return True
+        gitc = ["git", "--no-optional-locks", "-C", os.path.join(root, repo)]
+        t = subprocess.run(gitc + ["cat-file", "-t", f"{sha}:{path}"], capture_output=True, text=True)
+        if t.returncode != 0:
             unread.append(f"{eid}: {src['git']} не читається (немає коміту чи шляху; неглибока копія?) — "
                           f"це НЕ «без змін»")
             return True
+        if t.stdout.strip() != "blob":
+            errors.append(f"{eid}: {src['git']} — це {t.stdout.strip()}, а не файл; знімок версії — файл")
+            return False
         want = src.get("sha256")
-        if want and sha256_bytes(r.stdout) != str(want):
-            errors.append(f"{eid}: {src['git']} має інший вміст, ніж записаний sha256 — історію переписано")
+        if want:
+            r = subprocess.run(gitc + ["cat-file", "blob", f"{sha}:{path}"], capture_output=True)
+            if sha256_bytes(r.stdout) != str(want):
+                errors.append(f"{eid}: {src['git']} має інший вміст, ніж записаний sha256 — історію переписано")
         return True
     if "path" in src:
+        rel = str(src["path"]).rstrip("/")
+        if unsafe(rel):
+            errors.append(f"{eid}: path-джерело {src['path']!r} виходить за межі парасольки")
+            return False
+        archive = "/design-archive/" in f"/{rel}" and os.path.basename(os.path.dirname(rel)) == "design-archive"
         if root is None:
+            if archive or src.get("sha256"):
+                unread.append(f"{eid}: {src['path']} не звірено — немає --repo-root")
+                return True
+            return False
+        p = os.path.join(root, rel)
+        if os.path.isdir(p) and archive:
+            check_archive(root, eid, rel, p, errors)
             return True
-        p = os.path.join(root, str(src["path"]))
-        if os.path.isdir(p):
-            manifest = os.path.join(p, "MANIFEST")
-            if os.path.basename(os.path.dirname(p.rstrip("/"))) == "design-archive":
-                if not os.path.isfile(manifest):
-                    errors.append(f"{eid}: архівна тека {src['path']} без MANIFEST")
-                    return False
-                led = re.search(r"^ledger=(.+)$", open(manifest, encoding="utf-8").read(), re.M)
-                if not led or led.group(1).strip() != os.path.basename(p.rstrip("/")):
-                    errors.append(f"{eid}: MANIFEST теки {src['path']} не називає її ledger=<ім'я теки>")
-            return True
-        if os.path.isfile(p):
-            want = src.get("sha256")
-            if want and sha256_bytes(open(p, "rb").read()) != str(want):
+        if os.path.isfile(p) and src.get("sha256"):
+            if sha256_bytes(open(p, "rb").read()) != str(src["sha256"]):
                 errors.append(f"{eid}: {src['path']} має інший вміст, ніж записаний sha256 — історію переписано")
             return True
+        if os.path.exists(p):
+            return False   # робоче дерево без суми: читається, але змінне — історією не є
+        if archive or src.get("sha256"):
+            unread.append(f"{eid}: {src['path']} не читається — це НЕ «без змін»")
+            return True
         unread.append(f"{eid}: {src['path']} не читається — це НЕ «без змін»")
-        return True
+        return False
     if "artifact" in src:
         if not str(src["artifact"]).startswith("https://claude.ai/"):
             errors.append(f"{eid}: artifact-джерело не claude.ai-посилання: {src['artifact']!r}")
-        if not str(src.get("version") or "").strip():
+        if src.get("version") is None or not str(src.get("version")).strip():
             errors.append(f"{eid}: artifact-джерело без version — «яка версія» і є змістом запису")
         return False
     if "claude-design" in src:
@@ -116,8 +219,6 @@ def check_source(root, eid, src, unread, errors):
 
 def validate(doc, root, items_dir, today):
     errors, unread, pending = [], [], []
-    if not isinstance(doc, dict):
-        return None, [], [], []
     if doc.get("schema_version") != 1:
         errors.append("schema_version має бути 1")
     if not str(doc.get("product") or "").strip():
@@ -136,7 +237,7 @@ def validate(doc, root, items_dir, today):
         entries = []
     by_id = {}
     for i, e in enumerate(entries):
-        if not isinstance(e, dict) or not e.get("id"):
+        if not e.get("id"):
             errors.append(f"entries[{i}]: немає id")
             continue
         if e["id"] in by_id:
@@ -157,6 +258,8 @@ def validate(doc, root, items_dir, today):
         feats = e.get("features") or []
         if not feats:
             errors.append(f"{eid}: немає features — версія чого?")
+        if len(set(feats)) != len(feats):
+            errors.append(f"{eid}: фіча повторюється в features")
         for f in feats:
             if f not in features:
                 errors.append(f"{eid}: фіча {f} не оголошена в features")
@@ -166,24 +269,27 @@ def validate(doc, root, items_dir, today):
             immutable = check_source(root, eid, src, unread, errors) or immutable
         sp = e.get("snapshot_pending")
         if sp is not None:
-            by = as_date((sp or {}).get("by"))
-            if not by or not str((sp or {}).get("what") or "").strip():
+            by = as_date(sp.get("by"))
+            if not by or not str(sp.get("what") or "").strip():
                 errors.append(f"{eid}: snapshot_pending потребує what і by (YYYY-MM-DD)")
             elif by < today:
                 errors.append(f"{eid}: знімок прострочено (до {by}) — {sp['what']}")
             else:
                 pending.append(f"{eid}: знімка ще немає — {sp['what']}, до {by}")
         if st in IMMUTABLE_NEEDED and not immutable and sp is None:
-            errors.append(f"{eid}: {st} без незмінного джерела (git або path) — історія, що живе лише "
-                          f"за посиланням, зникає разом із ним; або snapshot_pending")
+            errors.append(f"{eid}: {st} без незмінного джерела (git, design-archive/<id>/ або файл із sha256) — "
+                          f"історія, що живе лише за посиланням чи в робочому дереві, зникає разом із ним; "
+                          f"або snapshot_pending")
 
         if st == "live":
             if not str(e.get("live_evidence") or "").strip():
                 errors.append(f"{eid}: live без live_evidence (збірка чи main@sha, що це показує)")
             for f in feats:
                 live_slots.setdefault((f, e.get("kind")), []).append(eid)
+        nxt = e.get("superseded_by")
+        if nxt and st != "superseded":
+            errors.append(f"{eid}: superseded_by у стані {st} — заміненою буває лише superseded-версія")
         if st == "superseded":
-            nxt = e.get("superseded_by")
             if not nxt:
                 errors.append(f"{eid}: superseded без superseded_by — чим замінено?")
             elif nxt not in by_id:
@@ -191,6 +297,8 @@ def validate(doc, root, items_dir, today):
             else:
                 if eid not in (by_id[nxt].get("supersedes") or []):
                     errors.append(f"{eid}: superseded_by {nxt}, а той не має його в supersedes")
+                if by_id[nxt].get("status") == "not-taken":
+                    errors.append(f"{eid}: замінена варіантом not-taken ({nxt}) — невзятий варіант нічого не замінює")
                 d1, d2 = as_date(e.get("date")), as_date(by_id[nxt].get("date"))
                 if d1 and d2 and d2 < d1:
                     errors.append(f"{eid}: замінена версією, датованою раніше ({d2} < {d1})")
@@ -203,15 +311,24 @@ def validate(doc, root, items_dir, today):
             its = e.get("items") or []
             if not its:
                 errors.append(f"{eid}: in-work без items — хто веде цю роботу?")
-            elif items_dir:
+            elif not items_dir:
+                unread.append(f"{eid}: елементи {', '.join(its)} не звірено — немає --items")
+            else:
                 for it in its:
-                    if not os.path.isfile(os.path.join(items_dir, f"{it}.yaml")):
+                    if unsafe(it) or not os.path.isfile(os.path.join(items_dir, f"{it}.yaml")):
                         errors.append(f"{eid}: елемента {it} немає в реєстрі ({items_dir})")
         if st == "planned" and not str(e.get("plan_ref") or "").strip():
             errors.append(f"{eid}: planned без plan_ref (dec-NNN, tri-NNN чи елемент)")
         if st == "not-taken" and not str(e.get("return_if") or "").strip():
             errors.append(f"{eid}: not-taken без return_if — варіант зберігають З умовою повернення")
 
+    for eid in by_id:   # ланцюг замін без циклів: A → B → A означало б, що найновішої версії немає
+        seen, cur = [], eid
+        while cur in by_id and by_id[cur].get("superseded_by") and cur not in seen:
+            seen.append(cur)
+            cur = by_id[cur]["superseded_by"]
+        if cur in seen and cur == eid:
+            errors.append(f"{eid}: цикл замін {' → '.join(seen + [cur])}")
     for (f, k), ids in sorted(live_slots.items()):
         if len(ids) > 1:
             errors.append(f"дві live-версії для {f}/{k}: {', '.join(sorted(ids))} — у проді одна")
@@ -272,20 +389,31 @@ def report(doc, features, by_id):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Реєстр версій макетів: валідація і звіт.")
     ap.add_argument("ledger")
-    ap.add_argument("--repo-root", help="парасолька STRW (репо продуктів поруч) — без неї джерела не звіряються")
-    ap.add_argument("--items", help="engine/items — для перевірки, що елементи in-work існують")
+    ap.add_argument("--repo-root", help="парасолька STRW (репо продуктів поруч); без неї джерела не звірено — код 3")
+    ap.add_argument("--items", help="engine/items; без нього елементи in-work не звірено — код 3")
     ap.add_argument("--today", default=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"))
     ap.add_argument("--report", action="store_true")
     a = ap.parse_args(argv)
+    if not as_date(a.today):
+        print(f"ERROR: --today {a.today!r} — не дата YYYY-MM-DD; терміни знімків не поміряти", file=sys.stderr)
+        return RC_SHAPE
     try:
-        doc = load_nodup(open(a.ledger, encoding="utf-8")) or {}
+        doc = load_nodup(open(a.ledger, encoding="utf-8"))
     except Exception as e:
         print(f"ERROR: {a.ledger} не парситься: {e}", file=sys.stderr)
         return RC_SHAPE
-    parsed, errors, unread, pending = validate(doc, a.repo_root, a.items, a.today)
-    if parsed is None:
+    if doc is None:
+        print(f"ERROR: {a.ledger} порожній — реєстру немає, це не «нічого не змінилось»", file=sys.stderr)
+        return RC_SHAPE
+    if not isinstance(doc, dict):
         print(f"ERROR: {a.ledger}: корінь не мапа", file=sys.stderr)
         return RC_SHAPE
+    shape = shape_errors(doc)
+    if shape:
+        for e in shape:
+            print(f"ERROR: не в формі: {e}", file=sys.stderr)
+        return RC_SHAPE
+    parsed, errors, unread, pending = validate(doc, a.repo_root, a.items, a.today)
     for e in errors:
         print(f"ERROR: {e}", file=sys.stderr)
     for u in unread:

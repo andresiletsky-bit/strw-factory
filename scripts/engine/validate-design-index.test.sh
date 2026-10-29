@@ -67,8 +67,12 @@ check "unwatched без reason" 1 "unwatched без reason" "$TMP/noreason.yaml"
 mut "$TMP/dupref.yaml" 's#ref: p-001/design-system/tokens#ref: p-001/design-system/claude-ds#'
 check "ref повторюється" 1 "ref повторюється" "$TMP/dupref.yaml"
 
-# url і version обов'язкові ЛИШЕ для ds-artifact: code-одиниця без них — зелена (контроль)
-check "code-одиниця без url/version не червоніє" 0 "" "$TMP/green.yaml"
+mut "$TMP/noid.yaml" 's#url: https://claude.ai/artifact/AbC123#url: https://claude.ai/artifact/#'
+check "ds-artifact з url без id артефакту" 1 "ds-artifact без url виду" "$TMP/noid.yaml"
+
+# url і version обов'язкові ЛИШЕ для ds-artifact: індекс з однією code-одиницею без них — зелений (контроль)
+printf 'schema_version: 1\nproduct: p-001\nunits:\n  - ref: p-001/design-system/tokens\n    surface: code\n    working_files: [p-ios/kit/tokens.json]\n    hash: null\n    state: watched\n' > "$TMP/codeonly.yaml"
+check "code-одиниця без url/version не червоніє" 0 "" "$TMP/codeonly.yaml"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

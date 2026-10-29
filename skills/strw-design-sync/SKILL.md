@@ -60,5 +60,5 @@ MANIFEST) або `git: <repo>@<sha>:<шлях>`; варіант, що прогр
 ```bash
 python3 strw-factory/scripts/engine/design-ledger.py strw-state/products/<продукт>/design/ledger.yaml --repo-root . --items strw-state/engine/items
 ```
-rc: 0 у формі · 1 правило → полагодити запис · 2 не парситься · **3 джерело нечитане → стоп** ·
+rc: 0 у формі · 1 правило → полагодити запис · 2 не в формі · **3 джерело нечитане чи без `--repo-root`/`--items` → стоп** ·
 4 є `snapshot_pending` → не зелено, назвати дірку. `--report` — markdown «прод · робота · план · історія».

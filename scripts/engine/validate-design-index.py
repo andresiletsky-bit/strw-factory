@@ -79,7 +79,8 @@ def main(path):
                           f"дозволені {sorted(ALLOWED_SURFACE)}")
 
         if u.get("surface") == "ds-artifact":
-            if not str(u.get("url") or "").startswith(DS_ARTIFACT_URL):
+            url = str(u.get("url") or "")
+            if not url.startswith(DS_ARTIFACT_URL) or not url[len(DS_ARTIFACT_URL):].strip("/"):
                 errors.append(f"{where}: ds-artifact без url виду {DS_ARTIFACT_URL}<id> — "
                               f"крок 1 скіла читає артефакт саме за ним")
             if not str(u.get("version") or "").strip():
